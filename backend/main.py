@@ -1,7 +1,10 @@
-from fastapi import FastAPI
-from sqlalchemy import text
+from fastapi import Depends, FastAPI
+from sqlalchemy import select, text
+from sqlalchemy.orm import Session
 
-from database import engine
+from database import engine, get_db
+from models import Profile
+from schemas import ProfileResponse
 
 
 app = FastAPI()
@@ -25,3 +28,11 @@ def database_health_check():
         "database": "connected",
         "profile_count": profile_count
     }
+
+@app.get("/profiles", response_model=list[ProfileResponse])
+def get_profiles(db: Session = Depends(get_db)):
+    statement = select(Profile)
+
+    profiles = db.scalars(statement).all()
+
+    return profiles
