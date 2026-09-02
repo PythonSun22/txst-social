@@ -1,4 +1,4 @@
-# Boko Lynx
+# TXST Lynx
 
 A Texas State University-focused social networking web application built with a Next.js frontend, FastAPI backend, and PostgreSQL database hosted through Supabase.
 
