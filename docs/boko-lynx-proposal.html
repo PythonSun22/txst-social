@@ -1,0 +1,950 @@
+<title>Boko Lynx Proposal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --ink-900:    #24070A;
+    --ink-800:    #340B10;
+    --maroon:     #501214;
+    --maroon-lit: #6B1C20;
+    --gold:       #C6A15B;
+    --gold-lit:   #E3C68C;
+    --paper:      #F6F0E7;
+    --paper-dim:  #CBB9A6;
+    --paper-mute: #9C8A79;
+    --rule:       rgba(198, 161, 91, .26);
+    --rule-firm:  rgba(198, 161, 91, .48);
+    --panel:      rgba(246, 240, 231, .045);
+
+    --f-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+    --f-body:    "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono:    "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    background: var(--ink-900);
+    color: var(--paper);
+    font-family: var(--f-body);
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.1rem;
+    padding: 1.5rem 1rem 1rem;
+  }
+
+  /* ---------------- deck frame ---------------- */
+
+  .deck {
+    width: min(96vw, 1320px);
+    position: relative;
+  }
+
+  .slide {
+    aspect-ratio: 16 / 9;
+    container-type: size;
+    background:
+      radial-gradient(120% 130% at 8% 0%, var(--maroon) 0%, var(--ink-800) 52%, var(--ink-900) 100%);
+    border: 1px solid var(--rule);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    padding: 5.2cqw 5.6cqw;
+    overflow: hidden;
+    position: relative;
+  }
+  .slide.active { display: flex; }
+
+  /* hairline gold rule top-left, a consistent structural mark */
+  .slide::before {
+    content: "";
+    position: absolute;
+    left: 5.6cqw;
+    top: 3.4cqw;
+    width: 6cqw;
+    height: 2px;
+    background: var(--gold);
+  }
+  .slide.is-title::before { display: none; }
+
+  .num {
+    position: absolute;
+    right: 5.6cqw;
+    bottom: 3.2cqw;
+    font-family: var(--f-mono);
+    font-size: 1.05cqw;
+    letter-spacing: .16em;
+    color: var(--paper-mute);
+  }
+
+  /* ---------------- type ---------------- */
+
+  .kicker {
+    font-family: var(--f-mono);
+    font-size: 1.06cqw;
+    font-weight: 500;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 1.6cqw;
+  }
+
+  .slide h2 {
+    font-family: var(--f-display);
+    font-weight: 400;
+    font-size: 4.6cqw;
+    line-height: 1.02;
+    letter-spacing: -.01em;
+    margin: 0 0 2.4cqw;
+    color: var(--paper);
+    text-wrap: balance;
+  }
+
+  .lede {
+    font-size: 1.62cqw;
+    line-height: 1.5;
+    color: var(--paper-dim);
+    max-width: 60ch;
+    margin: 0 0 2.4cqw;
+  }
+
+  /* ---------------- title slide ---------------- */
+
+  .is-title { justify-content: space-between; padding-block: 6cqw; }
+
+  .title-mark {
+    font-family: var(--f-mono);
+    font-size: 1.1cqw;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .is-title h1 {
+    font-family: var(--f-display);
+    font-weight: 400;
+    font-size: 12.5cqw;
+    line-height: .9;
+    letter-spacing: -.025em;
+    margin: 0;
+    color: var(--paper);
+  }
+  .is-title h1 em { font-style: italic; color: var(--gold-lit); }
+
+  .title-sub {
+    font-size: 2.05cqw;
+    line-height: 1.35;
+    color: var(--paper-dim);
+    max-width: 42ch;
+    margin: 1.6cqw 0 0;
+  }
+
+  .title-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 3cqw;
+    border-top: 1px solid var(--rule-firm);
+    padding-top: 2cqw;
+  }
+  .title-foot div { display: flex; flex-direction: column; gap: .5cqw; }
+  .title-foot dt {
+    font-family: var(--f-mono);
+    font-size: .95cqw;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .title-foot dd { margin: 0; font-size: 1.45cqw; color: var(--paper); }
+
+  /* ---------------- generic layout helpers ---------------- */
+
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 3cqw; }
+  .cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.2cqw; }
+
+  .stack { display: flex; flex-direction: column; gap: 1.5cqw; }
+
+  ul.bul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 1.05cqw; }
+  ul.bul li {
+    font-size: 1.5cqw;
+    line-height: 1.4;
+    color: var(--paper-dim);
+    padding-left: 1.9cqw;
+    position: relative;
+  }
+  ul.bul li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: .62em;
+    width: .85cqw;
+    height: 1px;
+    background: var(--gold);
+  }
+  ul.bul li strong { color: var(--paper); font-weight: 600; }
+
+  ul.tight li { font-size: 1.3cqw; gap: .8cqw; }
+
+  /* ---------------- goal blocks ---------------- */
+
+  .goals { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2.4cqw 3.4cqw; }
+  .goal { display: flex; flex-direction: column; gap: .7cqw; }
+  .goal .g-num {
+    font-family: var(--f-mono);
+    font-size: 1cqw;
+    letter-spacing: .16em;
+    color: var(--gold);
+  }
+  .goal h3 {
+    font-family: var(--f-display);
+    font-weight: 400;
+    font-size: 2.5cqw;
+    line-height: 1.1;
+    margin: 0;
+    color: var(--paper);
+  }
+  .goal p { margin: 0; font-size: 1.32cqw; line-height: 1.42; color: var(--paper-dim); }
+
+  /* ---------------- scope panels ---------------- */
+
+  .panel {
+    border: 1px solid var(--rule);
+    background: var(--panel);
+    padding: 2.2cqw 2.4cqw;
+    display: flex;
+    flex-direction: column;
+    gap: 1.4cqw;
+  }
+  .panel.out { border-style: dashed; }
+  .panel h3 {
+    font-family: var(--f-mono);
+    font-size: 1.06cqw;
+    font-weight: 500;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--gold);
+  }
+  .panel.out h3 { color: var(--paper-mute); }
+  .panel ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: .75cqw 1.6cqw; }
+  .panel li { font-size: 1.16cqw; line-height: 1.35; color: var(--paper-dim); }
+  .panel.out li { color: var(--paper-mute); }
+
+  /* ---------------- feature cards ---------------- */
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.8cqw; }
+  .card {
+    border: 1px solid var(--rule);
+    background: var(--panel);
+    padding: 1.9cqw 2cqw;
+    display: flex;
+    flex-direction: column;
+    gap: .85cqw;
+  }
+  .card h3 {
+    font-family: var(--f-display);
+    font-weight: 400;
+    font-size: 2.15cqw;
+    line-height: 1.08;
+    margin: 0;
+    color: var(--gold-lit);
+  }
+  .card p { margin: 0; font-size: 1.22cqw; line-height: 1.42; color: var(--paper-dim); }
+  .card .meta {
+    font-family: var(--f-mono);
+    font-size: .95cqw;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+    margin-top: auto;
+    padding-top: .8cqw;
+    border-top: 1px solid var(--rule);
+  }
+
+  /* ---------------- chips ---------------- */
+
+  .chips { display: flex; flex-wrap: wrap; gap: .85cqw; }
+  .chip {
+    font-family: var(--f-mono);
+    font-size: 1.15cqw;
+    letter-spacing: .06em;
+    color: var(--paper);
+    border: 1px solid var(--rule-firm);
+    padding: .55cqw 1.1cqw;
+  }
+  .chip.dim { color: var(--paper-mute); border-color: var(--rule); }
+
+  /* ---------------- architecture figure ---------------- */
+
+  figure.arch { margin: 0; display: flex; flex-direction: column; gap: 1.4cqw; color: var(--paper-dim); }
+  figure.arch svg { display: block; width: 100%; height: auto; }
+  figure.arch figcaption { font-size: 1.16cqw; color: var(--paper-mute); max-width: 74ch; }
+
+  .arch-box { fill: rgba(246,240,231,.05); stroke: var(--rule-firm); stroke-width: 1.4; }
+  .arch-name { font-family: var(--f-body); font-size: 19px; font-weight: 600; fill: #F6F0E7; }
+  .arch-sub  { font-family: var(--f-mono); font-size: 13px; fill: #9C8A79; }
+  .arch-line { stroke: #C6A15B; stroke-width: 1.5; opacity: .8; }
+  .arch-lab  { font-family: var(--f-mono); font-size: 12.5px; fill: #C6A15B; letter-spacing: .1em; }
+
+  /* ---------------- task grid ---------------- */
+
+  .tasks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5cqw 2.4cqw; }
+  .task { display: flex; gap: 1.1cqw; align-items: baseline; }
+  .task .t-num {
+    font-family: var(--f-mono);
+    font-size: 1.5cqw;
+    color: var(--gold);
+    min-width: 2.2cqw;
+  }
+  .task .t-body { display: flex; flex-direction: column; gap: .25cqw; }
+  .task h3 { font-size: 1.44cqw; font-weight: 600; margin: 0; color: var(--paper); line-height: 1.2; }
+  .task p { margin: 0; font-size: 1.12cqw; line-height: 1.36; color: var(--paper-mute); }
+
+  /* ---------------- phase strip ---------------- */
+
+  .phases { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.4cqw; }
+  .phase {
+    border-top: 2px solid var(--rule-firm);
+    padding-top: 1.3cqw;
+    display: flex;
+    flex-direction: column;
+    gap: .7cqw;
+  }
+  .phase.has-ms { border-top-color: var(--gold); }
+  .phase .p-wk {
+    font-family: var(--f-mono);
+    font-size: 1cqw;
+    letter-spacing: .14em;
+    color: var(--gold);
+  }
+  .phase h3 {
+    font-family: var(--f-display);
+    font-weight: 400;
+    font-size: 2cqw;
+    line-height: 1.08;
+    margin: 0;
+    color: var(--paper);
+  }
+  .phase p { margin: 0; font-size: 1.1cqw; line-height: 1.38; color: var(--paper-dim); }
+  .phase .ms {
+    font-family: var(--f-mono);
+    font-size: .92cqw;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-900);
+    background: var(--gold);
+    padding: .35cqw .7cqw;
+    align-self: flex-start;
+    margin-top: auto;
+  }
+
+  /* ---------------- week table ---------------- */
+
+  table.weeks { width: 100%; border-collapse: collapse; font-size: 1.12cqw; }
+  table.weeks th {
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: .92cqw;
+    font-weight: 500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--gold);
+    padding: .55cqw .8cqw .55cqw 0;
+    border-bottom: 1px solid var(--rule-firm);
+  }
+  table.weeks td {
+    padding: .48cqw .8cqw .48cqw 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--paper-dim);
+    vertical-align: top;
+  }
+  table.weeks td.wk {
+    font-family: var(--f-mono);
+    color: var(--paper);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  table.weeks td.focus { color: var(--paper); }
+  table.weeks tr.milestone td { background: rgba(198,161,91,.10); }
+  table.weeks td.ms {
+    font-family: var(--f-mono);
+    font-size: .95cqw;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--gold-lit);
+    white-space: nowrap;
+  }
+
+  /* ---------------- roles ---------------- */
+
+  .roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.7cqw; }
+  .role {
+    border: 1px solid var(--rule);
+    background: var(--panel);
+    border-top: 2px solid var(--gold);
+    padding: 1.6cqw 1.7cqw;
+    display: flex;
+    flex-direction: column;
+    gap: .7cqw;
+  }
+  .role .r-name {
+    font-family: var(--f-display);
+    font-size: 2.35cqw;
+    font-weight: 400;
+    line-height: 1;
+    color: var(--paper);
+  }
+  .role .r-owns { font-size: 1.2cqw; line-height: 1.35; color: var(--gold-lit); font-weight: 500; }
+  .role .r-cross {
+    font-family: var(--f-mono);
+    font-size: .95cqw;
+    line-height: 1.45;
+    color: var(--paper-mute);
+    margin-top: auto;
+    padding-top: .75cqw;
+    border-top: 1px solid var(--rule);
+  }
+
+  /* ---------------- risk rows ---------------- */
+
+  .risks { display: flex; flex-direction: column; gap: 1.5cqw; }
+  .risk { display: grid; grid-template-columns: 13cqw 1fr; gap: 2cqw; align-items: start; }
+  .risk .r-tag {
+    font-family: var(--f-mono);
+    font-size: 1cqw;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    padding-top: .3cqw;
+  }
+  .risk p { margin: 0; font-size: 1.36cqw; line-height: 1.42; color: var(--paper-dim); }
+  .risk p strong { color: var(--paper); font-weight: 600; }
+
+  /* ---------------- closing ---------------- */
+
+  .is-close { align-items: flex-start; justify-content: center; }
+  .is-close h2 { font-size: 5.6cqw; max-width: 22ch; }
+
+  /* ---------------- controls ---------------- */
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-family: var(--f-mono);
+    font-size: .78rem;
+    letter-spacing: .1em;
+    color: var(--paper-mute);
+  }
+  .controls button {
+    font-family: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+    text-transform: uppercase;
+    color: var(--paper);
+    background: transparent;
+    border: 1px solid var(--rule-firm);
+    padding: .5rem 1rem;
+    cursor: pointer;
+  }
+  .controls button:hover:not(:disabled) { border-color: var(--gold); color: var(--gold-lit); }
+  .controls button:disabled { opacity: .32; cursor: default; }
+  .controls button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .counter { font-variant-numeric: tabular-nums; min-width: 5.5rem; text-align: center; }
+  .hint { color: var(--paper-mute); opacity: .7; }
+
+  @media (max-width: 720px) {
+    .hint { display: none; }
+  }
+
+  @media print {
+    @page { size: landscape; margin: 0; }
+    body { background: #fff; padding: 0; display: block; gap: 0; }
+    .controls { display: none; }
+    .deck { width: 100%; }
+    .slide {
+      display: flex !important;
+      break-after: page;
+      border: none;
+      width: 100%;
+    }
+    .slide:last-child { break-after: auto; }
+  }
+</style>
+
+<div class="deck" id="deck">
+
+  <!-- 1 — TITLE -->
+  <section class="slide is-title active">
+    <p class="title-mark">Texas State University &middot; CS 4398 Software Engineering</p>
+    <div>
+      <h1>Boko <em>Lynx</em></h1>
+      <p class="title-sub">A social network built around the colleges Texas State students already belong to.</p>
+    </div>
+    <div class="title-foot">
+      <div>
+        <dt>Team</dt>
+        <dd>Sachin &middot; Misan &middot; Adam B &middot; Adam S &middot; Daniel &middot; Seth</dd>
+      </div>
+      <div>
+        <dt>Deliverable</dt>
+        <dd>Project Proposal, Part 1 &mdash; Fall 2026</dd>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 — VISION -->
+  <section class="slide">
+    <p class="kicker">The Vision</p>
+    <h2>Campus already has structure.<br>This social network embraces it.</h2>
+    <p class="lede">Boko Lynx is a web platform for the Texas State community that organizes people and content around the university's colleges &mdash; so a student's feed reflects where they actually study, live, and belong.</p>
+    <div class="cols-3" style="margin-top:1.4cqw">
+      <div class="stack">
+        <p class="kicker" style="margin:0">Conventional where it counts</p>
+        <p style="margin:0;font-size:1.24cqw;line-height:1.42;color:var(--paper-dim)">Profiles, a feed, posts, comments and reactions &mdash; the interactions students already understand, built to work reliably.</p>
+      </div>
+      <div class="stack">
+        <p class="kicker" style="margin:0">Distinctive where it matters</p>
+        <p style="margin:0;font-size:1.24cqw;line-height:1.42;color:var(--paper-dim)">An animated, interactive college-navigation experience gives the application an identity a generic CRUD app does not have.</p>
+      </div>
+      <div class="stack">
+        <p class="kicker" style="margin:0">Engineered to be split</p>
+        <p style="margin:0;font-size:1.24cqw;line-height:1.42;color:var(--paper-dim)">A clean frontend, backend and database separation that six developers can work on in parallel without blocking each other.</p>
+      </div>
+    </div>
+    <span class="num">02</span>
+  </section>
+
+  <!-- 3 — GOALS -->
+  <section class="slide">
+    <p class="kicker">Overall Goals</p>
+    <h2>What we are setting out to build</h2>
+    <div class="goals">
+      <div class="goal">
+        <span class="g-num">01</span>
+        <h3>A working social platform</h3>
+        <p>Accounts, profiles, a shared campus feed, and posts that students can comment on and react to &mdash; functional end to end, not mocked.</p>
+      </div>
+      <div class="goal">
+        <span class="g-num">02</span>
+        <h3>Organized around campus</h3>
+        <p>Colleges act as the primary communities, with groups, search, and discovery so students can find people and communities that match their interests.</p>
+      </div>
+      <div class="goal">
+        <span class="g-num">03</span>
+        <h3>A maintainable architecture</h3>
+        <p>A deliberate separation of frontend, backend and database that divides cleanly among a six-person team and survives the whole semester.</p>
+      </div>
+      <div class="goal">
+        <span class="g-num">04</span>
+        <h3>A visual identity of its own</h3>
+        <p>Animation, dynamic scrolling and an interactive college-crest navigation that enhance the experience without costing usability or accessibility.</p>
+      </div>
+    </div>
+    <span class="num">03</span>
+  </section>
+
+  <!-- 4 — SCOPE -->
+  <section class="slide">
+    <p class="kicker">Scope Boundary</p>
+    <h2>What we are committing to &mdash; and what we are not</h2>
+    <div class="cols-2">
+      <div class="panel">
+        <h3>In Scope</h3>
+        <ul>
+          <li>Accounts &amp; authentication</li>
+          <li>University email verification</li>
+          <li>User profiles</li>
+          <li>College affiliation</li>
+          <li>Social feed</li>
+          <li>Creating &amp; viewing posts</li>
+          <li>Comments &amp; reactions</li>
+          <li>Following / connecting</li>
+          <li>College communities &amp; feeds</li>
+          <li>Search-based discovery</li>
+          <li>Animated backgrounds &amp; transitions</li>
+          <li>Dynamic scrolling effects</li>
+          <li>College crest navigation GUI</li>
+          <li>Backend REST API</li>
+          <li>Relational persistence</li>
+          <li>Responsive design where practical</li>
+          <li>Small-scale ML moderation</li>
+        </ul>
+      </div>
+      <div class="panel out">
+        <h3>Out of Scope</h3>
+        <ul>
+          <li>3D GUI elements</li>
+          <li>Native iOS / Android apps</li>
+          <li>Production deployment infrastructure</li>
+          <li>Complex recommendation algorithms</li>
+          <li>ML content recommendations</li>
+          <li>Advertising systems</li>
+          <li>Payment processing</li>
+          <li>Video streaming</li>
+          <li>Real-time communication</li>
+          <li>University admin integration</li>
+          <li>Production-scale analytics</li>
+        </ul>
+      </div>
+    </div>
+    <span class="num">04</span>
+  </section>
+
+  <!-- 5 — FEATURES: CORE -->
+  <section class="slide">
+    <p class="kicker">Features &mdash; The Core Loop</p>
+    <h2>What a student actually does</h2>
+    <div class="cards">
+      <article class="card">
+        <h3>Accounts</h3>
+        <p>Register and authenticate with a Texas State email. Username, display name, college, major, profile image and biography.</p>
+        <span class="meta">Verified · txstate.edu</span>
+      </article>
+      <article class="card">
+        <h3>Profiles</h3>
+        <p>A page per student showing their picture, bio, college, major, posts, and their following and follower relationships.</p>
+        <span class="meta">Public · Editable</span>
+      </article>
+      <article class="card">
+        <h3>The Feed</h3>
+        <p>The primary campus surface. Browse recent posts, open one, react, comment, and jump to the author's profile.</p>
+        <span class="meta">Chronological first</span>
+      </article>
+      <article class="card">
+        <h3>Posts</h3>
+        <p>Images and text, stamped with author, timestamp and college association, carrying their own likes and comments.</p>
+        <span class="meta">Image · Text</span>
+      </article>
+      <article class="card">
+        <h3>Comments &amp; Reactions</h3>
+        <p>Persisted against both the user and the post, so every interaction is attributable and countable.</p>
+        <span class="meta">Threaded replies</span>
+      </article>
+      <article class="card">
+        <h3>Colleges</h3>
+        <p>Users will affiliate with their respective colleges: Applied Arts, Education, Fine Arts & Comms, Health Professionals, Liberal Arts, McCoy College of Business, Ingram College of Engineering, Science, Honors College & Graduate College.</p>
+        <span class="meta">President Damphousse's restructuring.</span>
+      </article>
+    </div>
+    <span class="num">05</span>
+  </section>
+
+  <!-- 6 — FEATURES: DISTINCTIVE -->
+  <section class="slide">
+    <p class="kicker">Features &mdash; What Makes It Boko Lynx</p>
+    <h2>The parts a generic social app does not have</h2>
+    <div class="cols-2" style="gap:3.6cqw">
+      <div class="stack">
+        <ul class="bul">
+          <li><strong>College communities.</strong> Texas State's colleges are the platform's major organizational unit. Students affiliate with one, browse its page, see its posts, and discover others studying alongside them.</li>
+          <li><strong>Groups.</strong> Smaller communities formed around interests, subjects, organizations, events and hobbies &mdash; scoped to whatever development time allows.</li>
+          <li><strong>Search &amp; discovery.</strong> A direct way to find users, colleges and groups. Deliberately simple: recommendation systems are out of scope.</li>
+        </ul>
+      </div>
+      <div class="stack">
+        <ul class="bul">
+          <li><strong>An animated interface.</strong> Animated backgrounds, smooth page transitions, scroll-driven effects and parallax, built with GSAP where it earns its place.</li>
+          <li><strong>Interactive college navigation.</strong> A polished crest-and-banner GUI for moving between colleges &mdash; the single most distinctive surface in the product.</li>
+          <li><strong>ML content moderation.</strong> A small-scale classifier flagging content for review, kept intentionally modest in ambition.</li>
+        </ul>
+        <p style="margin:.6cqw 0 0;font-size:1.14cqw;line-height:1.4;color:var(--paper-mute)">Animation enhances the interface. Where it would interfere with accessibility or navigation, the interface wins.</p>
+      </div>
+    </div>
+    <span class="num">06</span>
+  </section>
+
+  <!-- 7 — ARCHITECTURE -->
+  <section class="slide">
+    <p class="kicker">Technical Requirements &mdash; Architecture</p>
+    <h2>Four layers, one direction of dependency</h2>
+    <figure class="arch">
+      <svg viewBox="0 0 1180 210" role="img" aria-label="Architecture: the browser renders a Next.js React frontend, which calls a FastAPI backend over HTTPS and JSON, which reaches PostgreSQL through SQLAlchemy. PostgreSQL is hosted on Supabase.">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#C6A15B"></path>
+          </marker>
+        </defs>
+
+        <line class="arch-line" x1="248" y1="86" x2="292" y2="86" marker-start="url(#a)" marker-end="url(#a)"></line>
+        <text class="arch-lab" x="228" y="128">RENDERS</text>
+
+        <line class="arch-line" x1="558" y1="86" x2="602" y2="86" marker-start="url(#a)" marker-end="url(#a)"></line>
+        <text class="arch-lab" x="510" y="128">HTTPS / JSON</text>
+
+        <line class="arch-line" x1="868" y1="86" x2="912" y2="86" marker-start="url(#a)" marker-end="url(#a)"></line>
+        <text class="arch-lab" x="836" y="128">SQLALCHEMY</text>
+
+        <rect class="arch-box" x="20" y="34" width="228" height="104" rx="2"></rect>
+        <text class="arch-name" x="44" y="80">Browser</text>
+        <text class="arch-sub" x="44" y="106">the student's device</text>
+
+        <rect class="arch-box" x="292" y="34" width="266" height="104" rx="2"></rect>
+        <text class="arch-name" x="316" y="72">Next.js / React</text>
+        <text class="arch-sub" x="316" y="96">TypeScript · Tailwind</text>
+        <text class="arch-sub" x="316" y="116">GSAP animation</text>
+
+        <rect class="arch-box" x="602" y="34" width="266" height="104" rx="2"></rect>
+        <text class="arch-name" x="626" y="72">FastAPI / Python</text>
+        <text class="arch-sub" x="626" y="96">endpoints · validation</text>
+        <text class="arch-sub" x="626" y="116">uv for dependencies</text>
+
+        <rect class="arch-box" x="912" y="34" width="248" height="104" rx="2"></rect>
+        <text class="arch-name" x="936" y="72">PostgreSQL</text>
+        <text class="arch-sub" x="936" y="96">hosted on Supabase</text>
+        <text class="arch-sub" x="936" y="116">auth · storage</text>
+      </svg>
+      <figcaption>Each layer talks only to its neighbour. The frontend never reaches the database, and the database never knows a browser exists &mdash; which is what lets six people work on different layers at the same time.</figcaption>
+    </figure>
+    <p class="kicker" style="margin:2.4cqw 0 1cqw">Entities</p>
+    <div class="chips">
+      <span class="chip">Users</span>
+      <span class="chip">Profiles</span>
+      <span class="chip">Colleges</span>
+      <span class="chip">Posts</span>
+      <span class="chip">Comments</span>
+      <span class="chip">Reactions</span>
+      <span class="chip">Follows</span>
+      <span class="chip">Groups</span>
+      <span class="chip">Group Membership</span>
+    </div>
+    <span class="num">07</span>
+  </section>
+
+  <!-- 8 — TASKS -->
+  <section class="slide">
+    <p class="kicker">Breakdown of Tasks</p>
+    <h2>Nine work areas, in dependency order</h2>
+    <div class="tasks">
+      <div class="task"><span class="t-num">1</span><div class="t-body"><h3>Project Foundation</h3><p>Repository, Next.js and FastAPI configuration, frontend/backend communication, team Git workflow.</p></div></div>
+      <div class="task"><span class="t-num">2</span><div class="t-body"><h3>Database Foundation</h3><p>PostgreSQL, SQLAlchemy, initial models, migration strategy, verified reads and writes.</p></div></div>
+      <div class="task"><span class="t-num">3</span><div class="t-body"><h3>Core Vertical Slice</h3><p>Create a post through every layer and read it back into the feed. Validates the architecture.</p></div></div>
+      <div class="task"><span class="t-num">4</span><div class="t-body"><h3>Accounts &amp; Profiles</h3><p>Authentication, user and profile models, registration, profile pages and editing, college affiliation.</p></div></div>
+      <div class="task"><span class="t-num">5</span><div class="t-body"><h3>Social Interaction</h3><p>Comments, reactions, follow relationships, user discovery, feed integration, validation.</p></div></div>
+      <div class="task"><span class="t-num">6</span><div class="t-body"><h3>College Communities</h3><p>College model and pages, college-specific feeds, user and post association, navigation.</p></div></div>
+      <div class="task"><span class="t-num">7</span><div class="t-body"><h3>Groups &amp; Discovery</h3><p>Group model and membership, group pages and posts, community discovery, search.</p></div></div>
+      <div class="task"><span class="t-num">8</span><div class="t-body"><h3>Visual Enhancement</h3><p>Visual identity, animated backgrounds, transitions, scroll effects, GSAP, responsive polish.</p></div></div>
+      <div class="task"><span class="t-num">9</span><div class="t-body"><h3>Integration &amp; Delivery</h3><p>Full integration, functional, database, UI and browser testing, bug fixes, final deployment.</p></div></div>
+    </div>
+    <span class="num">08</span>
+  </section>
+
+  <!-- 9 — TIMELINE PHASES -->
+  <section class="slide">
+    <p class="kicker">Timeline &mdash; Overview</p>
+    <h2>Sixteen weeks, five phases</h2>
+    <div class="phases">
+      <div class="phase has-ms">
+        <span class="p-wk">WEEKS 1&ndash;3</span>
+        <h3>Foundation</h3>
+        <p>Repository, both scaffolds talking, database configured, models defined, migrations working.</p>
+        <span class="ms">M1 · Data layer</span>
+      </div>
+      <div class="phase has-ms">
+        <span class="p-wk">WEEKS 4&ndash;5</span>
+        <h3>Vertical Slice</h3>
+        <p>A post travels the full stack and returns to the feed. The architecture is proven before features multiply.</p>
+        <span class="ms">M2 · Slice works</span>
+      </div>
+      <div class="phase has-ms">
+        <span class="p-wk">WEEKS 6&ndash;9</span>
+        <h3>Social Core</h3>
+        <p>Accounts, profiles, comments, reactions and follows. The product becomes usable by a real person.</p>
+        <span class="ms">M3 · Midterm demo</span>
+      </div>
+      <div class="phase has-ms">
+        <span class="p-wk">WEEKS 10&ndash;12</span>
+        <h3>Campus Systems</h3>
+        <p>College communities and feeds, groups, search, and the moderation classifier.</p>
+        <span class="ms">M4 · Feature freeze</span>
+      </div>
+      <div class="phase has-ms">
+        <span class="p-wk">WEEKS 13&ndash;16</span>
+        <h3>Polish &amp; Deliver</h3>
+        <p>GSAP and the college navigation GUI, integration testing, deployment, rehearsal, presentation.</p>
+        <span class="ms">M5 · Final delivery</span>
+      </div>
+    </div>
+    <p style="margin:2.6cqw 0 0;font-size:1.22cqw;line-height:1.45;color:var(--paper-mute);max-width:88ch">Visual enhancement runs in the background from Week 8 under a dedicated owner, so it never blocks feature work &mdash; then gets a concentrated push in Week 13 once the core is stable.</p>
+    <span class="num">09</span>
+  </section>
+
+  <!-- 10 — TIMELINE WEEKS -->
+  <section class="slide">
+    <p class="kicker">Timeline &mdash; Week by Week</p>
+    <h2>The schedule</h2>
+    <table class="weeks">
+      <thead>
+        <tr><th>Week</th><th>Dates</th><th>Focus</th><th>Milestone</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="wk">1</td><td>Aug 24&ndash;28</td><td class="focus">Repository, Next.js and FastAPI scaffolds, health check &mdash; complete</td><td class="ms"></td></tr>
+        <tr class="milestone"><td class="wk">2</td><td>Aug 31&ndash;Sep 4</td><td class="focus">Proposal and presentation. Team workflow, dependency docs, architecture decisions locked</td><td class="ms">M0 · Proposal</td></tr>
+        <tr><td class="wk">3</td><td>Sep 7&ndash;11</td><td class="focus">PostgreSQL and SQLAlchemy configured, initial models, migration strategy</td><td class="ms"></td></tr>
+        <tr class="milestone"><td class="wk">4</td><td>Sep 14&ndash;18</td><td class="focus">Post model and schema, create and retrieve endpoints</td><td class="ms">M1 · Data layer</td></tr>
+        <tr class="milestone"><td class="wk">5</td><td>Sep 21&ndash;25</td><td class="focus">Post creation interface, feed interface, end-to-end test of the full slice</td><td class="ms">M2 · Slice works</td></tr>
+        <tr><td class="wk">6</td><td>Sep 28&ndash;Oct 2</td><td class="focus">Authentication, user model, registration and login, email verification</td><td class="ms"></td></tr>
+        <tr><td class="wk">7</td><td>Oct 5&ndash;9</td><td class="focus">Profile model and API, profile pages, editing, college affiliation</td><td class="ms"></td></tr>
+        <tr><td class="wk">8</td><td>Oct 12&ndash;16</td><td class="focus">Comments and reactions, persisted and displayed. Visual identity work begins</td><td class="ms"></td></tr>
+        <tr class="milestone"><td class="wk">9</td><td>Oct 19&ndash;23</td><td class="focus">Follow relationships, user discovery, feed integration. Midterm demonstration</td><td class="ms">M3 · Social core</td></tr>
+        <tr><td class="wk">10</td><td>Oct 26&ndash;30</td><td class="focus">College model, college pages and feeds, user and post association</td><td class="ms"></td></tr>
+        <tr><td class="wk">11</td><td>Nov 2&ndash;6</td><td class="focus">Group model and membership, group pages and posts, search</td><td class="ms"></td></tr>
+        <tr class="milestone"><td class="wk">12</td><td>Nov 9&ndash;13</td><td class="focus">Moderation classifier, remaining features finished or formally cut</td><td class="ms">M4 · Freeze</td></tr>
+        <tr><td class="wk">13</td><td>Nov 16&ndash;20</td><td class="focus">Animation push: backgrounds, transitions, scroll effects, college crest navigation</td><td class="ms"></td></tr>
+        <tr><td class="wk">14</td><td>Nov 23&ndash;27</td><td class="focus">Thanksgiving &mdash; deliberately light. Integration, documentation, final report</td><td class="ms"></td></tr>
+        <tr><td class="wk">15</td><td>Nov 30&ndash;Dec 4</td><td class="focus">Functional, database, UI and browser testing. Bug fixes, deployment, rehearsal</td><td class="ms"></td></tr>
+        <tr class="milestone"><td class="wk">16</td><td>Dec 7&ndash;11</td><td class="focus">Final presentation, live demonstration, submission</td><td class="ms">M5 · Delivery</td></tr>
+      </tbody>
+    </table>
+    <span class="num">10</span>
+  </section>
+
+  <!-- 11 — DELEGATION -->
+  <section class="slide">
+    <p class="kicker">Delegation of Responsibilities</p>
+    <h2>Six vertical slices, not six layers</h2>
+    <p class="lede" style="margin-bottom:2cqw">Each member owns a feature from database through API to interface, so nobody waits on another person's layer. Each also holds one cross-cutting concern that no single feature would otherwise own.</p>
+    <div class="roles">
+      <article class="role">
+        <span class="r-name">Sachin</span>
+        <span class="r-owns">Accounts &amp; Authentication</span>
+        <span class="r-cross">Cross-cutting: deployment, environments and CI</span>
+      </article>
+      <article class="role">
+        <span class="r-name">Misan</span>
+        <span class="r-owns">Profiles &amp; College Affiliation</span>
+        <span class="r-cross">Cross-cutting: database steward &mdash; schema, migrations, seed data</span>
+      </article>
+      <article class="role">
+        <span class="r-name">Adam B</span>
+        <span class="r-owns">Posts &amp; the Feed</span>
+        <span class="r-cross">Cross-cutting: API contract and OpenAPI schema</span>
+      </article>
+      <article class="role">
+        <span class="r-name">Adam S</span>
+        <span class="r-owns">Comments, Reactions &amp; Follows</span>
+        <span class="r-cross">Cross-cutting: testing and QA. Also owns the moderation classifier</span>
+      </article>
+      <article class="role">
+        <span class="r-name">Daniel</span>
+        <span class="r-owns">College Communities, Groups &amp; Search</span>
+        <span class="r-cross">Cross-cutting: coordination, documentation, deliverables</span>
+      </article>
+      <article class="role">
+        <span class="r-name">Seth</span>
+        <span class="r-owns">Visual Identity &amp; Animation</span>
+        <span class="r-cross">Cross-cutting: accessibility and responsive layout</span>
+      </article>
+    </div>
+    <span class="num">11</span>
+  </section>
+
+  <!-- 12 — WORKING AGREEMENTS -->
+  <section class="slide">
+    <p class="kicker">How We Work</p>
+    <h2>Policy & protocol keeping the team in sync</h2>
+    <div class="cols-2" style="gap:3.6cqw">
+      <ul class="bul">
+        <li><strong>No direct commits to main.</strong> Feature branches, pull requests, one approving review from someone who did not write the code.</li>
+        <li><strong>Slack channels</strong> for organized remote communicaion: what shipped, what is next, what is blocked.</li>
+        <li><strong>Reviews are due within 24 hours.</strong> A stalled review blocks a teammate and counts as a missed commitment.</li>
+      </ul>
+      <ul class="bul">
+        <li><strong>Definition of done:</strong> it works, it has a test, it is reviewed and merged, and it runs on the deployed environment &mdash; not only on the author's machine.</li>
+        <li><strong>Vertical slicing</strong> for full-stack development by all members in parallel.</li>
+        <li><strong>Thorough documentation</strong> via a system of automatic code-level documentation combined with human-written documentation.</li>
+      </ul>
+    </div>
+    <span class="num">12</span>
+  </section>
+
+  <!-- 13 — RISKS -->
+  <section class="slide">
+    <p class="kicker">Risks &amp; Open Questions</p>
+    <h2>What we anticipate could go wrong</h2>
+    <div class="risks">
+      <div class="risk">
+        <span class="r-tag">Highest risk</span>
+        <p><strong>The ML moderation system.</strong> It is the only in-scope item requiring a skill the rest of the project does not. Scheduled last, deliberately, so that cutting it costs nothing else.</p>
+      </div>
+      <div class="risk">
+        <span class="r-tag">Open question</span>
+        <p><strong>Follows, or communities only?</strong> Follows and college communities are two different answers to &ldquo;what fills my feed.&rdquo; Building both means neither is fully realized. To be decided before Week 9.</p>
+      </div>
+      <div class="risk">
+        <span class="r-tag">Schedule</span>
+        <p><strong>Animation competing with function.</strong> Visual work is assigned to a dedicated owner and runs in parallel, so a polished interface never arrives at the cost of a working feed.</p>
+      </div>
+      <div class="risk">
+        <span class="r-tag">Coordination</span>
+        <p><strong>Six full-stack developers.</strong> This team structure may have to adapt to more refined developer roles if the project complexity requires it.</p>
+      </div>
+    </div>
+    <span class="num">13</span>
+  </section>
+
+  <!-- 14 — CLOSE -->
+  <section class="slide is-close">
+    <p class="kicker">Final Production</p>
+    <h2>Demonstration in December</h2>
+    <p class="lede" style="font-size:1.85cqw;max-width:52ch">Students in this class will sign in with their Texas State email, land on a campus feed, posts to their college, and watch other students react and reply &mdash; inside a dynamic graphical interface that is strikingly unique.</p>
+    <div class="chips" style="margin-top:1.6cqw">
+      <span class="chip dim">Next.js</span>
+      <span class="chip dim">React</span>
+      <span class="chip dim">TypeScript</span>
+      <span class="chip dim">Tailwind</span>
+      <span class="chip dim">GSAP</span>
+      <span class="chip dim">FastAPI</span>
+      <span class="chip dim">SQLAlchemy</span>
+      <span class="chip dim">PostgreSQL</span>
+      <span class="chip dim">Supabase</span>
+    </div>
+    <span class="num">14</span>
+  </section>
+
+</div>
+
+<nav class="controls">
+  <button type="button" id="prev" aria-label="Previous slide">&larr; Prev</button>
+  <span class="counter" id="counter">1 / 14</span>
+  <button type="button" id="next" aria-label="Next slide">Next &rarr;</button>
+  <span class="hint">Arrow keys to navigate &middot; Print to export PDF</span>
+</nav>
+
+<script>
+  (function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    var counter = document.getElementById('counter');
+    var prev = document.getElementById('prev');
+    var next = document.getElementById('next');
+    var i = 0;
+
+    function show(n) {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach(function (s, k) { s.classList.toggle('active', k === i); });
+      counter.textContent = (i + 1) + ' / ' + slides.length;
+      prev.disabled = i === 0;
+      next.disabled = i === slides.length - 1;
+    }
+
+    prev.addEventListener('click', function () { show(i - 1); });
+    next.addEventListener('click', function () { show(i + 1); });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') { show(i + 1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(i - 1); }
+      else if (e.key === 'Home') { show(0); }
+      else if (e.key === 'End') { show(slides.length - 1); }
+      else { return; }
+      e.preventDefault();
+    });
+
+    show(0);
+  })();
+</script>
