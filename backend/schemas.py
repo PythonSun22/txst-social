@@ -1,6 +1,17 @@
+"""Pydantic schemas for API requests and responses."""
+
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
+
+
+class HealthResponse(BaseModel):
+    status: str
+
+
+class DatabaseHealthResponse(BaseModel):
+    database: str
+    profile_count: int
 
 
 class ProfileCreate(BaseModel):

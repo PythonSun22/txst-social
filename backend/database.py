@@ -1,38 +1,33 @@
+"""Database connection and session configuration."""
+
 import os
+from collections.abc import Generator
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
-
-# Load environment variables from .env
 load_dotenv()
 
-
-# Read the database connection string
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-
-# Stop the program if DATABASE_URL is missing
 if DATABASE_URL is None:
     raise RuntimeError("DATABASE_URL is not set")
 
-
-# Create SQLAlchemy's connection manager
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True
+    pool_pre_ping=True,
 )
 
-
-# Creates database sessions when we need them
 SessionLocal = sessionmaker(
     bind=engine,
     autoflush=False,
-    autocommit=False
+    autocommit=False,
 )
 
-def get_db():
+
+def get_db() -> Generator[Session, None, None]:
+    """Provide a database session for a FastAPI request."""
     db = SessionLocal()
 
     try:
