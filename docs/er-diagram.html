@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Entity relationship diagram and design of record for the Boko Lynx database schema.">
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Boko Lynx Schema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+:root {
+  --ground:   #F6F2F1;
+  --surface:  #FFFFFF;
+  --surface-2:#EEE8E7;
+  --ink:      #1E1819;
+  --ink-2:    #5B5052;
+  --ink-3:    #8B7C7E;
+  --rule:     #DDD3D2;
+  --rule-2:   #C9BCBB;
+  --maroon:   #7E1C24;
+  --maroon-2: #A8434B;
+  --gold:     #8A6B2F;
+  --ok:       #2C6749;
+  --warn:     #8C5A11;
+  --ok-bg:    #E4EEE8;
+  --warn-bg:  #F4EADA;
+}
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:   #131011;
+    --surface:  #1B1617;
+    --surface-2:#241D1F;
+    --ink:      #F1EAE9;
+    --ink-2:    #B4A6A7;
+    --ink-3:    #877779;
+    --rule:     #322A2B;
+    --rule-2:   #453A3C;
+    --maroon:   #E49097;
+    --maroon-2: #C9727A;
+    --gold:     #CBA765;
+    --ok:       #74C29A;
+    --warn:     #E0A94D;
+    --ok-bg:    #1A2A22;
+    --warn-bg:  #2C2415;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:   #131011;
+  --surface:  #1B1617;
+  --surface-2:#241D1F;
+  --ink:      #F1EAE9;
+  --ink-2:    #B4A6A7;
+  --ink-3:    #877779;
+  --rule:     #322A2B;
+  --rule-2:   #453A3C;
+  --maroon:   #E49097;
+  --maroon-2: #C9727A;
+  --gold:     #CBA765;
+  --ok:       #74C29A;
+  --warn:     #E0A94D;
+  --ok-bg:    #1A2A22;
+  --warn-bg:  #2C2415;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 16px;
+  line-height: 1.6;
+  padding-inline: 24px;
+  padding-block: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; }
+
+/* ---------- header ---------- */
+
+.masthead {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-block: 56px 32px;
+  border-bottom: 2px solid var(--ink);
+}
+.eyebrow {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--maroon);
+}
+h1 {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: clamp(34px, 6vw, 56px);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+.standfirst {
+  max-width: 62ch;
+  font-size: 18px;
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--surface);
+  margin-block: 28px 0;
+  overflow: hidden;
+}
+.meta > div {
+  flex: 1 1 150px;
+  padding: 13px 16px;
+  border-right: 1px solid var(--rule);
+}
+.meta > div:last-child { border-right: 0; }
+.meta dt {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 3px;
+}
+.meta dd {
+  margin: 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- sections ---------- */
+
+section { padding-block: 46px; border-bottom: 1px solid var(--rule); }
+section:last-of-type { border-bottom: 0; }
+
+h2 {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--maroon);
+  margin: 0 0 20px;
+}
+h3 {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  color: var(--ink);
+}
+p { margin: 0 0 16px; max-width: 66ch; }
+p:last-child { margin-bottom: 0; }
+
+code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.87em;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--ink);
+}
+
+.lede { font-size: 18px; color: var(--ink-2); max-width: 60ch; }
+
+/* ---------- figure ---------- */
+
+figure { margin: 0; }
+.scroller {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 20px;
+}
+.scroller svg { display: block; min-width: 940px; max-width: 100%; height: auto; }
+
+figcaption {
+  font-size: 15px;
+  color: var(--ink-2);
+  margin-top: 16px;
+  max-width: 70ch;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+  padding-left: 0;
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.legend svg { flex: none; }
+
+/* ---------- groups ---------- */
+
+.groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.group { background: var(--surface); padding: 20px 18px; }
+.group h3 { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--maroon); margin-bottom: 12px; }
+.group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.group li { font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.group b {
+  display: block;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* ---------- decisions ---------- */
+
+.decisions { display: flex; flex-direction: column; gap: 18px; }
+.decision {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--warn);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 20px 22px;
+}
+.dhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.dtag {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warn);
+  background: var(--warn-bg);
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.dhead h3 { margin: 0; }
+.opts { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.opts li { font-size: 14.5px; color: var(--ink-2); padding-left: 17px; position: relative; line-height: 1.5; }
+.opts li::before {
+  content: "";
+  position: absolute; left: 0; top: 9px;
+  width: 6px; height: 6px; border-radius: 50%;
+  border: 1.5px solid var(--rule-2);
+}
+.opts li.pick { color: var(--ink); }
+.opts li.pick::before { background: var(--maroon); border-color: var(--maroon); }
+.opts b { font-family: Archivo, system-ui, sans-serif; font-weight: 600; }
+
+/* ---------- verification ---------- */
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; }
+caption { text-align: left; padding: 0 0 14px; color: var(--ink-2); font-size: 15px; max-width: 66ch; }
+th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--rule); font-size: 14px; }
+tbody tr:last-child td { border-bottom: 0; }
+th {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+td:first-child { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--ink); }
+td:last-child { white-space: nowrap; }
+.pill {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.bug {
+  margin-top: 26px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--maroon);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 20px 22px;
+}
+
+footer {
+  padding-block: 34px 60px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.9;
+  border-top: 2px solid var(--ink);
+}
+
+/* ---------- svg ---------- */
+
+.ent      { fill: var(--surface); stroke: var(--rule-2); stroke-width: 1; }
+.ent-hub  { fill: var(--surface); stroke: var(--maroon); stroke-width: 1.6; }
+.ent-out  { fill: none; stroke: var(--gold); stroke-width: 1.3; stroke-dasharray: 5 3.5; }
+.ent-name { font-family: Archivo, system-ui, sans-serif; font-size: 12.5px; font-weight: 700; fill: var(--maroon); }
+.ent-name.out { fill: var(--gold); }
+.ent-rule { stroke: var(--rule); stroke-width: 1; }
+.col      { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; fill: var(--ink-2); }
+.col.key  { fill: var(--ink); font-weight: 500; }
+.tag      { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 8.5px; fill: var(--ink-3); }
+.edge      { stroke: var(--maroon); stroke-width: 1.4; fill: none; }
+.edge-act  { stroke: var(--ink-3); stroke-width: 1.1; stroke-dasharray: 4 4; fill: none; }
+.edge-auth { stroke: var(--gold); stroke-width: 1.6; fill: none; }
+.elabel   { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 9px; fill: var(--ink-3); }
+.card     { font-family: Archivo, system-ui, sans-serif; font-size: 9.5px; font-weight: 600; fill: var(--maroon-2); }
+.mk-m { fill: var(--maroon); }
+.mk-a { fill: var(--ink-3); }
+.mk-g { fill: var(--gold); }
+
+@media (max-width: 620px) {
+  body { padding-inline: 16px; }
+  .masthead { padding-block: 40px 26px; }
+  .meta > div { flex-basis: 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Texas State University &middot; CS 4398 &middot; Design of record</div>
+    <h1>Boko Lynx Schema</h1>
+    <p class="standfirst">Twelve tables behind a college-centered campus forum &mdash; how a student, a space, a post and its screening all connect, and the three decisions the team still owes an answer.</p>
+  </header>
+
+  <dl class="meta">
+    <div><dt>Tables</dt><dd>12 + auth.users</dd></div>
+    <div><dt>Engine</dt><dd>PostgreSQL 16</dd></div>
+    <div><dt>Identity</dt><dd>Supabase Auth</dd></div>
+    <div><dt>Requirements</dt><dd>FR-01 &rarr; FR-99</dd></div>
+    <div><dt>Open decisions</dt><dd>3</dd></div>
+  </dl>
+
+  <section>
+    <h2>Start here &mdash; the boundary</h2>
+    <p class="lede">The one thing to understand before reading the diagram: <strong>we do not store passwords.</strong></p>
+    <p>Supabase Auth owns credentials, sessions, password resets and the verification email. It keeps those in its own table, <code>auth.users</code>, drawn in gold and dashed below because it sits outside our schema. Our <code>profiles</code> row uses the very same <code>id</code>, so the foreign key between them <em>is</em> the seam between what Supabase owns and what the application owns.</p>
+    <p>Two values are copied across that seam by a database trigger &mdash; a student's address and whether they have confirmed it. That copy exists for two concrete reasons: FR-01 limits the product to <code>txstate.edu</code>, and a CHECK constraint cannot see into another table; and FR-02 gates every post, comment and like on being verified, which would otherwise mean a cross-schema join on every single write.</p>
+  </section>
+
+  <section>
+    <h2>Entity relationships</h2>
+    <figure>
+      <div class="scroller">
+        <svg viewBox="0 0 1180 1020" role="img" aria-label="Entity relationship diagram of the Boko Lynx database: Supabase auth.users feeds profiles; profiles and spaces are joined by follows, moderators and bans; spaces contain posts, which contain comments; post_likes and comment_likes hang off each; moderation_checks and reports reference both posts and comments.">
+          <defs>
+            <marker id="mk-m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+              <polygon points="0,0 8,3 0,6" class="mk-m"/>
+            </marker>
+            <marker id="mk-a" markerWidth="7" markerHeight="5.5" refX="7" refY="2.75" orient="auto" markerUnits="userSpaceOnUse">
+              <polygon points="0,0 7,2.75 0,5.5" class="mk-a"/>
+            </marker>
+            <marker id="mk-g" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+              <polygon points="0,0 8,3 0,6" class="mk-g"/>
+            </marker>
+          </defs>
+
+          <!-- ============ EDGES (drawn first, so boxes sit on top) ============ -->
+
+          <!-- auth boundary -->
+          <path d="M147,136 L147,190" class="edge-auth" marker-end="url(#mk-g)"/>
+          <text x="157" y="167" class="elabel">same id &middot; 1:1</text>
+
+          <!-- profiles <-> spaces, via three junctions -->
+          <path d="M255,239 L324,239" class="edge" marker-end="url(#mk-m)"/>
+          <text x="292" y="233" class="elabel" text-anchor="middle">user_id</text>
+          <path d="M515,239 L574,239" class="edge" marker-end="url(#mk-m)"/>
+          <text x="545" y="233" class="elabel" text-anchor="middle">space_id</text>
+
+          <path d="M255,329 L324,329" class="edge" marker-end="url(#mk-m)"/>
+          <text x="292" y="323" class="elabel" text-anchor="middle">user_id</text>
+          <path d="M515,329 L574,329" class="edge" marker-end="url(#mk-m)"/>
+          <text x="545" y="323" class="elabel" text-anchor="middle">space_id</text>
+
+          <path d="M255,419 L324,419" class="edge" marker-end="url(#mk-m)"/>
+          <text x="292" y="413" class="elabel" text-anchor="middle">user_id</text>
+          <path d="M515,419 L574,419" class="edge" marker-end="url(#mk-m)"/>
+          <text x="545" y="413" class="elabel" text-anchor="middle">space_id</text>
+
+          <!-- spaces -> colleges -->
+          <path d="M805,270 L874,270" class="edge" marker-end="url(#mk-m)"/>
+          <text x="840" y="264" class="elabel" text-anchor="middle">1:1</text>
+
+          <!-- spaces -> posts -->
+          <path d="M692,426 L692,494" class="edge" marker-end="url(#mk-m)"/>
+          <text x="700" y="443" class="elabel">1</text>
+          <text x="700" y="466" class="elabel">space_id &middot; FR-30</text>
+          <text x="700" y="489" class="elabel">N</text>
+
+          <!-- posts -> comments -->
+          <path d="M692,730 L692,784" class="edge" marker-end="url(#mk-m)"/>
+          <text x="700" y="745" class="elabel">1</text>
+          <text x="700" y="763" class="elabel">post_id</text>
+          <text x="700" y="780" class="elabel">N</text>
+
+          <!-- posts -> post_likes -->
+          <path d="M580,603 L521,603" class="edge" marker-end="url(#mk-m)"/>
+          <text x="550" y="597" class="elabel" text-anchor="middle">post_id</text>
+
+          <!-- comments -> comment_likes -->
+          <path d="M580,873 L521,873" class="edge" marker-end="url(#mk-m)"/>
+          <text x="550" y="867" class="elabel" text-anchor="middle">comment_id</text>
+
+          <!-- posts -> moderation_checks -->
+          <path d="M805,560 L874,560" class="edge" marker-end="url(#mk-m)"/>
+          <text x="840" y="554" class="elabel" text-anchor="middle">post_id</text>
+
+          <!-- comments -> moderation_checks -->
+          <path d="M805,810 L832,810 L832,630 L874,630" class="edge" marker-end="url(#mk-m)"/>
+          <text x="812" y="803" class="elabel">comment_id</text>
+
+          <!-- posts -> reports -->
+          <path d="M805,690 L858,690 L858,750 L874,750" class="edge" marker-end="url(#mk-m)"/>
+          <text x="812" y="684" class="elabel">post_id</text>
+
+          <!-- comments -> reports -->
+          <path d="M805,850 L850,850 L850,820 L874,820" class="edge" marker-end="url(#mk-m)"/>
+          <text x="812" y="844" class="elabel">comment_id</text>
+
+          <!-- comments self-reference -->
+          <path d="M580,900 L555,900 L555,945 L574,945" class="edge" marker-end="url(#mk-m)"/>
+          <text x="551" y="960" class="elabel" text-anchor="end">parent_id</text>
+
+          <!-- the authorship rail -->
+          <path d="M147,426 L147,990 L1002,990 L1002,882" class="edge-act" marker-end="url(#mk-a)"/>
+          <path d="M147,603 L324,603" class="edge-act" marker-end="url(#mk-a)"/>
+          <text x="235" y="597" class="elabel" text-anchor="middle">user_id</text>
+          <path d="M147,873 L324,873" class="edge-act" marker-end="url(#mk-a)"/>
+          <text x="235" y="867" class="elabel" text-anchor="middle">user_id</text>
+          <text x="575" y="984" class="elabel" text-anchor="middle">reporter_id &middot; reported_user_id</text>
+
+          <!-- ============ ENTITIES ============ -->
+
+          <!-- auth.users (outside our schema) -->
+          <rect x="40" y="50" width="215" height="86" rx="4" class="ent-out"/>
+          <text x="52" y="43" class="card">SUPABASE AUTH &mdash; NOT OURS</text>
+          <text x="52" y="68" class="ent-name out">auth.users</text>
+          <line x1="40" y1="76" x2="255" y2="76" class="ent-rule"/>
+          <text x="52" y="88" class="col key">id</text><text x="243" y="88" class="tag" text-anchor="end">uuid PK</text>
+          <text x="52" y="104" class="col">email</text><text x="243" y="104" class="tag" text-anchor="end">text</text>
+          <text x="52" y="120" class="col">email_confirmed_at</text><text x="243" y="120" class="tag" text-anchor="end">tstz</text>
+
+          <!-- profiles -->
+          <rect x="40" y="196" width="215" height="230" rx="4" class="ent-hub"/>
+          <text x="52" y="189" class="card">THE PERSON</text>
+          <text x="52" y="214" class="ent-name">profiles</text>
+          <line x1="40" y1="222" x2="255" y2="222" class="ent-rule"/>
+          <text x="52" y="234" class="col key">id</text><text x="243" y="234" class="tag" text-anchor="end">PK &middot; FK auth</text>
+          <text x="52" y="250" class="col key">username</text><text x="243" y="250" class="tag" text-anchor="end">citext</text>
+          <text x="52" y="266" class="col">email</text><text x="243" y="266" class="tag" text-anchor="end">citext &#9650;</text>
+          <text x="52" y="282" class="col">email_verified_at</text><text x="243" y="282" class="tag" text-anchor="end">tstz &#9650;</text>
+          <text x="52" y="298" class="col">display_name</text><text x="243" y="298" class="tag" text-anchor="end">text</text>
+          <text x="52" y="314" class="col">bio</text><text x="243" y="314" class="tag" text-anchor="end">text</text>
+          <text x="52" y="330" class="col">major</text><text x="243" y="330" class="tag" text-anchor="end">text</text>
+          <text x="52" y="346" class="col">home_college_id</text><text x="243" y="346" class="tag" text-anchor="end">FK &rarr; colleges</text>
+          <text x="52" y="362" class="col">post_karma</text><text x="243" y="362" class="tag" text-anchor="end">int</text>
+          <text x="52" y="378" class="col">comment_karma</text><text x="243" y="378" class="tag" text-anchor="end">int</text>
+          <text x="52" y="394" class="col">is_admin</text><text x="243" y="394" class="tag" text-anchor="end">bool</text>
+          <text x="52" y="410" class="col">suspended_at</text><text x="243" y="410" class="tag" text-anchor="end">tstz</text>
+
+          <!-- follows -->
+          <rect x="330" y="196" width="185" height="86" rx="4" class="ent"/>
+          <text x="342" y="214" class="ent-name">follows</text>
+          <line x1="330" y1="222" x2="515" y2="222" class="ent-rule"/>
+          <text x="342" y="234" class="col key">user_id</text><text x="503" y="234" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="250" class="col key">space_id</text><text x="503" y="250" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="266" class="col">muted</text><text x="503" y="266" class="tag" text-anchor="end">FR-72</text>
+
+          <!-- moderators -->
+          <rect x="330" y="286" width="185" height="86" rx="4" class="ent"/>
+          <text x="342" y="304" class="ent-name">moderators</text>
+          <line x1="330" y1="312" x2="515" y2="312" class="ent-rule"/>
+          <text x="342" y="324" class="col key">space_id</text><text x="503" y="324" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="340" class="col key">user_id</text><text x="503" y="340" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="356" class="col">granted_by</text><text x="503" y="356" class="tag" text-anchor="end">FR-21</text>
+
+          <!-- bans -->
+          <rect x="330" y="376" width="185" height="86" rx="4" class="ent"/>
+          <text x="342" y="394" class="ent-name">bans</text>
+          <line x1="330" y1="402" x2="515" y2="402" class="ent-rule"/>
+          <text x="342" y="414" class="col key">space_id</text><text x="503" y="414" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="430" class="col key">user_id</text><text x="503" y="430" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="446" class="col">expires_at</text><text x="503" y="446" class="tag" text-anchor="end">FR-95</text>
+
+          <!-- spaces -->
+          <rect x="580" y="196" width="225" height="230" rx="4" class="ent-hub"/>
+          <text x="592" y="189" class="card">THE PLACE &mdash; [D-2]</text>
+          <text x="592" y="214" class="ent-name">spaces</text>
+          <line x1="580" y1="222" x2="805" y2="222" class="ent-rule"/>
+          <text x="592" y="234" class="col key">id</text><text x="793" y="234" class="tag" text-anchor="end">uuid PK</text>
+          <text x="592" y="250" class="col key">kind</text><text x="793" y="250" class="tag" text-anchor="end">enum</text>
+          <text x="600" y="266" class="col">campus | college | community</text>
+          <text x="592" y="282" class="col key">slug</text><text x="793" y="282" class="tag" text-anchor="end">citext uniq</text>
+          <text x="592" y="298" class="col">name</text><text x="793" y="298" class="tag" text-anchor="end">text</text>
+          <text x="592" y="314" class="col">description</text><text x="793" y="314" class="tag" text-anchor="end">text</text>
+          <text x="592" y="330" class="col">rules</text><text x="793" y="330" class="tag" text-anchor="end">FR-23</text>
+          <text x="592" y="346" class="col">created_by</text><text x="793" y="346" class="tag" text-anchor="end">FK &rarr; profiles</text>
+          <text x="592" y="362" class="col">follower_count</text><text x="793" y="362" class="tag" text-anchor="end">cached</text>
+          <text x="592" y="378" class="col">post_count</text><text x="793" y="378" class="tag" text-anchor="end">cached</text>
+          <text x="592" y="394" class="col">created_at</text><text x="793" y="394" class="tag" text-anchor="end">tstz</text>
+          <text x="592" y="410" class="col">deleted_at</text><text x="793" y="410" class="tag" text-anchor="end">soft delete</text>
+
+          <!-- colleges -->
+          <rect x="880" y="220" width="245" height="118" rx="4" class="ent"/>
+          <text x="892" y="213" class="card">SEEDED, NEVER USER-CREATED</text>
+          <text x="892" y="238" class="ent-name">colleges</text>
+          <line x1="880" y1="246" x2="1125" y2="246" class="ent-rule"/>
+          <text x="892" y="258" class="col key">space_id</text><text x="1113" y="258" class="tag" text-anchor="end">PK &middot; FK</text>
+          <text x="892" y="274" class="col">short_name</text><text x="1113" y="274" class="tag" text-anchor="end">text</text>
+          <text x="892" y="290" class="col">crest_key</text><text x="1113" y="290" class="tag" text-anchor="end">FR-13</text>
+          <text x="892" y="306" class="col">accent_hex</text><text x="1113" y="306" class="tag" text-anchor="end">text</text>
+          <text x="892" y="322" class="col">sort_order</text><text x="1113" y="322" class="tag" text-anchor="end">smallint</text>
+
+          <!-- posts -->
+          <rect x="580" y="500" width="225" height="230" rx="4" class="ent-hub"/>
+          <text x="592" y="493" class="card">CONTENT</text>
+          <text x="592" y="518" class="ent-name">posts</text>
+          <line x1="580" y1="526" x2="805" y2="526" class="ent-rule"/>
+          <text x="592" y="538" class="col key">id</text><text x="793" y="538" class="tag" text-anchor="end">uuid PK</text>
+          <text x="592" y="554" class="col key">space_id</text><text x="793" y="554" class="tag" text-anchor="end">FK &middot; one only</text>
+          <text x="592" y="570" class="col">author_id</text><text x="793" y="570" class="tag" text-anchor="end">FK &rarr; profiles</text>
+          <text x="592" y="586" class="col key">type</text><text x="793" y="586" class="tag" text-anchor="end">enum</text>
+          <text x="592" y="602" class="col">title</text><text x="793" y="602" class="tag" text-anchor="end">&le; 300</text>
+          <text x="592" y="618" class="col">body / url / image_key</text><text x="793" y="618" class="tag" text-anchor="end">exactly 1</text>
+          <text x="592" y="634" class="col">like_count</text><text x="793" y="634" class="tag" text-anchor="end">cached</text>
+          <text x="592" y="650" class="col">comment_count</text><text x="793" y="650" class="tag" text-anchor="end">cached</text>
+          <text x="592" y="666" class="col">hot_rank</text><text x="793" y="666" class="tag" text-anchor="end">FR-54</text>
+          <text x="592" y="682" class="col key">status</text><text x="793" y="682" class="tag" text-anchor="end">FR-90</text>
+          <text x="600" y="698" class="col">pending | approved</text>
+          <text x="600" y="714" class="col">blocked | removed</text>
+
+          <!-- post_likes -->
+          <rect x="330" y="560" width="185" height="86" rx="4" class="ent"/>
+          <text x="342" y="578" class="ent-name">post_likes</text>
+          <line x1="330" y1="586" x2="515" y2="586" class="ent-rule"/>
+          <text x="342" y="598" class="col key">user_id</text><text x="503" y="598" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="614" class="col key">post_id</text><text x="503" y="614" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="630" class="col">created_at</text><text x="503" y="630" class="tag" text-anchor="end">FR-50</text>
+
+          <!-- moderation_checks -->
+          <rect x="880" y="500" width="245" height="150" rx="4" class="ent"/>
+          <text x="892" y="493" class="card">WHAT THE MODEL SAID</text>
+          <text x="892" y="518" class="ent-name">moderation_checks</text>
+          <line x1="880" y1="526" x2="1125" y2="526" class="ent-rule"/>
+          <text x="892" y="538" class="col key">id</text><text x="1113" y="538" class="tag" text-anchor="end">uuid PK</text>
+          <text x="892" y="554" class="col">post_id</text><text x="1113" y="554" class="tag" text-anchor="end">nullable</text>
+          <text x="892" y="570" class="col">comment_id</text><text x="1113" y="570" class="tag" text-anchor="end">nullable</text>
+          <text x="892" y="586" class="col">label</text><text x="1113" y="586" class="tag" text-anchor="end">enum</text>
+          <text x="892" y="602" class="col">score</text><text x="1113" y="602" class="tag" text-anchor="end">real 0..1</text>
+          <text x="892" y="618" class="col key">decision</text><text x="1113" y="618" class="tag" text-anchor="end">allow | block</text>
+          <text x="892" y="634" class="col">model_version</text><text x="1113" y="634" class="tag" text-anchor="end">FR-92</text>
+
+          <!-- comments -->
+          <rect x="580" y="790" width="225" height="182" rx="4" class="ent"/>
+          <text x="592" y="808" class="ent-name">comments</text>
+          <line x1="580" y1="816" x2="805" y2="816" class="ent-rule"/>
+          <text x="592" y="828" class="col key">id</text><text x="793" y="828" class="tag" text-anchor="end">uuid PK</text>
+          <text x="592" y="844" class="col key">post_id</text><text x="793" y="844" class="tag" text-anchor="end">FK</text>
+          <text x="592" y="860" class="col">parent_id</text><text x="793" y="860" class="tag" text-anchor="end">self FK</text>
+          <text x="592" y="876" class="col">author_id</text><text x="793" y="876" class="tag" text-anchor="end">FK &rarr; profiles</text>
+          <text x="592" y="892" class="col key">path</text><text x="793" y="892" class="tag" text-anchor="end">ltree &middot; [D-3]</text>
+          <text x="592" y="908" class="col">depth</text><text x="793" y="908" class="tag" text-anchor="end">&le; 12</text>
+          <text x="592" y="924" class="col">body</text><text x="793" y="924" class="tag" text-anchor="end">text</text>
+          <text x="592" y="940" class="col">like_count</text><text x="793" y="940" class="tag" text-anchor="end">cached</text>
+          <text x="592" y="956" class="col key">status</text><text x="793" y="956" class="tag" text-anchor="end">FR-90</text>
+
+          <!-- comment_likes -->
+          <rect x="330" y="830" width="185" height="86" rx="4" class="ent"/>
+          <text x="342" y="848" class="ent-name">comment_likes</text>
+          <line x1="330" y1="856" x2="515" y2="856" class="ent-rule"/>
+          <text x="342" y="868" class="col key">user_id</text><text x="503" y="868" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="884" class="col key">comment_id</text><text x="503" y="884" class="tag" text-anchor="end">PK</text>
+          <text x="342" y="900" class="col">created_at</text><text x="503" y="900" class="tag" text-anchor="end">FR-50</text>
+
+          <!-- reports -->
+          <rect x="880" y="710" width="245" height="166" rx="4" class="ent"/>
+          <text x="892" y="703" class="card">WHAT A PERSON SAID</text>
+          <text x="892" y="728" class="ent-name">reports</text>
+          <line x1="880" y1="736" x2="1125" y2="736" class="ent-rule"/>
+          <text x="892" y="748" class="col key">id</text><text x="1113" y="748" class="tag" text-anchor="end">uuid PK</text>
+          <text x="892" y="764" class="col">reporter_id</text><text x="1113" y="764" class="tag" text-anchor="end">FK &rarr; profiles</text>
+          <text x="892" y="780" class="col">post_id</text><text x="1113" y="780" class="tag" text-anchor="end">nullable</text>
+          <text x="892" y="796" class="col">comment_id</text><text x="1113" y="796" class="tag" text-anchor="end">nullable</text>
+          <text x="892" y="812" class="col">reported_user_id</text><text x="1113" y="812" class="tag" text-anchor="end">FR-99</text>
+          <text x="892" y="828" class="col">space_id</text><text x="1113" y="828" class="tag" text-anchor="end">queue scope</text>
+          <text x="892" y="844" class="col">reason</text><text x="1113" y="844" class="tag" text-anchor="end">enum</text>
+          <text x="892" y="860" class="col key">status</text><text x="1113" y="860" class="tag" text-anchor="end">open|resolved</text>
+        </svg>
+      </div>
+
+      <figcaption>Every post belongs to exactly one <code>space</code>, and General is one of those spaces rather than a blend of the others &mdash; which is why <code>posts.space_id</code> is a single plain foreign key instead of three nullable ones. That is decision <strong>[D-2]</strong>, and it is what makes <code>follows</code>, <code>moderators</code> and <code>bans</code> one table each rather than two.</figcaption>
+
+      <ul class="legend">
+        <li>
+          <svg width="34" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" class="edge"/><polygon points="26,2 34,5 26,8" class="mk-m"/></svg>
+          Structural &mdash; contains or is keyed by
+        </li>
+        <li>
+          <svg width="34" height="10" aria-hidden="true"><line x1="0" y1="5" x2="27" y2="5" class="edge-act"/><polygon points="27,2.5 34,5 27,7.5" class="mk-a"/></svg>
+          Who did it &mdash; points back to a person
+        </li>
+        <li>
+          <svg width="34" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" class="edge-auth"/><polygon points="26,2 34,5 26,8" class="mk-g"/></svg>
+          The auth boundary
+        </li>
+        <li>
+          <svg width="12" height="10" aria-hidden="true"><text x="0" y="9" class="col" style="font-size:11px">&#9650;</text></svg>
+          Written only by trigger
+        </li>
+      </ul>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What each group is for</h2>
+    <div class="groups">
+      <div class="group">
+        <h3>Identity</h3>
+        <ul>
+          <li><b>profiles</b> A student. Keyed to Supabase Auth; owns the karma totals and the admin flag.</li>
+          <li><b>colleges</b> The crest, accent colour and sort order &mdash; the bits only a college has.</li>
+        </ul>
+      </div>
+      <div class="group">
+        <h3>Places</h3>
+        <ul>
+          <li><b>spaces</b> General, a college, or a student-made community. One table, one <code>kind</code>.</li>
+          <li><b>follows</b> Who follows what, and whether they've muted it.</li>
+          <li><b>moderators</b> Who may remove things, and only inside their own space.</li>
+          <li><b>bans</b> Who may not post there, and until when.</li>
+        </ul>
+      </div>
+      <div class="group">
+        <h3>Content</h3>
+        <ul>
+          <li><b>posts</b> Text, link or image &mdash; exactly one of the three, enforced by the database.</li>
+          <li><b>comments</b> The thread. <code>path</code> stores the ancestry so a whole tree loads in one query.</li>
+        </ul>
+      </div>
+      <div class="group">
+        <h3>Engagement</h3>
+        <ul>
+          <li><b>post_likes</b> A like <em>is</em> the row. No <code>+1/-1</code> column, because there are no downvotes.</li>
+          <li><b>comment_likes</b> Same shape. Unliking is a delete; liking twice is impossible.</li>
+        </ul>
+      </div>
+      <div class="group">
+        <h3>Safety</h3>
+        <ul>
+          <li><b>moderation_checks</b> What the classifier thought, kept so thresholds can be tuned later.</li>
+          <li><b>reports</b> What a person thought. A report on content the model passed is a labelled miss.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Three decisions still open</h2>
+    <div class="decisions">
+
+      <div class="decision">
+        <div class="dhead"><span class="dtag">D-4</span><h3>What happens when the classifier doesn't answer?</h3></div>
+        <p>FR-90 puts a model call between &ldquo;pressed Post&rdquo; and &ldquo;post exists&rdquo;. That call can be slow, time out, or return 503 because the service is asleep. The schema supports all three answers; the difference is invisible in code review and obvious in a demo.</p>
+        <ul class="opts">
+          <li><b>Fail closed</b> &mdash; nothing unscreened is ever published, but if the model is down during the presentation, posts silently stop appearing and the app looks broken.</li>
+          <li><b>Fail open</b> &mdash; always fast, always works, but content is readable before it has been checked, which is the one thing FR-90 exists to prevent.</li>
+          <li class="pick"><b>Bounded wait</b> &mdash; wait about two seconds, then fall back to <code>pending</code> and retry in the background. The common case stays fast and the failure case is safe rather than merely quiet. <em>Recommended.</em></li>
+        </ul>
+        <p style="margin-top:14px">Editing raises the same question again: an edited body has not been screened. Re-screen on edit, or the checker is bypassed by posting something clean and editing it afterwards.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dhead"><span class="dtag">D-5</span><h3>Colleges, or departments?</h3></div>
+        <p>The seed currently holds the ten real Texas State colleges, so a computer science student lands in one bucket with biology, maths and engineering. A per-department list would give CS its own feed &mdash; closer to what was described &mdash; at roughly forty to fifty spaces. It is a change to one <code>INSERT</code> and nothing else structurally, but it changes how the product feels, so it wants deciding before the demo rather than after.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dhead"><span class="dtag">D-3</span><h3>Comment trees as a materialised path</h3></div>
+        <p>Implemented, not yet reviewed. <code>path</code> holds the ancestry as an <code>ltree</code> &mdash; <code>0001.0004.0009</code> &mdash; so a whole thread loads correctly sorted in one indexed query with no recursion. <code>parent_id</code> is kept alongside it on purpose: the path makes reads fast, the parent keeps referential integrity real. The redundancy is deliberate, and the two must always be written in the same statement. The team should be comfortable maintaining that before it ships.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Verified against PostgreSQL 16</h2>
+    <div class="tablewrap">
+      <table>
+        <caption>Both migrations applied to a clean container, then every rule was given bad data to see whether it actually rejects it rather than merely parsing.</caption>
+        <thead>
+          <tr><th scope="col">Attempted</th><th scope="col">Rule</th><th scope="col">Result</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>bob@gmail.com signs up</td><td>FR-01</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>dp1234@txstate.edu signs up</td><td>profile auto-created, unverified</td><td><span class="pill">passed</span></td></tr>
+          <tr><td>second student, colliding handle</td><td>became dp12341</td><td><span class="pill">passed</span></td></tr>
+          <tr><td>student confirms their email</td><td>FR-02 mirrored to profiles</td><td><span class="pill">passed</span></td></tr>
+          <tr><td>username &ldquo;BobcatFan&rdquo;</td><td>lowercase handles</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>a second campus space</td><td>FR-60</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>community with no creator</td><td>FR-10</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>post with both a body and a url</td><td>FR-31</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>liking the same post twice</td><td>FR-50</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>comment nested past the limit</td><td>FR-41</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>report targeting a post and a comment</td><td>FR-97</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>account report filed into a space queue</td><td>FR-99 routing</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>reporting yourself</td><td>self-report</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>second open report on one account</td><td>FR-99, released once resolved</td><td><span class="pill">rejected</span></td></tr>
+          <tr><td>reading a pending post, signed out</td><td>FR-90 &mdash; sees 1 of 2</td><td><span class="pill">hidden</span></td></tr>
+          <tr><td>reading it as its author</td><td>FR-90 &mdash; sees 2 of 2</td><td><span class="pill">visible</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bug">
+      <h3>It caught one real bug</h3>
+      <p>The trigger functions set <code>search_path = ''</code>, which is correct and required for a <code>security definer</code> function. That also made the unqualified <code>citext</code> type unresolvable inside them &mdash; so <strong>every signup would have failed at runtime.</strong> The file parsed perfectly. It would have died in front of the class. Fixed by comparing as <code>text</code> and letting the implicit cast do the rest.</p>
+    </div>
+  </section>
+
+  <footer>
+    supabase/migrations/20260910200000_lynx_core.sql &mdash; 888 lines<br>
+    builds on 20260901212005_initial_schema.sql<br>
+    branch databaseSchema &middot; mirrored by hand in backend/models.py
+  </footer>
+
+</div>
+</body>
+</html>
