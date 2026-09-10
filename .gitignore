@@ -18,3 +18,7 @@ frontend/out/
 
 # IDE
 .vscode/
+
+# Claude Code (local, per-developer)
+.claude/settings.local.json
+.claude/projects/
