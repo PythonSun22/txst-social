@@ -2,7 +2,7 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #d92a2a;
+  --foreground: #121010;
 }
 
 @theme inline {
@@ -14,8 +14,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #cf2727;
-    --foreground: #ededed;
+    --background: #dd9922;
+    --foreground: #fefefe;
   }
 }
 
@@ -30,10 +30,22 @@ body {
   width: 220px;
   background-color: #501214;
   height: 100vh;
-  padding: 20px;
+  padding: 24px;
 }
 
 .page-content {
   flex: 1;
-  padding: 20px;
+  padding: 24px;
+}
+
+.feed {
+  margin-top: 24px;
+
+}
+
+.post {
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
 }
