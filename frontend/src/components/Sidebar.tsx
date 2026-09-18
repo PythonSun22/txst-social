@@ -8,6 +8,7 @@ const Sidebar = () => {
             <li><Link href="/">ForAll</Link></li>
             <li><Link href="/colleges">Colleges</Link></li>
             <li><Link href="/profile">Profile</Link></li>
+            <li><Link href="/login">Account</Link></li>
         </ul>
     </div>
   );

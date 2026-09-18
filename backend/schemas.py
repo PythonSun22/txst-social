@@ -29,3 +29,9 @@ class ProfileResponse(ProfileCreate):
     comment_karma: int = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CurrentProfileResponse(ProfileResponse):
+    """The caller's profile and FR-02 verification state, without private account fields."""
+
+    email_verified: bool
