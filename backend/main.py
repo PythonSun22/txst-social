@@ -1,18 +1,51 @@
 """FastAPI application and API routes."""
 
-from fastapi import Depends, FastAPI
+import os
+
+from fastapi import Depends, FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from auth import get_current_profile
 from database import engine, get_db
 from models import Profile
 from schemas import (
+    CurrentProfileResponse,
     DatabaseHealthResponse,
     HealthResponse,
     ProfileResponse,
 )
 
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "FRONTEND_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000",
+        ).split(",")
+        if origin.strip()
+    ],
+    allow_methods=["GET"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+
+@app.get("/auth/me", response_model=CurrentProfileResponse)
+def current_profile(
+    response: Response,
+    profile: Profile = Depends(get_current_profile),
+):
+    response.headers["Cache-Control"] = "no-store"
+
+    return CurrentProfileResponse(
+        **ProfileResponse.model_validate(profile).model_dump(),
+        email_verified=profile.email_verified_at is not None,
+    )
 
 
 @app.get(
@@ -21,7 +54,6 @@ app = FastAPI()
     summary="Check API health",
 )
 def health_check() -> HealthResponse:
-    """Return the current API health status."""
     return HealthResponse(status="ok")
 
 
@@ -32,6 +64,7 @@ def health_check() -> HealthResponse:
 )
 def database_health_check() -> DatabaseHealthResponse:
     """Verify the database connection and return the profile count."""
+
     with engine.connect() as connection:
         result = connection.execute(
             text("select count(*) from public.profiles")
@@ -51,5 +84,8 @@ def database_health_check() -> DatabaseHealthResponse:
 )
 def get_profiles(db: Session = Depends(get_db)) -> list[Profile]:
     """Return all stored profiles."""
+
     statement = select(Profile)
-    return list(db.scalars(statement).all())
+    profiles = db.scalars(statement).all()
+
+    return list(profiles)

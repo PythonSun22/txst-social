@@ -195,9 +195,22 @@ Sprint 1 (Sept 1–13) — foundation — is essentially complete: both apps run
 they talk to each other, Postgres is connected through SQLAlchemy, migrations
 are version-controlled, and the full schema is merged into `dev`.
 
-Working endpoints today are `GET /health`, `GET /db-health` and `GET /profiles`.
-That is all. Posts, comments, likes, feeds, auth and moderation are **schema
-only** — the tables exist, the API does not.
+Working endpoints today are `GET /health`, `GET /db-health`, `GET /profiles`
+and `GET /auth/me`. `/login` signs existing users in through Supabase Auth.
+FastAPI validates bearer tokens with the project's Auth server, then loads the
+matching profile. Inactive accounts are rejected (FR-96); a reusable write
+dependency requires verified email (FR-02). Future post routes must derive
+`author_id` from that profile and check bans for the target space (FR-95).
+Application queries still use the server's SQLAlchemy connection, not the
+browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
+Posts, comments, likes, feeds and moderation remain **schema only**.
+
+Approved next slice: persistent General/ForAll posts with required titles,
+text only, images only, or text plus multiple ordered images. A future migration
+will replace `posts.image_key` with `post_media`; the current schema described
+above has not yet changed. Existing link behavior stays supported. Newly created
+posts may remain author-visible `pending` for this milestone; classifier work
+and [D-4] remain deferred. This does not authorize automatic approval.
 
 Sprint 2 (Sept 14–27) is the first vertical slice: posts through every layer,
 create and retrieve, browser to database and back.
