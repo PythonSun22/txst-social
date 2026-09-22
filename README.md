@@ -27,12 +27,12 @@ A Texas State University-focused social networking web application built with a 
 - Supabase
   - Hosted PostgreSQL
   - Database migrations
-  - Authentication planned
+  - Authentication foundation: existing-account sign-in and backend identity
   - Storage may be used later
 
 ### Planned
 
-- Supabase Auth
+- Supabase signup and account recovery UI
 - GSAP for motion and scroll effects
 - Three.js
 - React Three Fiber
@@ -183,6 +183,49 @@ http://127.0.0.1:8000/docs
 ```
 
 ## Current API Endpoints
+
+### Authentication foundation (FR-01, FR-02, FR-96)
+
+Copy `frontend/.env.example` to `frontend/.env.local`, and add the new entries
+from `backend/.env.example` to your backend `.env`. Use the same Supabase project
+for both apps and `DATABASE_URL`. Only a **publishable key** (or legacy anon key)
+belongs in these Auth settings; never put a service-role or secret key in a
+`NEXT_PUBLIC_` variable. Restart the frontend after changing its environment.
+
+Open `/login` and sign in with an existing Texas State email/password account.
+Supabase's browser SDK manages session persistence and refresh. Passwords go
+directly to Supabase Auth. The browser uses Supabase for Auth only; application
+data continues through FastAPI. Account signup/reset UI is not part of this
+foundation stage.
+
+`GET /auth/me` accepts `Authorization: Bearer <access token>`. FastAPI asks the
+configured project's `/auth/v1/user` endpoint to validate the token and uses
+the returned UUID to load `profiles`. Its response includes public profile
+fields plus `email_verified`; it never accepts an author ID from the client.
+Missing/invalid tokens return 401, disallowed accounts return 403, and Auth
+configuration/service failures return 503. Unverified active users can inspect
+their identity, but `require_verified_profile` rejects them for future writes.
+Space-specific bans must additionally be checked when post routes are added.
+
+The existing backend database connection must be authorized to read profiles.
+It is a trusted server connection: passing a bearer token to FastAPI does not
+change its SQL role or set `auth.uid()`. Application authorization is enforced
+explicitly. No browser profile-read policy or database migration is added here.
+The migrations' signup trigger must have created the account's profile; the API
+does not create missing profiles or write mirrored email/verification fields.
+
+`FRONTEND_ORIGINS` is a comma-separated allowlist for browser API requests and
+defaults to the two local development origins in `.env.example`.
+
+Run the isolated backend tests from `backend/`:
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+These tests mock Supabase Auth and database access. For a live smoke test, sign
+in, verify the username/verification state on `/login`, refresh, and sign out.
+The current stage has no post endpoints; persistent posts and media follow next.
 
 ### Health Check
 

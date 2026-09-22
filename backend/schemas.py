@@ -1,6 +1,17 @@
+"""Pydantic schemas for API requests and responses."""
+
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
+
+
+class HealthResponse(BaseModel):
+    status: str
+
+
+class DatabaseHealthResponse(BaseModel):
+    database: str
+    profile_count: int
 
 
 class ProfileCreate(BaseModel):
@@ -29,3 +40,9 @@ class ProfileResponse(ProfileCreate):
     comment_karma: int = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CurrentProfileResponse(ProfileResponse):
+    """The caller's profile and FR-02 verification state, without private account fields."""
+
+    email_verified: bool
