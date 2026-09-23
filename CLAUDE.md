@@ -118,3 +118,13 @@ context for next time. No match → add a new subsection (name from
 - **Working on:** repo tooling and assistant context (`CLAUDE.md`, `AGENTS.md`).
 
 - **Notes for Claude:** —
+
+### Daniel Pelley — daniel.pelley@outlook.com
+
+- **Working on:** frontend theme and feed UI on `feature/initial-ui-fyp`,
+  adapted from the Figma Make mockup `Boko Lynx.make` (in `work/cs4332/`, one
+  level above the repo). Maroon/gold tokens in `globals.css`; `Navbar`
+  replaced `Sidebar`; `PostCard`, `SortBar` and the ForAll page still use mock data.
+- **Notes for Claude:** learning the stack, so wants short, plain explanations.
+  The mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for the
+  look only, never for product rules.
