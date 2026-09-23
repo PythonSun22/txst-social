@@ -1,51 +1,57 @@
 @import "tailwindcss";
 
+/*
+ * Texas State maroon and gold theme, taken from the Figma Make mockup
+ * ("Boko Lynx.make"). Colours are defined once here; components use them
+ * through the Tailwind names registered in @theme below (bg-primary,
+ * text-muted-foreground, border-border, ...), so retheming is one edit.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #121010;
+  --background: #f4f0ec;
+  --foreground: #1a0a0b;
+  --card: #ffffff;
+  --card-foreground: #1a0a0b;
+  --primary: #501214;
+  --primary-foreground: #ffffff;
+  --secondary: #f9f5f0;
+  --secondary-foreground: #1a0a0b;
+  --muted: #ede8e2;
+  --muted-foreground: #7a6a5a;
+  --accent: #c4902a;
+  --accent-foreground: #ffffff;
+  --border: #ddd5c8;
+  --ring: #501214;
+  --radius: 6px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #dd9922;
-    --foreground: #fefefe;
-  }
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-card: var(--radius);
+  /* Font variables are set by next/font in layout.tsx. */
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-serif: var(--font-merriweather), Georgia, serif;
 }
 
 body {
-  display: flex;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 
-.sidebar {
-  width: 220px;
-  background-color: #501214;
-  height: 100vh;
-  padding: 24px;
-}
-
-.page-content {
-  flex: 1;
-  padding: 24px;
-}
-
-.feed {
-  margin-top: 24px;
-
-}
-
-.post {
-  padding: 16px;
-  margin-bottom: 16px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c4902a33 transparent;
 }
