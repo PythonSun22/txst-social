@@ -124,7 +124,8 @@ context for next time. No match → add a new subsection (name from
 - **Working on:** frontend theme and feed UI on `feature/initial-ui-fyp`,
   adapted from the Figma Make mockup `Boko Lynx.make` (in `work/cs4332/`, one
   level above the repo). Maroon/gold tokens in `globals.css`; `Navbar`
-  replaced `Sidebar`; `PostCard`, `SortBar` and the ForAll page still use mock data.
+  replaced `Sidebar`; `PostCard`, `SortBar` and the ForAll page still use mock data. `/submit` +
+  `PostComposer` is the create-post form, not yet wired to an endpoint.
 - **Notes for Claude:** learning the stack, so wants short, plain explanations.
   The mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for the
   look only, never for product rules.

@@ -1,6 +1,7 @@
 "use client";
 import PostCard, { type ModerationStatus } from "@/components/PostCard";
 import SortBar, { type SortOrder } from "@/components/SortBar";
+import Link from "next/link";
 import { useState } from "react";
 
 // Field names follow the `posts` table so swapping in the API response is easy.
@@ -47,6 +48,14 @@ export default function Home() {
           Eat &apos;Em Up, Kats!
         </span>
       </div>
+
+      <Link
+        href="/submit"
+        className="mb-3 flex items-center gap-2 rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-base leading-none text-white" aria-hidden="true">+</span>
+        Create Post
+      </Link>
 
       <SortBar value={sort} onChange={setSort} />
 
