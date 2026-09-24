@@ -5,6 +5,7 @@ const links = [
   { href: "/", label: "ForAll" },
   { href: "/colleges", label: "Colleges" },
   { href: "/profile", label: "Profile" },
+  { href: "/upload-test", label: "Upload test" },
 ];
 
 /**

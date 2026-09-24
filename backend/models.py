@@ -109,6 +109,26 @@ class Post(Base):
     removed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="SET NULL"), nullable=True)
 
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR, Computed("to_tsvector('english', title)", persisted=True))
+class ImageUpload(Base):
+    """FR-32: private Storage object metadata; uploaded does not mean approved."""
+
+    __tablename__ = "image_uploads"
+    __table_args__ = {"schema": "public"}
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="CASCADE"), nullable=False)
+    bucket_id: Mapped[str] = mapped_column(Text, nullable=False, server_default="post-images")
+    object_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    original_name: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Follow(Base):
     __tablename__ = "follows"
     __table_args__ = {"schema": "public"}
