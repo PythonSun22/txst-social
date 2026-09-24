@@ -5,10 +5,11 @@ import os
 from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from auth import get_current_profile
 from database import engine, get_db
+from models import Post, Profile
 from images import router as images_router
 from posts import router as posts_router
 from models import Profile
@@ -16,6 +17,7 @@ from schemas import (
     CurrentProfileResponse,
     DatabaseHealthResponse,
     HealthResponse,
+    PostResponse,
     ProfileResponse,
 )
 
@@ -50,6 +52,46 @@ def current_profile(
         **ProfileResponse.model_validate(profile).model_dump(),
         email_verified=profile.email_verified_at is not None,
     )
+
+
+@app.get(
+    "/posts/me",
+    response_model=list[PostResponse],
+    summary="Get the current user's posts",
+)
+def get_my_posts(
+    response: Response,
+    current_profile: Profile = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
+
+    statement = (
+        select(Post)
+        .options(
+            load_only(
+                Post.id,
+                Post.space_id,
+                Post.author_id,
+                Post.title,
+                Post.body,
+                Post.like_count,
+                Post.comment_count,
+                Post.created_at,
+                Post.status,
+            )
+        )
+        .where(
+            Post.author_id == current_profile.id,
+            Post.deleted_at.is_(None),
+            Post.status.in_(["approved", "pending"]),
+        )
+        .order_by(Post.created_at.desc())
+    )
+
+    posts = db.scalars(statement).all()
+
+    return list(posts)
 
 
 @app.get(
