@@ -1,4 +1,4 @@
-# Independent local testing — Boko Lynx
+# Independent local testing — TXST Lynx
 
 Each teammate runs their own Supabase database, Auth, and Storage on their
 computer. Test feature-branch migrations locally, then open a PR. **Every merge

@@ -2,7 +2,7 @@
 
 /*
  * Texas State maroon and gold theme, taken from the Figma Make mockup
- * ("Boko Lynx.make"). Colours are defined once here; components use them
+ * (original design source). Colours are defined once here; components use them
  * through the Tailwind names registered in @theme below (bg-primary,
  * text-muted-foreground, border-border, ...), so retheming is one edit.
  */

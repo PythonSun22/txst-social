@@ -35,7 +35,7 @@ export class ImageTransferError extends Error {
   }
 }
 
-/** Reusable pipeline. A future crop step supplies a new inspected File to this same function. */
+/** Transfers an inspected original or edited File without coupling the asset to a post. */
 export async function uploadImage(image: SelectedImage, onStage: (stage: string) => void): Promise<SavedImage> {
   if (image.errors.length || !image.width || !image.height) throw new Error("Choose a valid image first.");
   onStage("Preparing upload…");

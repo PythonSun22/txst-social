@@ -1,4 +1,4 @@
-# Boko Lynx — project foundation
+# TXST Lynx — project foundation
 
 **What this file is.** Everything an outsider needs to be useful on this project
 in one place. It is written for AI assistants — ChatGPT, Claude, Copilot, Cursor,
@@ -20,7 +20,7 @@ because it is believed.
 
 ## 1. What we are building
 
-Boko Lynx is a social platform for Texas State University students, for a
+TXST Lynx is a social platform for Texas State University students, for a
 semester-long software engineering course (CS 4398, September–December 2026).
 Sign-up is restricted to `txstate.edu` addresses.
 
@@ -96,18 +96,20 @@ txst-social/
     ├── documentation.md       # documentation standard the team agreed
     ├── learning.md            # learning resources, by topic
     ├── Two_Week_Sprint_Timeline.md
-    └── boko-lynx-proposal.html
+    └── txst-lynx-proposal.html
 ```
 
 **`supabase/migrations/20260910200000_lynx_core.sql` and subsequent migrations
 are the source of truth for the data model.** Read the core migration first;
-`20260924191615_image_upload_pipeline.sql` adds private image uploads.
+`20260924191615_image_upload_pipeline.sql` adds private image uploads, and
+`20260924205639_persistent_posts_and_likes.sql` adds ordered attachments and
+replaces the old post content constraint.
 
 ---
 
 ## 4. The data model
 
-Thirteen tables of ours, plus Supabase's `auth.users` which we do not own.
+Fourteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, bio, major,
@@ -125,8 +127,13 @@ Thirteen tables of ours, plus Supabase's `auth.users` which we do not own.
 - `bans` — `(space_id, user_id)` with an optional expiry.
 
 **Content**
-- `posts` — one `space_id`, one `type` (`text` / `link` / `image`), and exactly
-  one of `body` / `url` / `image_key`, enforced by CHECK constraint.
+- `posts` — one `space_id`, required title, and one `type` (`text` / `link` /
+  `image`). Text requires a body; images may also have text; legacy links use
+  `url`. `submission_id` makes post-create retries idempotent per author.
+- `post_media` — ordered `(post_id, position)` attachments referencing completed
+  `image_uploads`, with object key and dimensions. A deferred database constraint
+  requires media for image posts and forbids it for text/link posts. Nullable
+  upload references/dimensions preserve legacy image keys.
 - `comments` — threaded. `path` is an `ltree` holding the ancestry, so a whole
   thread loads in one indexed query with no recursion. `parent_id` is kept
   alongside it on purpose and the two must be written in the same statement.
@@ -204,30 +211,42 @@ Working endpoints today are `GET /health`, `GET /db-health`, `GET /profiles`
 and `GET /auth/me`. `/login` signs existing users in through Supabase Auth.
 FastAPI validates bearer tokens with the project's Auth server, then loads the
 matching profile. Inactive accounts are rejected (FR-96); a reusable write
-dependency requires verified email (FR-02). Future post routes must derive
-`author_id` from that profile and check bans for the target space (FR-95).
+dependency requires verified email (FR-02). Post routes derive `author_id` from
+that profile and check bans for the target space (FR-95).
 Application queries still use the server's SQLAlchemy connection, not the
 browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
-Posts, comments, likes, feeds and moderation remain **schema only**.
+General posts, ordered images, chronological feed reads and post likes now work
+through `/posts`. Comments and classifier/moderation workflows remain **schema only**.
 
 `/upload-test` is a Next.js page for the reusable image upload pipeline (FR-32).
 Drag/drop or browse one JPEG, PNG, or WebP up to **10,000,000 bytes (10 MB)**;
-display byte size, dimensions and aspect ratio. Preserve the original image;
-crop/resize editing is deferred. FastAPI `/images` reserves an owner-scoped
+display byte size, dimensions and aspect ratio. An optional browser editor offers
+drag cropping, ratio presets, pixel controls and proportional downscaling (maximum
+export edge 4096 px). Save replaces the local selection after revalidation;
+Discard preserves it. Edits are re-encoded as still images; unedited uploads
+preserve original bytes. Editing an uploaded selection creates a new asset on
+the next submission, never overwrites the old object. FastAPI `/images` reserves an owner-scoped
 object key and signs with the caller's JWT; the browser transfers bytes directly
 to the private `post-images` bucket. Completion checks Storage size/MIME metadata.
-Only the owner can list uploads or get a short-lived preview. Verified, active
+Only the owner can list uploads or get an upload preview; post image previews
+also permit readers of approved posts. Verified, active
 accounts are required for writes (FR-02/FR-96). Apply the image-upload migration
 before testing persistence. No service-role key is needed. See
 `docs/image-uploads.md` for setup, limitations and the post integration seam.
 
-Approved next slice: persistent General/ForAll posts with required titles,
-text only, images only, or text plus multiple ordered images. A future migration
-will replace `posts.image_key` with `post_media` referencing completed
-`image_uploads` in display order; the current post schema described
-above has not yet changed. Existing link behavior stays supported. Newly created
-posts may remain author-visible `pending` for this milestone; classifier work
-and [D-4] remain deferred. This does not authorize automatic approval.
+Implemented slice: persistent General/ForAll posts with required titles,
+text only, images only, or text plus up to ten ordered images. `post_media`
+replaces `posts.image_key`. Existing links remain readable. The main feed has
+no mock posts and uses cursor pagination, most recent first. Verified signed-in
+students can like/unlike through FastAPI; counters, karma and hot rank change
+atomically, and direct browser writes to `post_likes` are denied by RLS.
+New posts remain author-visible `pending`; classifier work and [D-4] remain
+deferred. This does not authorize automatic approval.
+
+Keep the upload/editor modules independent of posts. `ImageUploader` supports
+selection-only mode for the composer and standalone transfer mode for the lab;
+`PostComposer` owns ordered attachments and post submission. Read
+[posts and media](docs/posts-and-media.md) before extending these features.
 
 Sprint 2 (Sept 14–27) is the first vertical slice: posts through every layer,
 create and retrieve, browser to database and back.
@@ -242,9 +261,14 @@ One-time deployment exception, authorized by the user on 2026-09-24:
 `20260924191615_image_upload_pipeline.sql` was applied to the shared database
 before merge because local Docker setup was blocked by disk space. Migration
 history, table RLS, private bucket limits and ownership policies were verified.
-This does not waive the two-approval merge rule or authorize future shared
-migration deployments before review. Keep this migration file when integrating
-branches; the shared database already records it as applied.
+A second explicit exception authorized this milestone's shared deployment:
+`20260924204603_update_site_name.sql` and
+`20260924205639_persistent_posts_and_likes.sql` are also applied. Migration history,
+RLS and rollback-only integration checks passed. These exceptions do not waive
+the two-approval merge rule or authorize future shared migrations before review.
+Keep all migration files when integrating branches; the shared database records
+them as applied. Older code selecting `posts.image_key` must update with the
+post-media migration.
 
 ---
 
@@ -280,20 +304,16 @@ correct answer.
 
 Real, unresolved, and worth knowing before you trust any single document.
 
-**The project has three names.** `README.md` and the first migration say
-**TXST Lynx**. The proposal and the core migration say **Boko Lynx**. The
-documentation standard and the sprint timeline say **TXST Social**. The GitHub
-repository is `txst-social`. Nothing is broken by this, but it should be settled
-and applied everywhere — pick one and do a pass.
+**Naming is settled:** the official site name is **TXST Lynx**, used in UI,
+metadata and documentation. The GitHub repository remains `txst-social`.
+Migration `20260924204603_update_site_name.sql` updates the FR-01 error message
+on existing databases; it was applied under the explicit exception above.
 
-**Direct database access from the browser is ambiguous.** `README.md` says all
-application database access goes through FastAPI. The RLS policies in
-`20260910200000_lynx_core.sql` deliberately permit a signed-in browser to insert
-and delete its own likes and follows directly, on the reasoning that those need
-no decision, while anything requiring one — screening, rate limits, moderator
-scope — must go through the API. **Both are defensible; only one can be the
-rule.** The team has not chosen. Until it does, prefer routing through FastAPI,
-which is the more conservative reading and matches what is written down.
+**Post like writes are API-only.** The post-media migration removes the old
+browser INSERT/DELETE policies on `post_likes`, ensuring counters cannot be
+bypassed. Older direct-write policies for comment likes and follows still exist;
+when implementing those features, reconcile them with the frontend-to-FastAPI
+rule. Auth and signed Storage transfers remain intentional browser integrations.
 
 ---
 

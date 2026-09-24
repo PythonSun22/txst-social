@@ -95,7 +95,7 @@ class Post(Base):
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    image_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    submission_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     like_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     comment_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -109,6 +109,19 @@ class Post(Base):
     removed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="SET NULL"), nullable=True)
 
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR, Computed("to_tsvector('english', title)", persisted=True))
+class PostMedia(Base):
+    """FR-32: ordered attachments, separate from the reusable upload asset."""
+
+    __tablename__ = "post_media"
+    __table_args__ = {"schema": "public"}
+    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.posts.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="RESTRICT"), nullable=True)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
 class ImageUpload(Base):
     """FR-32: private Storage object metadata; uploaded does not mean approved."""
 

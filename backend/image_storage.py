@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from image_schemas import IMAGE_BUCKET
 
 
-def storage_request(method: str, path: str, token: str, body: dict | None = None) -> dict:
+def storage_request(method: str, path: str, token: str | None, body: dict | None = None) -> dict:
     """Use the caller's JWT so Storage RLS remains effective; never return upstream details."""
     url = os.getenv("SUPABASE_URL", "").rstrip("/")
     key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
@@ -18,7 +18,7 @@ def storage_request(method: str, path: str, token: str, body: dict | None = None
     try:
         response = httpx.request(
             method, f"{url}/storage/v1/{path}",
-            headers={"apikey": key, "Authorization": f"Bearer {token}"},
+            headers={"apikey": key, **({"Authorization": f"Bearer {token}"} if token else {})},
             json=body, timeout=15.0,
         )
     except httpx.RequestError:
@@ -51,7 +51,7 @@ def object_info(object_key: str, token: str) -> dict:
     return storage_request("GET", f"object/info/{IMAGE_BUCKET}/{object_key}", token)
 
 
-def sign_preview(object_key: str, token: str) -> str:
+def sign_preview(object_key: str, token: str | None) -> str:
     data = storage_request("POST", f"object/sign/{IMAGE_BUCKET}/{object_key}", token, {"expiresIn": 300})
     path = data.get("signedURL")
     if not isinstance(path, str) or not path.startswith("/object/sign/"):
