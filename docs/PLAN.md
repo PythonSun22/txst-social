@@ -9,6 +9,7 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 ---
 
 ## Registration (`Signup` branch)
+## OpenAI moderation starter (FR-90–92)
 
 Auth foundation (existing-account sign-in, `/auth/me`, Supabase-validated
 identity) is already merged from `Frontend`. There's currently no way for a
@@ -66,4 +67,25 @@ Classifier integration and `[D-4]` remain deferred. No auto-approval.
 Comments, persistent likes, advanced ranking, and gallery features are
 outside this slice.
 
+1. Install the authorized OpenAI SDK with `uv add openai`, updating the project
+   dependency declaration, lockfile, and backend virtual environment.
+2. Implement a standalone text-screening module returning provider flags, category
+   scores, model identity, and latency, with a local command-line example.
+3. Check success, empty input, missing configuration, and provider failure without
+   using real credentials; document how to run a live check.
+4. Consolidate moderation guidance and setup into `docs/moderation.md`, update
+
+   references, and refresh the project context and Misan's session notes.
+never a successful result. This module makes no publication decision. [D-4]
+**Constraints:** API keys stay server-side. Screening failures raise an error,
+(timeout/retry policy) remains open; the starter's network timeout only bounds
+the standalone request.
+
+**Non-goals:** endpoints, database writes/migrations, image screening, profanity
+rules, policy thresholds, moderator review, or background jobs.
+
+**Verification:** SDK transition and documentation consolidation complete. Six
+offline tests pass using the real SDK with a mocked HTTP transport, including
+invalid responses, provider failures, and no automatic retries. Live provider
+verification requires a local `OPENAI_API_KEY`.
 _Revise this file whenever the plan changes. Keep it short._
