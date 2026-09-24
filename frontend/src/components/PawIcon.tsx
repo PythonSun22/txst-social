@@ -9,8 +9,8 @@ export default function PawIcon({ size = 20 }: { size?: number }) {
       <ellipse cx="32" cy="42" rx="14" ry="12" />
       <ellipse cx="14" cy="28" rx="7" ry="9" />
       <ellipse cx="50" cy="28" rx="7" ry="9" />
-      <ellipse cx="22" cy="18" rx="6" ry="7" />
-      <ellipse cx="42" cy="18" rx="6" ry="7" />
+      <ellipse cx="25" cy="18" rx="7" ry="9" />
+      <ellipse cx="39" cy="18" rx="7" ry="9" />
     </svg>
   );
 }

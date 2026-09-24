@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from auth import get_current_profile
 from database import engine, get_db
 from models import Profile
+from images import router as images_router
+from posts import router as posts_router
 from schemas import (
     CurrentProfileResponse,
     DatabaseHealthResponse,
@@ -19,6 +21,8 @@ from schemas import (
 
 
 app = FastAPI()
+app.include_router(images_router)
+app.include_router(posts_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +34,7 @@ app.add_middleware(
         ).split(",")
         if origin.strip()
     ],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 

@@ -1,4 +1,4 @@
-# CLAUDE.md — Boko Lynx
+# CLAUDE.md — TXST Lynx
 
 This file is loaded automatically by Claude Code for every teammate. It is the
 Claude-specific layer on top of the project's shared assistant brief.
@@ -66,8 +66,11 @@ Lint the frontend with `npm run lint` before a PR.
   deadline. Build only what the current sprint needs (see
   `docs/Two_Week_Sprint_Timeline.md`).
 - Don't restructure the repo or change the git workflow without team agreement.
-- Don't rename the project — it has three names in different files and settling
-  that is a deliberate team task, not a drive-by edit.
+- The official site name is **TXST Lynx**. Keep the repository name `txst-social`.
+- Every merge requires **two approvals**. Test migrations locally first; see
+  `docs/local-development.md` and the recorded deployment exceptions in AGENTS.md.
+- Preserve image-module independence; read `docs/posts-and-media.md` before
+  changing post composition, uploads or likes.
 
 
 ## Keeping context current
@@ -87,17 +90,19 @@ A stale context file is worse than none, because it is believed.
 
 _Claude keeps this current — see above._
 
-**Working today:** `GET /health`, `GET /db-health`, `GET /profiles`. Everything
-else — posts, comments, likes, feeds, auth, moderation — is **schema only**: the
-tables exist in `20260910200000_lynx_core.sql`, the API does not.
+**Working today:** health/profiles, Supabase existing-account login and identity,
+private image uploads with browser crop/resize, persistent General text/image/mixed
+posts, chronological cursor feed and authenticated persistent post likes/unlikes.
+New posts remain author-visible pending (FR-90); comments and moderation are still
+schema only. See `docs/posts-and-media.md` for reusable module contracts and tests.
 
-**Current sprint:** Sprint 2 (Sep 14–27) — first full-stack vertical slice:
-posts through every layer, create + retrieve, browser to database and back.
-
-**Then:** Sprint 3 — Supabase Auth, registration/login, authenticated profiles,
-posts associated with users.
+**Current sprint:** Sprint 2 (Sep 14–27) — first full-stack vertical slice.
+Registration/recovery UI and classifier integration remain future work.
 
 ## Team
+
+Individual work notes below may describe earlier UI milestones. The current
+implementation is recorded in **Project status** above and `docs/posts-and-media.md`.
 
 Each teammate has a subsection: what they're working on now, which files/areas
 are theirs at the moment, and anything Claude should remember when helping them.
@@ -122,7 +127,7 @@ context for next time. No match → add a new subsection (name from
 ### Daniel Pelley — daniel.pelley@outlook.com
 
 - **Working on:** frontend theme and feed UI on `feature/initial-ui-fyp`,
-  adapted from the Figma Make mockup `Boko Lynx.make` (in `work/cs4332/`, one
+  adapted from the Figma Make mockup the original `.make` design file in `work/cs4332/` (one
   level above the repo). Maroon/gold tokens in `globals.css`; `Navbar`
   replaced `Sidebar`; `PostCard`, `SortBar` and the ForAll page still use mock data. `/submit` +
   `PostComposer` is the create-post form, not yet wired to an endpoint.

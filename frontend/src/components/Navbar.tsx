@@ -5,6 +5,7 @@ const links = [
   { href: "/", label: "ForAll" },
   { href: "/colleges", label: "Colleges" },
   { href: "/profile", label: "Profile" },
+  { href: "/upload-test", label: "Upload test" },
 ];
 
 /**
@@ -22,7 +23,7 @@ export default function Navbar() {
             <PawIcon size={18} />
           </span>
           <span className="flex flex-col leading-none">
-            <span className="font-serif text-base font-bold tracking-tight text-white">Boko Lynx</span>
+            <span className="font-serif text-base font-bold tracking-tight text-white">TXST Lynx</span>
             <span className="text-[10px] font-semibold uppercase tracking-widest text-[#f0c060]">
               Texas State University
             </span>

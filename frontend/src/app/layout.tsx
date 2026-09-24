@@ -15,7 +15,7 @@ const merriweather = Merriweather({
 });
 
 export const metadata: Metadata = {
-  title: "Boko Lynx",
+  title: "TXST Lynx",
   description: "A social platform for Texas State University students.",
 };
 

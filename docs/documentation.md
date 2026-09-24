@@ -1,8 +1,8 @@
-# TXST Social — Documentation Standard
+# TXST Lynx — Documentation Standard
 
 ## Purpose
 
-TXST Social will use a **documentation-as-code** approach combining:
+TXST Lynx will use a **documentation-as-code** approach combining:
 
 1. **Human-written project documentation**
 2. **In-code documentation**

@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Entity relationship diagram and design of record for the Boko Lynx database schema.">
+<meta name="description" content="Entity relationship diagram and design of record for the TXST Lynx database schema.">
 <style>
   html { color-scheme: light dark; }
   body { margin: 0; }
   img { max-width: 100%; }
   [hidden] { display: none !important; }
 </style>
-<title>Boko Lynx Schema</title>
+<title>TXST Lynx Schema</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
@@ -366,7 +366,8 @@ footer {
 
   <header class="masthead">
     <div class="eyebrow">Texas State University &middot; CS 4398 &middot; Design of record</div>
-    <h1>Boko Lynx Schema</h1>
+    <h1>TXST Lynx Schema</h1>
+    <p><strong>Foundation snapshot:</strong> this diagram describes the original core migration. The current schema also has <code>image_uploads</code> and ordered <code>post_media</code>; <code>posts.image_key</code> has been replaced, and image posts may include text. See <a href="posts-and-media.md">Posts and reusable images</a> for the current model and API-only post likes.</p>
     <p class="standfirst">Twelve tables behind a college-centered campus forum &mdash; how a student, a space, a post and its screening all connect, and the three decisions the team still owes an answer.</p>
   </header>
 
@@ -389,7 +390,7 @@ footer {
     <h2>Entity relationships</h2>
     <figure>
       <div class="scroller">
-        <svg viewBox="0 0 1180 1020" role="img" aria-label="Entity relationship diagram of the Boko Lynx database: Supabase auth.users feeds profiles; profiles and spaces are joined by follows, moderators and bans; spaces contain posts, which contain comments; post_likes and comment_likes hang off each; moderation_checks and reports reference both posts and comments.">
+        <svg viewBox="0 0 1180 1020" role="img" aria-label="Entity relationship diagram of the TXST Lynx database: Supabase auth.users feeds profiles; profiles and spaces are joined by follows, moderators and bans; spaces contain posts, which contain comments; post_likes and comment_likes hang off each; moderation_checks and reports reference both posts and comments.">
           <defs>
             <marker id="mk-m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
               <polygon points="0,0 8,3 0,6" class="mk-m"/>
