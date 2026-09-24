@@ -193,3 +193,25 @@ def like_post(post_id: UUID, response: Response, profile: Profile = Depends(requ
 def unlike_post(post_id: UUID, response: Response, profile: Profile = Depends(require_verified_profile), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return set_like(db, post_id, profile, False)
+
+
+@router.delete("/{post_id}", status_code=204, summary="Soft-delete your own post")
+def delete_own_post(
+    post_id: UUID,
+    profile: Profile = Depends(require_verified_profile),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Mark the caller's post deleted while retaining its database row (FR-34)."""
+    post = db.scalar(select(Post).where(
+        Post.id == post_id,
+        Post.author_id == profile.id,
+        Post.deleted_at.is_(None),
+    ).with_for_update())
+    if post is None:
+        # Do not disclose whether another user's post exists.
+        raise HTTPException(404, "Post not found.")
+
+    post.deleted_at = datetime.now(timezone.utc)
+    db.execute(update(Space).where(Space.id == post.space_id).values(post_count=Space.post_count - 1))
+    db.commit()
+    return Response(status_code=204)
