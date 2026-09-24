@@ -208,8 +208,8 @@ the returned UUID to load `profiles`. Its response includes public profile
 fields plus `email_verified`; it never accepts an author ID from the client.
 Missing/invalid tokens return 401, disallowed accounts return 403, and Auth
 configuration/service failures return 503. Unverified active users can inspect
-their identity, but `require_verified_profile` rejects them for future writes.
-Space-specific bans must additionally be checked when post routes are added.
+their identity, but `require_verified_profile` rejects them for writes.
+Post and like routes additionally check space-specific bans.
 
 The existing backend database connection must be authorized to read profiles.
 It is a trusted server connection: passing a bearer token to FastAPI does not
@@ -229,14 +229,17 @@ uv run python -m unittest discover -s tests -v
 
 These tests mock Supabase Auth and database access. For a live smoke test, sign
 in, verify the username/verification state on `/login`, refresh, and sign out.
-The current stage has no post endpoints; persistent posts and media follow next.
+Persistent posts, images and likes are described below.
 
 ### Image upload test (FR-02, FR-32, FR-90)
 
 Open `/upload-test` from the **Upload test** navigation link. The page accepts
 one JPEG, PNG, or WebP up to 10 MB (10,000,000 bytes), displays its dimensions
 and aspect ratio, and enables upload for verified students when validation passes.
-Original bytes and aspect ratio are preserved; cropping comes later.
+Original bytes and aspect ratio are preserved unless you choose **Edit image**.
+The browser editor supports drag cropping, ratio presets and proportional resizing.
+**Save changes** revalidates the edited file; **Discard changes** keeps the current
+selection. Submit uploads the chosen version as a new private asset.
 
 Before testing persistence, apply
 `supabase/migrations/20260924191615_image_upload_pipeline.sql` with the normal
@@ -251,7 +254,29 @@ Image bytes go directly from browser to Storage. PostgreSQL stores metadata;
 completed uploads are private and do not create or approve posts.
 
 See [Image upload pipeline](docs/image-uploads.md) for architecture, manual
-checks, limits, cleanup considerations and future post integration.
+checks, limits, cleanup considerations and reusable modules.
+
+### Posts and likes (FR-30/31/32/50/51/60/90)
+
+`/submit` saves a title with text, up to ten ordered images, or both. The same
+browser image editor used by `/upload-test` is embedded in the form. The ForAll
+feed reads saved posts newest first with cursor pagination; mock posts are removed.
+Signed-in verified students can like a post and click again to remove the like.
+Both post and like state survive refresh.
+
+New posts are **pending and visible only to their author** until moderation
+approves them. The classifier is not implemented by this milestone.
+
+The API exposes `POST /posts`, `GET /posts`,
+`GET /posts/{id}/media/{position}/preview`, and `PUT` / `DELETE /posts/{id}/like`.
+See [Posts and reusable images](docs/posts-and-media.md) for architecture,
+contracts, retry behavior, database checks and browser acceptance steps.
+
+Apply `20260924205639_persistent_posts_and_likes.sql` with the normal migration
+workflow for a new environment. It adds `post_media`, replaces `posts.image_key`,
+and routes post-like writes through FastAPI. The shared development database
+already has this and the branding migration under the explicitly authorized
+2026-09-24 exception; the two-approval merge rule still applies.
 
 ### Health Check
 

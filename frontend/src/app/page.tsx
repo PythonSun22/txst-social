@@ -1,79 +1,73 @@
 "use client";
-import PostCard, { type ModerationStatus } from "@/components/PostCard";
-import SortBar, { type SortOrder } from "@/components/SortBar";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useState } from "react";
-
-// Field names follow the `posts` table so swapping in the API response is easy.
-interface Post {
-  id: number;
-  author: string;
-  title: string;
-  body: string;
-  like_count: number;
-  comment_count: number;
-  created_at: string;
-  status: ModerationStatus;
-}
-
-// Placeholder data until GET /posts exists (PLAN.md step 2).
-const initialPosts: Post[] = [
-  { id: 1, author: "Seth", title: "Hello, world!", body: "First post on Boko Lynx.", like_count: 10, comment_count: 2, created_at: "2026-09-20T14:05:00Z", status: "approved" },
-  { id: 2, author: "Sachin", title: "This is a great post!", body: "Testing the new card layout.", like_count: 15, comment_count: 4, created_at: "2026-09-21T09:30:00Z", status: "approved" },
-  { id: 3, author: "Misan", title: "I love this!", body: "Maroon and gold looks right.", like_count: 11, comment_count: 1, created_at: "2026-09-21T18:45:00Z", status: "approved" },
-  { id: 4, author: "Adam B", title: "Supabase post!", body: "Auth is wired up.", like_count: 10, comment_count: 0, created_at: "2026-09-22T11:10:00Z", status: "approved" },
-  { id: 5, author: "Adam S", title: "Backend post", body: "FastAPI is serving /auth/me.", like_count: 12, comment_count: 3, created_at: "2026-09-22T16:20:00Z", status: "approved" },
-  { id: 6, author: "Daniel", title: "Schema post", body: "Waiting on the classifier, so only I can see this one.", like_count: 0, comment_count: 0, created_at: "2026-09-23T10:00:00Z", status: "pending" },
-];
-
-// Stand-in for the ordering the API will do. The real Hot order reads the
-// stored hot_rank column (FR-54); this uses the same formula on the mock rows.
-function sortPosts(posts: Post[], order: SortOrder): Post[] {
-  const time = (p: Post) => new Date(p.created_at).getTime() / 1000;
-  const hot = (p: Post) => Math.log10(Math.max(p.like_count, 1)) + time(p) / 45000;
-  const key = { hot, new: time, top: (p: Post) => p.like_count }[order];
-  return [...posts].sort((a, b) => key(b) - key(a));
-}
+import PostCard from "@/components/PostCard";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import { getSupabase } from "@/lib/supabase";
+import { fetchPosts, type FeedPost } from "@/lib/posts";
 
 export default function Home() {
-  const [sort, setSort] = useState<SortOrder>("hot");
-  const posts = sortPosts(initialPosts, sort);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [profile, setProfile] = useState<CurrentProfile | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [more, setMore] = useState(false);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  const generation = useRef({ value: 0 });
+  const paging = useRef(false);
 
-  return (
-    <>
-      {/* ForAll is the General space: one place you post to, not a blend of every space. */}
-      <div className="mb-3 flex items-center justify-between">
-        <h1 className="font-serif text-xl font-bold text-primary">ForAll</h1>
-        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Eat &apos;Em Up, Kats!
-        </span>
-      </div>
+  useEffect(() => {
+    let active = true;
+    let controller: AbortController | undefined;
+    const lifecycle = generation.current;
+    async function load() {
+      controller?.abort(); controller = new AbortController();
+      const request = controller;
+      lifecycle.value++;
+      setPosts([]); setProfile(null); setCursor(null); setLoading(true); setError("");
+      try {
+        const [account, page] = await Promise.all([getCurrentProfile(request.signal), fetchPosts(undefined, request.signal)]);
+        if (active && !request.signal.aborted) { setProfile(account); setPosts(page.items); setCursor(page.next_cursor); }
+      } catch (cause) {
+        if (active && !request.signal.aborted) setError(cause instanceof Error ? cause.message : "Unable to load posts.");
+      } finally { if (active && !request.signal.aborted) setLoading(false); }
+    }
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const { data } = getSupabase().auth.onAuthStateChange(() => {
+        queueMicrotask(() => { if (active) void load(); });
+      });
+      unsubscribe = () => data.subscription.unsubscribe();
+      void load();
+    } catch (cause) {
+      queueMicrotask(() => { if (active) { setError(cause instanceof Error ? cause.message : "Unable to load feed."); setLoading(false); } });
+    }
+    return () => { active = false; controller?.abort(); lifecycle.value++; unsubscribe?.(); };
+  }, [reload]);
 
-      <Link
-        href="/submit"
-        className="mb-3 flex items-center gap-2 rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-      >
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-base leading-none text-white" aria-hidden="true">+</span>
-        Create Post
-      </Link>
+  async function loadMore() {
+    if (!cursor || paging.current) return;
+    const request = generation.current.value;
+    paging.current = true; setMore(true); setError("");
+    try {
+      const page = await fetchPosts(cursor);
+      if (request === generation.current.value) {
+        setPosts((current) => [...current, ...page.items.filter((item) => !current.some((p) => p.id === item.id))]);
+        setCursor(page.next_cursor);
+      }
+    } catch (cause) { if (request === generation.current.value) setError(cause instanceof Error ? cause.message : "Unable to load more posts."); }
+    finally { paging.current = false; setMore(false); }
+  }
 
-      <SortBar value={sort} onChange={setSort} />
-
-      <div className="flex flex-col gap-3">
-        {posts.map((post) => (
-          <PostCard
-            key={post.id}
-            spaceName="General"
-            author={post.author}
-            createdAt={post.created_at}
-            title={post.title}
-            body={post.body}
-            likes={post.like_count}
-            commentCount={post.comment_count}
-            status={post.status}
-          />
-        ))}
-      </div>
-    </>
-  );
+  return <>
+    <div className="mb-3 flex items-center justify-between"><h1 className="font-serif text-xl font-bold text-primary">ForAll</h1><span className="text-xs text-muted-foreground">Newest first</span></div>
+    <Link href="/submit" className="mb-4 block rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-primary">+ Create Post</Link>
+    {loading && <p role="status">Loading posts…</p>}
+    {error && <p role="alert" className="mb-3 text-sm text-red-700">{error} <button type="button" className="underline" onClick={() => setReload((n) => n + 1)}>Reload feed</button></p>}
+    {!loading && !error && !posts.length && <p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">No posts to show yet. New posts appear here for their author while awaiting review.</p>}
+    <div className="space-y-3">{posts.map((post) => <PostCard key={`${profile?.id ?? 'guest'}:${post.id}`} post={post} profile={profile}
+      onLike={(id, value) => setPosts((items) => items.map((item) => item.id === id ? { ...item, ...value } : item))} />)}</div>
+    {cursor && <button type="button" disabled={more} onClick={() => void loadMore()} className="mt-4 rounded-full border border-primary px-4 py-2 text-sm text-primary disabled:opacity-40">{more ? "Loading…" : "Load more"}</button>}
+  </>;
 }

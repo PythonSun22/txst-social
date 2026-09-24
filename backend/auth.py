@@ -76,3 +76,13 @@ def require_verified_profile(profile: Profile = Depends(get_current_profile)) ->
     if profile.email_verified_at is None:
         raise HTTPException(403, "Verify your Texas State email before posting.")
     return profile
+
+
+def get_optional_profile(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> Profile | None:
+    """Public reads allow no token; an invalid supplied bearer token still fails."""
+    if credentials is None:
+        return None
+    return get_current_profile(get_authenticated_user_id(credentials), db)

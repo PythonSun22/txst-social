@@ -8,13 +8,13 @@ export interface CurrentProfile {
 }
 
 /** Call FastAPI with the current Supabase session; application data stays behind the API. */
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, init: RequestInit = {}, publicRead = false): Promise<T> {
   const { data, error } = await getSupabase().auth.getSession();
   if (error) throw error;
-  if (!data.session) throw new Error("Sign in before uploading or viewing saved images.");
+  if (!data.session && !publicRead) throw new Error("Sign in to perform this action.");
   const base = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  if (data.session) headers.set("Authorization", `Bearer ${data.session.access_token}`);
   if (init.body) headers.set("Content-Type", "application/json");
   const response = await fetch(`${base.replace(/\/$/, "")}${path}`, { ...init, headers, cache: "no-store" });
   if (!response.ok) {

@@ -1,4 +1,4 @@
-# TXST Social — Two-Week Sprint Timeline
+# TXST Lynx — Two-Week Sprint Timeline
 **Development Period:** September–Mid-December 2026  
 **Sprint Length:** 2 Weeks
 
@@ -223,7 +223,7 @@ Freeze major feature development and prepare a reliable final product.
 - Rehearse final demonstration
 
 ### Final Deliverable
-A stable, documented, demonstrable version of TXST Social ready for the final course presentation.
+A stable, documented, demonstrable version of TXST Lynx ready for the final course presentation.
 
 ---
 

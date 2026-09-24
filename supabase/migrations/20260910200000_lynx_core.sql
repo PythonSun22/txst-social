@@ -1,5 +1,5 @@
 -- =========================================================================
--- Boko Lynx — core schema
+-- TXST Lynx — core schema
 --
 -- Builds on 20260901212005_initial_schema.sql. That migration established two
 -- things this one treats as settled:
@@ -620,7 +620,7 @@ set search_path = ''
 as $$
 begin
     if new.email is null or new.email !~ '@txstate\.edu$' then
-        raise exception 'Boko Lynx is limited to txstate.edu addresses (FR-01)'
+        raise exception 'TXST Lynx is limited to txstate.edu addresses (FR-01)'
             using errcode = 'check_violation';
     end if;
     return new;
