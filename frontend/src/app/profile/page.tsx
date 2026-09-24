@@ -4,24 +4,23 @@ import PostCard from "@/components/PostCard";
 import SortBar, { type SortOrder } from "@/components/SortBar";
 import {
   getCurrentProfile,
-  getMyPosts,
   type CurrentProfile,
-  type Post,
 } from "@/lib/api";
+import { getMyPosts, type FeedPost } from "@/lib/posts";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-function sortPosts(posts: Post[], order: SortOrder): Post[] {
-  const time = (post: Post) =>
+function sortPosts(posts: FeedPost[], order: SortOrder): FeedPost[] {
+  const time = (post: FeedPost) =>
     new Date(post.created_at).getTime() / 1000;
 
-  const hot = (post: Post) =>
+  const hot = (post: FeedPost) =>
     Math.log10(Math.max(post.like_count, 1)) + time(post) / 45000;
 
   const key = {
     hot,
     new: time,
-    top: (post: Post) => post.like_count,
+    top: (post: FeedPost) => post.like_count,
   }[order];
 
   return [...posts].sort((a, b) => key(b) - key(a));
@@ -32,7 +31,7 @@ export default function Profile() {
   const [profile, setProfile] = useState<CurrentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [myPosts, setMyPosts] = useState<Post[]>([]);
+  const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const posts = sortPosts(myPosts, sort);
 
   // Load the authenticated profile when this component mounts.
@@ -148,17 +147,18 @@ export default function Profile() {
 
       <div className="flex flex-col gap-3">
         {posts.map((post) => (
-        <PostCard
-            key={post.id}
-            spaceName="Space"
-            author={displayName}
-            createdAt={post.created_at}
-            title={post.title}
-            body={post.body ?? ""}
-            likes={post.like_count}
-            commentCount={post.comment_count}
-            status={post.status}
-        />
+          <PostCard
+            key={`${profile.id}:${post.id}`}
+            post={post}
+            profile={profile}
+            onLike={(id, value) =>
+              setMyPosts((items) =>
+                items.map((item) =>
+                  item.id === id ? { ...item, ...value } : item
+                )
+              )
+            }
+          />
         ))}
       </div>
     </section>

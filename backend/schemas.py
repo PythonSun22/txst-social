@@ -1,8 +1,6 @@
 """Pydantic schemas for API requests and responses."""
 
 from uuid import UUID
-from datetime import datetime
-from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
@@ -47,18 +45,3 @@ class CurrentProfileResponse(ProfileResponse):
     """The caller's profile and FR-02 verification state, without private account fields."""
 
     email_verified: bool
-
-class PostResponse(BaseModel):
-    """Post fields returned to the frontend."""
-
-    id: UUID
-    space_id: UUID
-    author_id: UUID | None
-    title: str
-    body: str | None
-    like_count: int
-    comment_count: int
-    created_at: datetime
-    status: Literal["pending", "approved", "blocked", "removed"]
-
-    model_config = ConfigDict(from_attributes=True)

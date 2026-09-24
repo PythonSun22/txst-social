@@ -11,6 +11,8 @@ export interface FeedPage { items: FeedPost[]; next_cursor: string | null }
 export const fetchPosts = (cursor?: string, signal?: AbortSignal) => apiRequest<FeedPage>(
   `/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal }, true,
 );
+export const getMyPosts = (signal?: AbortSignal) =>
+  apiRequest<FeedPost[]>("/posts/me", { signal });
 export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[] }) =>
   apiRequest<FeedPost>("/posts", { method: "POST", body: JSON.stringify(payload) });
 export const setPostLike = (id: string, liked: boolean) => apiRequest<{ liked: boolean; like_count: number }>(
