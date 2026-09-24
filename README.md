@@ -2,6 +2,10 @@
 
 A Texas State University-focused social networking web application built with a Next.js frontend, FastAPI backend, and PostgreSQL database hosted through Supabase.
 
+For independent feature-branch testing, follow the
+[local development guide](docs/local-development.md). It covers local Supabase,
+test accounts, migrations, and the team's two-approval merge workflow.
+
 ## Current Stack
 
 ### Frontend
@@ -28,7 +32,7 @@ A Texas State University-focused social networking web application built with a 
   - Hosted PostgreSQL
   - Database migrations
   - Authentication foundation: existing-account sign-in and backend identity
-  - Storage may be used later
+  - Private image storage through the `/upload-test` pipeline
 
 ### Planned
 
@@ -194,8 +198,8 @@ belongs in these Auth settings; never put a service-role or secret key in a
 
 Open `/login` and sign in with an existing Texas State email/password account.
 Supabase's browser SDK manages session persistence and refresh. Passwords go
-directly to Supabase Auth. The browser uses Supabase for Auth only; application
-data continues through FastAPI. Account signup/reset UI is not part of this
+directly to Supabase Auth. The browser uses Supabase for Auth and signed image
+transfers; application records continue through FastAPI. Account signup/reset UI is not part of this
 foundation stage.
 
 `GET /auth/me` accepts `Authorization: Bearer <access token>`. FastAPI asks the
@@ -226,6 +230,28 @@ uv run python -m unittest discover -s tests -v
 These tests mock Supabase Auth and database access. For a live smoke test, sign
 in, verify the username/verification state on `/login`, refresh, and sign out.
 The current stage has no post endpoints; persistent posts and media follow next.
+
+### Image upload test (FR-02, FR-32, FR-90)
+
+Open `/upload-test` from the **Upload test** navigation link. The page accepts
+one JPEG, PNG, or WebP up to 10 MB (10,000,000 bytes), displays its dimensions
+and aspect ratio, and enables upload for verified students when validation passes.
+Original bytes and aspect ratio are preserved; cropping comes later.
+
+Before testing persistence, apply
+`supabase/migrations/20260924191615_image_upload_pipeline.sql` with the normal
+`supabase db push` workflow. It creates `image_uploads`, the private
+`post-images` Storage bucket, and ownership policies. Use the same Supabase
+project in both `.env` files and `DATABASE_URL`; no new environment variables
+or service-role key are required. Restart FastAPI to load the new routes.
+
+The pipeline exposes `GET /images/policy`, `POST /images`,
+`POST /images/{id}/complete`, `GET /images`, and `GET /images/{id}/preview`.
+Image bytes go directly from browser to Storage. PostgreSQL stores metadata;
+completed uploads are private and do not create or approve posts.
+
+See [Image upload pipeline](docs/image-uploads.md) for architecture, manual
+checks, limits, cleanup considerations and future post integration.
 
 ### Health Check
 

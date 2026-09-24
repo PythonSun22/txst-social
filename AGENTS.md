@@ -99,15 +99,15 @@ txst-social/
     └── boko-lynx-proposal.html
 ```
 
-**`supabase/migrations/20260910200000_lynx_core.sql` is the source of truth for
-the data model.** It is 888 lines, most of them comments explaining *why*. If a
-question is about the database, read that file before answering.
+**`supabase/migrations/20260910200000_lynx_core.sql` and subsequent migrations
+are the source of truth for the data model.** Read the core migration first;
+`20260924191615_image_upload_pipeline.sql` adds private image uploads.
 
 ---
 
 ## 4. The data model
 
-Twelve tables of ours, plus Supabase's `auth.users` which we do not own.
+Thirteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, bio, major,
@@ -130,6 +130,11 @@ Twelve tables of ours, plus Supabase's `auth.users` which we do not own.
 - `comments` — threaded. `path` is an `ltree` holding the ancestry, so a whole
   thread loads in one indexed query with no recursion. `parent_id` is kept
   alongside it on purpose and the two must be written in the same statement.
+- `image_uploads` — an owner, private Storage object key, file name, MIME type,
+  byte size, browser-measured width/height, and upload timestamps. Independent
+  of posts so the upload pipeline can be tested and reused before post creation.
+  `uploaded_at` means transfer confirmed, **not moderation approved**. Dimensions
+  are browser-reported; server-side image decoding is not implemented yet.
 
 **Engagement**
 - `post_likes`, `comment_likes` — composite PK `(user_id, target_id)`. Unliking
@@ -205,9 +210,21 @@ Application queries still use the server's SQLAlchemy connection, not the
 browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
 Posts, comments, likes, feeds and moderation remain **schema only**.
 
+`/upload-test` is a Next.js page for the reusable image upload pipeline (FR-32).
+Drag/drop or browse one JPEG, PNG, or WebP up to **10,000,000 bytes (10 MB)**;
+display byte size, dimensions and aspect ratio. Preserve the original image;
+crop/resize editing is deferred. FastAPI `/images` reserves an owner-scoped
+object key and signs with the caller's JWT; the browser transfers bytes directly
+to the private `post-images` bucket. Completion checks Storage size/MIME metadata.
+Only the owner can list uploads or get a short-lived preview. Verified, active
+accounts are required for writes (FR-02/FR-96). Apply the image-upload migration
+before testing persistence. No service-role key is needed. See
+`docs/image-uploads.md` for setup, limitations and the post integration seam.
+
 Approved next slice: persistent General/ForAll posts with required titles,
 text only, images only, or text plus multiple ordered images. A future migration
-will replace `posts.image_key` with `post_media`; the current schema described
+will replace `posts.image_key` with `post_media` referencing completed
+`image_uploads` in display order; the current post schema described
 above has not yet changed. Existing link behavior stays supported. Newly created
 posts may remain author-visible `pending` for this milestone; classifier work
 and [D-4] remain deferred. This does not authorize automatic approval.
@@ -216,7 +233,18 @@ Sprint 2 (Sept 14–27) is the first vertical slice: posts through every layer,
 create and retrieve, browser to database and back.
 
 **Branches:** `main` is stable, `dev` is where work integrates, feature branches
-come off `dev` and go back via pull request. Do not work on `main`.
+come off `dev` and go back via pull request. **Every merge requires two approvals.**
+Test feature-branch migrations against local Supabase before review; coordinate
+shared-database migration application after merge. See `docs/local-development.md`.
+Do not work on `main`.
+
+One-time deployment exception, authorized by the user on 2026-09-24:
+`20260924191615_image_upload_pipeline.sql` was applied to the shared database
+before merge because local Docker setup was blocked by disk space. Migration
+history, table RLS, private bucket limits and ownership policies were verified.
+This does not waive the two-approval merge rule or authorize future shared
+migration deployments before review. Keep this migration file when integrating
+branches; the shared database already records it as applied.
 
 ---
 
