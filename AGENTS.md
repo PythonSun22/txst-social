@@ -217,6 +217,10 @@ Application queries still use the server's SQLAlchemy connection, not the
 browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
 General posts, ordered images, chronological feed reads and post likes now work
 through `/posts`. Comments and classifier/moderation workflows remain **schema only**.
+OpenAI has been selected for moderation. `backend/moderation.py` provides a
+standalone text-screening function and CLI (FR-90–92), with setup in
+`docs/moderation.md`. Publication rules, audit persistence, image screening,
+and timeout/retry policy [D-4] remain unimplemented or undecided.
 
 `/upload-test` is a Next.js page for the reusable image upload pipeline (FR-32).
 Drag/drop or browse one JPEG, PNG, or WebP up to **10,000,000 bytes (10 MB)**;

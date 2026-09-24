@@ -95,6 +95,11 @@ private image uploads with browser crop/resize, persistent General text/image/mi
 posts, chronological cursor feed and authenticated persistent post likes/unlikes.
 New posts remain author-visible pending (FR-90); comments and moderation are still
 schema only. See `docs/posts-and-media.md` for reusable module contracts and tests.
+**Working today:** `GET /health`, `GET /db-health`, `GET /profiles`. Other feature
+APIs are not implemented. OpenAI is selected for moderation; a standalone text
+screening module/CLI exists in `backend/moderation.py` (FR-90–92). See
+`docs/moderation.md`. Publication and database integration remain future
+work; [D-4] is still open.
 
 **Current sprint:** Sprint 2 (Sep 14–27) — first full-stack vertical slice.
 Registration/recovery UI and classifier integration remain future work.
@@ -134,3 +139,8 @@ context for next time. No match → add a new subsection (name from
 - **Notes for Claude:** learning the stack, so wants short, plain explanations.
   The mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for the
   look only, never for product rules.
+
+### Misan Parajuli — bgg66@txstate.edu
+
+- **Current focus:** OpenAI text moderation starter (FR-90–92).
+- **Session context:** selected OpenAI; the official SDK starter and offline tests are in `backend`, with setup and design guidance in `docs/moderation.md`. A local key is configured, but live verification returned HTTP 429 (`Too Many Requests`, type `invalid_request_error`, no specific code or Retry-After). The cause remains unresolved; do not assume billing. Publication rules and [D-4] remain open.
