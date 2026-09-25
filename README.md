@@ -221,6 +221,11 @@ does not create missing profiles or write mirrored email/verification fields.
 `FRONTEND_ORIGINS` is a comma-separated allowlist for browser API requests and
 defaults to the two local development origins in `.env.example`.
 
+`DELETE /posts/{post_id}` lets a verified author soft-delete their own post.
+It accepts the same bearer token, returns `204 No Content` on success, and
+sets `deleted_at` while retaining the row in the database. Other users' posts
+and already-deleted posts return `404`.
+
 Run the isolated backend tests from `backend/`:
 
 ```bash
@@ -267,7 +272,7 @@ Both post and like state survive refresh.
 New posts are **pending and visible only to their author** until moderation
 approves them. The classifier is not implemented by this milestone.
 
-The API exposes `POST /posts`, `GET /posts`,
+The API exposes `POST /posts`, `GET /posts`, `DELETE /posts/{post_id}`,
 `GET /posts/{id}/media/{position}/preview`, and `PUT` / `DELETE /posts/{id}/like`.
 See [Posts and reusable images](docs/posts-and-media.md) for architecture,
 contracts, retry behavior, database checks and browser acceptance steps.
