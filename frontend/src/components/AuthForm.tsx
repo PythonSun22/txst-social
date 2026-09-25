@@ -5,7 +5,7 @@ import { AuthError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "confirm";
 
 function describeAuthError(cause: unknown, mode: Mode): string {
   if (cause instanceof AuthError) {
@@ -23,7 +23,9 @@ function describeAuthError(cause: unknown, mode: Mode): string {
     return cause.message;
   }
   if (cause instanceof Error) return cause.message;
-  return mode === "signup" ? "Sign-up failed." : "Sign-in failed.";
+  if (mode === "signup") return "Sign-up failed.";
+  if (mode === "confirm") return "That code didn't work.";
+  return "Sign-in failed.";
 }
 
 export default function AuthForm() {
@@ -31,6 +33,8 @@ export default function AuthForm() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -94,9 +98,25 @@ export default function AuthForm() {
         if (data.user && data.user.identities?.length === 0) {
           setError("An account with this email may already exist. Try signing in, or check your inbox if you haven't confirmed it yet.");
         } else {
-          setMessage("Check your email to confirm your account, then sign in.");
-          setMode("signin");
+          // A plain confirmation link can be "clicked" by a mail security
+          // scanner (e.g. TXST's Microsoft 365 gateway) before the student
+          // ever opens the email, silently confirming accounts nobody asked
+          // to confirm. A code the student has to type can't be guessed by a
+          // scanner that only fetches URLs, so we use verifyOtp instead of
+          // relying on the emailed link.
+          setPendingEmail(trimmedEmail);
+          setMessage("Enter the confirmation code we emailed you.");
+          setMode("confirm");
         }
+      } else if (mode === "confirm") {
+        const { error } = await getSupabase().auth.verifyOtp({
+          email: pendingEmail,
+          token: code.trim(),
+          type: "email",
+        });
+        if (error) throw error;
+        setCode("");
+        setPendingEmail("");
       } else {
         const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
@@ -125,7 +145,27 @@ export default function AuthForm() {
     {profile ? <>
       <p>Signed in as {profile.display_name || profile.username}.</p>
       <p>{profile.email_verified ? "Your Texas State email is verified." : "Verify your Texas State email before posting."}</p>
-    </> : !loading && <form onSubmit={submit} className="space-y-4">
+    </> : mode === "confirm" ? <form onSubmit={submit} className="space-y-4">
+      <p>Enter the code we emailed to {pendingEmail}.</p>
+      <p className="text-sm text-gray-500">
+        Don&apos;t see it? Check your Junk/Spam folder — Texas State&apos;s mail
+        filter sometimes routes it there.
+      </p>
+      <label className="block">Confirmation code
+        <input className="block w-full rounded border p-2" type="text" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} />
+      </label>
+      <button className="rounded border px-4 py-2" disabled={busy} type="submit">
+        {busy ? "Please wait…" : "Confirm"}
+      </button>
+      <button
+        className="block text-sm underline"
+        type="button"
+        disabled={busy}
+        onClick={() => { setMode("signup"); setCode(""); setPendingEmail(""); setError(""); setMessage(""); }}
+      >
+        Start over
+      </button>
+    </form> : !loading && <form onSubmit={submit} className="space-y-4">
       <p>
         {mode === "signup"
           ? "Create an account with your Texas State email."
