@@ -147,6 +147,10 @@ export default function AuthForm() {
       <p>{profile.email_verified ? "Your Texas State email is verified." : "Verify your Texas State email before posting."}</p>
     </> : mode === "confirm" ? <form onSubmit={submit} className="space-y-4">
       <p>Enter the code we emailed to {pendingEmail}.</p>
+      <p className="text-sm text-gray-500">
+        Don&apos;t see it? Check your Junk/Spam folder — Texas State&apos;s mail
+        filter sometimes routes it there.
+      </p>
       <label className="block">Confirmation code
         <input className="block w-full rounded border p-2" type="text" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} />
       </label>
