@@ -32,6 +32,7 @@ class PostMediaResponse(BaseModel):
 class PostResponse(BaseModel):
     id: UUID
     author: str
+    can_delete: bool
     title: str
     body: str | None
     url: str | None
