@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 from uuid import UUID, uuid4
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
+os.environ["MODERATION_ENABLED"] = "false"
 
 import httpx
 from fastapi.testclient import TestClient
