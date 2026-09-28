@@ -34,7 +34,9 @@ direct-transfer exception in AGENTS.md. Supabase Auth manages sessions; FastAPI
 checks verified email and active account status for upload/complete (FR-02,
 FR-96). Read routes check the active owner. FastAPI signs with the user's JWT
 and the existing publishable key, allowing Storage RLS to enforce ownership.
-There is no service-role key in either app.
+These upload/preview routes need no service-role key. The separate automatic
+moderation worker uses a backend-only Storage secret to sign pending attachments
+without an author session; see [moderation](moderation.md).
 
 ## Modules
 
@@ -130,8 +132,8 @@ the module boundaries, schema, API, retries and tests agents should preserve.
 An uploaded file is **not approved content** (FR-90). Upload previews are issued
 only to the owner. Post previews additionally allow readers of approved posts.
 Both return expiring bearer URLs valid for five minutes. Newly submitted posts
-remain author-visible pending; classifier behavior remains deferred, including
-[D-4].
+remain author-visible pending until the ForAll worker screens text and images.
+Failures stay pending with bounded retries under [D-4].
 
 This test pipeline is not a server-side image sanitizer. Browser signature and
 decode checks provide feedback; Storage enforces byte count and declared MIME

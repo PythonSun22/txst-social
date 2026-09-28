@@ -37,6 +37,7 @@ class PostResponse(BaseModel):
     url: str | None
     type: Literal["text", "image", "link"]
     status: Literal["pending", "approved", "blocked", "removed"]
+    moderation_failed: bool = False
     created_at: datetime
     like_count: int
     comment_count: int

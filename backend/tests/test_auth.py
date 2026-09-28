@@ -8,6 +8,7 @@ from uuid import UUID
 
 # Tests must never connect to a developer's database.
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
+os.environ["MODERATION_ENABLED"] = "false"
 
 import httpx
 from fastapi import Depends, FastAPI

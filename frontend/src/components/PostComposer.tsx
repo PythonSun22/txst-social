@@ -103,7 +103,7 @@ export default function PostComposer() {
         onClick={() => setAttachments((items) => [...items, { key: crypto.randomUUID(), image: null }])}
         className="rounded-full border border-primary px-4 py-2 text-sm font-bold text-primary disabled:opacity-40">Add image</button>
     </fieldset>
-    <p className="text-xs text-muted-foreground">Your post will be saved as pending review and visible only to you until approved.</p>
+    <p className="text-xs text-muted-foreground">Your post will be screened automatically and visible only to you until approved.</p>
     {notice && <p role="status" className="text-sm text-primary">{notice}</p>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     <div className="flex justify-end gap-3">

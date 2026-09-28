@@ -2,8 +2,11 @@
 
 The General/ForAll feed now reads database posts, newest first. `/submit` saves
 a required title with text, images, or both (FR-30/31/32/60). New posts are
-`pending` and visible only to their author (FR-90). Classifier integration and
-timeout decision [D-4] remain deferred; saving or uploading never approves content.
+`pending` and visible only to their author (FR-90). The background moderation
+worker screens General text and images, then approves or blocks; failures retry
+with a finite limit under [D-4]. Saving/uploading alone never approves content.
+Apply the automatic moderation migration and configure the worker as described
+in [moderation](moderation.md).
 
 ## Module boundaries for contributors and agents
 
@@ -51,6 +54,7 @@ PostgreSQL. `backend/models.py` mirrors these migrations by hand.
 |---|---|
 | `POST /posts` | Verified active account required. Accepts `submission_id`, `title`, optional `body`, ordered `image_ids`. Saves to General as pending. |
 | `GET /posts?limit=20&cursor=...` | Approved posts plus the signed-in author's own posts, excluding soft-deleted posts/spaces. Returns `items` and `next_cursor`. |
+| `GET /posts/{id}` | Same visibility rules; pending cards poll this to show screening results or exhaustion. |
 | `GET /posts/{id}/media/{position}/preview` | Checks post visibility before returning an expiring Storage URL. |
 | `PUT /posts/{id}/like` | Sets the authenticated verified student's like. Repeated requests do not add extra likes. |
 | `DELETE /posts/{id}/like` | Removes that student's like; retries do not reduce the count again. |
@@ -107,7 +111,10 @@ browser interactions or real image transfers. Apply migrations before running it
 Browser acceptance checks with both apps running:
 
 1. Sign in, open `/submit`, save a text-only post; refresh the feed and confirm it
-   remains with a pending label. Repeat with images only and text plus images.
+   persists and changes from pending after automatic screening. Repeat with
+   images only and text plus images. Apply the moderation migration and set
+   `MODERATION_ENABLED=true` for this check; leave it false when checking pending
+   isolation separately from classification.
 2. Add multiple images, crop/resize one, discard another edit, reorder attachments
    and submit. Confirm saved images and display order after refresh.
 3. Like a visible post, refresh, then click again to unlike and refresh again.
