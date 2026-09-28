@@ -8,6 +8,44 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ---
 
+## Automatic ForAll moderation (FR-32, FR-60, FR-90–92)
+
+1. Add migration and matching ORM fields for durable attempt counts, retry times,
+   worker leases, exhausted failures, and full classification audit results.
+2. Extend the existing provider adapter to screen title/body and all attached
+   images. Sign private images with a backend-only Storage secret. Any provider
+   or category flag blocks; only a complete unflagged response approves.
+3. Start an opt-in background worker with FastAPI's lifespan after the migration
+   is applied to the configured database. Claim committed General
+   posts oldest first, including the pending backlog; release database locks
+   during network calls. Lease tokens and content fingerprints reject stale
+   results. Persist the decision and audit in one transaction.
+4. Bound automatic attempts (default 3 total; delays 30s then 120s). Failures
+   stay pending, with a persisted exhaustion state and an author-facing message.
+   Refresh pending cards automatically while preserving feed pagination.
+5. Verify provider, storage, scheduling, crash recovery, concurrency, visibility,
+   and failure behavior offline and against isolated local PostgreSQL when
+   available. Update setup, status docs, and Misan's session notes.
+
+**Constraints:** no human review for ForAll, no publication on failure, no
+client-controlled status, no tokens or signed URLs in audit/logs. Keep image
+upload modules reusable. SDK retries stay off so the persisted limit is real.
+Do not apply this migration or screen real shared posts before the normal
+review/deployment process; the prior shared-database exceptions do not apply.
+
+**Non-goals:** reports, comments, subcommunities, account sanctions, post editing,
+custom score thresholds, profanity rules, and fetching legacy link destinations.
+Legacy link posts remain pending rather than being approved without screening
+their destination. [D-4] is resolved for this slice as pending plus bounded
+retries; timing defaults are configurable. Editing/re-screening policy is deferred.
+
+**Verification:** implementation complete. Backend tests include isolated
+PostgreSQL migration/worker checks with mocked provider calls. Live Supabase
+Storage/OpenAI verification and shared deployment remain outstanding; do not
+treat the PostgreSQL schema stand-ins as full Supabase end-to-end coverage.
+
+---
+
 ## Registration (`Signup` branch)
 ## OpenAI moderation starter (FR-90–92)
 

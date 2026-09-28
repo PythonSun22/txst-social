@@ -1,23 +1,167 @@
-# Boko Lynx moderation
+# TXST Lynx moderation
 
 ## Current implementation
 
 `backend/moderation.py` calls the official OpenAI moderation endpoint with
-`omni-moderation-latest`. It is an initial building block for FR-90–92, not a
-publication pipeline. It runs without FastAPI or a database connection.
+`omni-moderation-latest` for text and images. The standalone text CLI still works
+without FastAPI or a database connection. The API now starts
+`backend/moderation_worker.py` in a background thread (FR-90–92).
+
+`POST /posts` currently saves General/ForAll posts as author-visible `pending`.
+The committed post row is its durable queue entry. The worker screens eligible
+posts, including the existing pending backlog, and saves `approved` or `blocked`
+plus a moderation audit in one transaction. Any overall or category flag blocks.
+Failures remain private and retry with a finite limit. Apply
+`20260926000000_automatic_post_moderation.sql` before running this code; this
+migration has not been deployed to the shared database.
+
+## Automated workflow baseline — September 26, 2026
+
+Saved at the user's request for refining the pipeline (FR-90–92, FR-97–99).
+New-post screening below is implemented; report handling remains future work. The
+current college-project scope must not depend on a staffed platform admin or
+human-review queue. This baseline supersedes the human-review recommendations
+in the historical suggestions below for the current scope.
+
+**Current scope:** screening and publication for the existing General/ForAll
+feed, including its backlog of pending posts. Automated user-report handling
+is recorded here for later work.
+College/subcommunity workflows and human moderation tools are outside this
+immediate slice. Posts with images require screening of their attachments as
+well as text before approval. The worker sends the title/body and every attachment
+together in one moderation request (FR-32/90).
+
+### Post and report transitions
+
+| Event | Intended behavior |
+|---|---|
+| New post submitted | Save as `pending`, then screen it. |
+| Screening passes | Change to `approved`. |
+| Screening flags it | Change to `blocked`. |
+| Screening fails | Keep `pending`; retry automatically with a limit. |
+| User reports a published post | Save the report and schedule another screening. |
+| Re-screening finds a violation | Change the published post to `removed`; resolve the report. |
+| Re-screening finds no violation | Keep it `approved`; dismiss the report with an explanation. |
+| Re-screening fails | Keep the report `open` for retry; do not treat the error as a violation. |
+
+The backend applies these decisions to the existing post row. Post status and
+report status remain separate: receiving a report does not itself change an
+approved post's visibility. `blocked` means rejected before publication;
+`removed` means withdrawn after publication. No `needs_review` status is needed
+for this automated scope.
+
+### Rules for manageable automated reporting
+
+- Report counts alone never remove content or suspend accounts. Otherwise,
+  coordinated users could silence classmates.
+- Group reports about the same post into one screening job, with duplicate
+  protection and a cooldown.
+- No automatic account suspension in the first version. Limit actions to the
+  reported post or comment; comment integration is later work.
+- After retry attempts are exhausted, record the failure and show
+  "Automated review could not be completed." Avoid an endless retry loop or a
+  misleading "No violation found" result. New posts stay unpublished; a failed
+  report check does not establish that a published post violated a rule.
+- Do not offer a human appeal or review option that nobody can staff. A later
+  automated recheck must be described as a recheck.
+
+### Processing order and retries
+
+The ForAll worker selects eligible pending posts by `created_at ASC, id ASC`.
+This includes existing pending posts. Each API process runs one worker, and
+database row locks with `SKIP LOCKED` prevent competing processes from claiming
+the same live job. The worker runs only while FastAPI is running.
+
+A failed attempt is scheduled for a later retry, allowing other eligible posts
+to proceed. Oldest-first selection therefore does not guarantee publication
+order: an older post waiting for retry can be approved after a newer post. More
+workers could also finish jobs out of order. The public feed's newest-first
+display order is independent of screening order.
+
+Attempts are persisted before network calls. Claims expire after five minutes;
+a crashed worker's job becomes eligible again without resetting its count.
+After a crash on the final attempt, the next worker records exhaustion once the
+lease expires. A stale claim or changed content fingerprint cannot publish.
+No DB transaction stays open during Storage/OpenAI calls. SDK retries are off.
+
+Default [D-4] behavior is three total attempts, with delays of 30 seconds and
+120 seconds after failures. All screening failures consume the budget, including
+configuration errors. A provider `Retry-After` can lengthen the delay. Configuration
+errors still require fixing the configuration; automatic retry cannot repair it.
+Exhaustion is persisted as `moderation_exhausted_at`; it leaves the post pending
+and stops retries even after restart. The author sees "Automated review could not
+be completed." There is no automatic reset, manual review, or user retry endpoint
+in this version. Correcting configuration does not reset an exhausted post.
+
+The worker records full flags/scores, model, policy version, content fingerprint,
+latency, and attempt number in `moderation_checks`. Signed URLs, keys, and post
+text are not copied into audit results or error logs. Failure codes live on the
+post; errors never become successful classification audits. `GET /posts/{id}`
+uses the existing visibility checks and lets pending cards refresh every five
+seconds without resetting feed pagination. Refreshing stops on a verdict or
+exhaustion.
+
+### Deferred work and limits
+
+- Recovery after exhaustion, post editing and revision-aware re-screening. Any
+  future edit/attachment writer must lock its parent post and return edited
+  content to pending; the fingerprint check does not implement an edit API.
+- Legacy link posts stay pending and exhaust with `unsupported_link`: screening
+  their title or URL text cannot certify the external destination.
+- No dedicated profanity check, OCR, animation frame extraction, or custom
+  score thresholds. Provider image categories do not cover every text category.
+  Evaluate false positives/negatives before treating screening as comprehensive.
+- Later report checks: whether to re-screen content alone or assess relevant
+  context alongside the report. A reporter's allegation is not proof or an
+  instruction, and repeating the same classifier call may repeat its mistake.
+- Persisting retry exhaustion and its user-facing message. The current report
+  statuses (`open`, `resolved`, `dismissed`) do not distinguish retry exhaustion;
+  the implementation must track it separately or introduce a migration. An
+  exhausted report must not remain eligible for automatic retry indefinitely.
 
 ## Configure and run
 
-Add your OpenAI API key to your existing, ignored `backend/.env`:
+Apply migrations to local Supabase with `supabase migration up --local`, following
+[local development](local-development.md). Shared deployment still requires the
+normal review/merge process. Do not rely on earlier deployment exceptions.
+
+Configure the existing, ignored `backend/.env` before starting FastAPI:
 
 ```dotenv
 OPENAI_API_KEY=your_actual_api_key
+SUPABASE_SECRET_KEY=your_backend_only_supabase_secret
+MODERATION_ENABLED=false
+MODERATION_MAX_ATTEMPTS=3
+MODERATION_RETRY_SECONDS=30
+MODERATION_POLL_SECONDS=2
 ```
 
 Create/manage the key on the [OpenAI API platform](https://platform.openai.com/api-keys).
 Keep it in the backend environment; do not put it in frontend code or commit it.
 The module loads `backend/.env` explicitly and preserves existing environment
 variables. The database password is unrelated to this credential.
+
+The Storage secret is required for pending images because the worker has no user
+session. `backend/moderation_storage.py` signs only persisted attachment keys for
+five minutes. A legacy `SUPABASE_SERVICE_ROLE_KEY` also works if the new secret
+is absent. Never place either key in frontend variables. Public image/upload
+routes still use the caller's JWT and do not use this elevated adapter.
+Local Supabase signs images with a `127.0.0.1` URL, which OpenAI cannot fetch.
+The worker currently passes that URL through, so local image posts may exhaust
+their retries and remain pending. A one-off Base64 data-URL check with a local
+image succeeded, but that temporary adapter was reverted. Text screening is
+unaffected.
+[Supabase API key guidance](https://supabase.com/docs/guides/getting-started/api-keys)
+
+Start normally with `uv run fastapi dev main.py`. The worker is disabled by
+default so starting a development backend cannot screen posts in its configured
+database unexpectedly. After the migration is reviewed, applied to that same
+database, and credentials are configured, set `MODERATION_ENABLED=true` to start
+screening. Set it back to `false` to pause screening. Disabling the worker does
+not make an unapplied migration optional: the ORM still needs the new columns.
+`MODERATION_MAX_ATTEMPTS` accepts 1–10; retry/poll settings accept 1–3600 seconds.
+Retry delays grow by four times per failure, capped at one hour before applying
+a longer provider hint. Exhausted posts remain stopped when settings change.
 
 From `backend`, using the project's existing environment:
 
@@ -62,13 +206,14 @@ environment from the working directory. Activation with
 PATH; it is optional when calling them by their explicit paths. Using `uv add`
 also records dependency metadata so teammates can reproduce the installation.
 
-One SDK request uses a 10-second network timeout with automatic retries disabled. This is
-a starter transport setting, not the approximately 2-second publication wait
-proposed in [D-4], and not a total job deadline. [D-4] remains unresolved.
+One SDK request uses a 10-second network timeout with automatic retries disabled.
+This bounds a network operation, not total job duration. Publication does not
+wait inside `POST /posts`; [D-4] is pending plus bounded background retries for
+this ForAll slice.
 
 `ModerationError` means screening failed, never that content is safe. The caller
 must not substitute an unflagged result after an exception. Provider flags are
-not final Boko Lynx publication decisions, nor a guarantee of profanity detection.
+interpreted by the worker's any-flag policy, not a guarantee of profanity detection.
 
 ## Offline verification
 
@@ -80,7 +225,28 @@ uv run python -m unittest discover -s tests -v
 
 Tests exercise the real SDK with a mocked HTTP transport, so they require no key, database, or network. They
 check provider results, blank input, missing keys, authentication/rate-limit
-errors, timeouts, and invalid responses. They do not measure model accuracy.
+errors, timeouts, invalid responses, multimodal payloads, signing and lifecycle.
+They do not measure model accuracy. Database tests are skipped unless explicitly
+configured with a disposable local test database.
+
+The migration/worker integration tests can also run on a disposable PostgreSQL
+16 container, with no shared credentials or live provider requests:
+
+```powershell
+docker run --rm --detach --name txst-moderation-test --publish 127.0.0.1:55439:5432 --env POSTGRES_PASSWORD=local-moderation-test --env POSTGRES_DB=moderation_test postgres:16
+# From backend, once PostgreSQL is ready:
+$env:MODERATION_TEST_DATABASE_URL='postgresql+psycopg://postgres:local-moderation-test@127.0.0.1:55439/moderation_test'
+uv run python -m unittest discover -s tests -v
+Remove-Item Env:MODERATION_TEST_DATABASE_URL
+docker stop txst-moderation-test
+```
+
+The runner refuses non-loopback hosts and databases not named `moderation_test*`.
+It applies every repository migration to an empty database with minimal
+Auth/Storage schema stand-ins. Tests exercise real transactions, competing
+connections, retries, visibility, stale results and atomic audit writes. This is
+not a full Supabase Auth/Storage end-to-end test. Verify a real signed image fetch
+and OpenAI response in local Supabase before shared deployment.
 
 ## Remaining integration
 
@@ -98,9 +264,9 @@ Reference: [OpenAI error codes](https://developers.openai.com/api/docs/guides/er
 
 ### Future work
 
-Publication rules/thresholds, image screening, profanity rules, moderation audit
-writes, revision checks, retries, and moderator review remain future work.
-No endpoint or database migration is introduced by this starter.
+Automated reports, comments, subcommunity review, editing, profanity rules,
+evaluation datasets and recovery after exhaustion remain future work. There is
+no human review dependency in the implemented ForAll scope.
 
 Reference: [official OpenAI moderation documentation](https://developers.openai.com/api/docs/guides/moderation).
 
@@ -110,7 +276,7 @@ Reference: [official OpenAI moderation documentation](https://developers.openai.
 
 > Saved from the moderation discussion on September 22, 2026. These are proposals, not approved product decisions or implemented features. Service details reflect the sources consulted for the original answer.
 
-> OpenAI has been selected and the SDK starter is described above. The original provider comparison is retained for context; the remaining workflow and policy suggestions are still proposals.
+> OpenAI has been selected and the SDK starter is described above. This section is historical: the September 26 automated workflow baseline above takes precedence for current scope. Human-review suggestions below are not current staffing requirements; other alternatives remain proposals.
 
 **For Boko Lynx, I’d start with a hosted moderation model, a separate profanity check, and a small human-review workflow.** That gives you a feasible semester project while covering more than a list of banned words.
 

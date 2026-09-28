@@ -1,6 +1,9 @@
 """FastAPI application assembly and health endpoints."""
 
 import os
+import asyncio
+from contextlib import asynccontextmanager
+from threading import Event, Thread
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,10 +13,35 @@ from database import engine
 from images import router as images_router
 from posts import router as posts_router
 from profile_routes import router as profile_router
-from schemas import DatabaseHealthResponse, HealthResponse
+from models import Profile
+from moderation_worker import Settings, run_worker
+from schemas import (
+    CurrentProfileResponse,
+    DatabaseHealthResponse,
+    HealthResponse,
+    ProfileResponse,
+)
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Screen committed ForAll posts while the API runs (FR-90–92)."""
+    stop = Event()
+    worker = None
+    if os.getenv("MODERATION_ENABLED", "false").lower() in {"true", "1", "yes"}:
+        worker = Thread(target=run_worker, args=(stop, Settings.from_env()), daemon=True,
+                        name="post-moderation")
+        worker.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        if worker:
+            # Interrupted work is recoverable through its persisted lease and attempt count.
+            await asyncio.to_thread(worker.join, 5)
+
+
+app = FastAPI(lifespan=lifespan)
 app.include_router(images_router)
 app.include_router(posts_router)
 app.include_router(profile_router)

@@ -93,16 +93,16 @@ _Claude keeps this current — see above._
 **Working today:** health/profiles, Supabase existing-account login and identity,
 private image uploads with browser crop/resize, persistent General text/image/mixed
 posts, chronological cursor feed and authenticated persistent post likes/unlikes.
-New posts remain author-visible pending (FR-90); comments and moderation are still
-schema only. See `docs/posts-and-media.md` for reusable module contracts and tests.
-**Working today:** `GET /health`, `GET /db-health`, `GET /profiles`. Other feature
-APIs are not implemented. OpenAI is selected for moderation; a standalone text
-screening module/CLI exists in `backend/moderation.py` (FR-90–92). See
-`docs/moderation.md`. Publication and database integration remain future
-work; [D-4] is still open.
+ForAll moderation screens text/images in an opt-in background worker (FR-90–92).
+Posts start private/pending, then approve or block automatically; failed screening
+retries with a persisted limit and an author-facing exhaustion notice. Comments
+and reports remain schema only. Apply the new moderation migration and configure
+the backend Storage secret and explicitly enable the worker before use; no
+shared deployment has occurred. See
+`docs/moderation.md` and `docs/posts-and-media.md`.
 
 **Current sprint:** Sprint 2 (Sep 14–27) — first full-stack vertical slice.
-Registration/recovery UI and classifier integration remain future work.
+Registration/recovery UI, reports and subcommunity moderation remain future work.
 
 ## Team
 
@@ -142,5 +142,5 @@ context for next time. No match → add a new subsection (name from
 
 ### Misan Parajuli — bgg66@txstate.edu
 
-- **Current focus:** OpenAI text moderation starter (FR-90–92).
-- **Session context:** selected OpenAI; the official SDK starter and offline tests are in `backend`, with setup and design guidance in `docs/moderation.md`. A local key is configured, but live verification returned HTTP 429 (`Too Many Requests`, type `invalid_request_error`, no specific code or Retry-After). The cause remains unresolved; do not assume billing. Publication rules and [D-4] remain open.
+- **Current focus:** automatic General/ForAll moderation implemented (FR-90–92); local image-screening handoff and migration deployment remain. Automated reports are later work (FR-97–99).
+- **Session context:** no staffed platform admin or human-review dependency. The worker screens text/images oldest first, blocks any flag, and keeps failures pending with 3 total attempts by default (30s/120s delays). State and audits persist; pending cards poll for results. Local signed image URLs caused OpenAI HTTP 400; a one-off Base64 data-URL test succeeded, but the temporary Python adapter was reverted at the user's request. The new migration is not applied to the shared database; pending images require a backend Storage secret. Setup and report safeguards are in `docs/moderation.md`.

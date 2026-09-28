@@ -58,6 +58,7 @@ revisit one — several were argued through and closed deliberately.
 | **Supabase Auth owns identity** | We store no passwords. `public.profiles.id` **is** `auth.users.id`. |
 | **`txstate.edu` only** | Enforced in the database by a trigger on `auth.users`, not only in application code. |
 | **Screening precedes publication** | A post exists as `pending` and is invisible to everyone but its author until the classifier approves it. |
+| **ForAll moderation is automatic** | Any overall/category flag blocks publication. Screening failures stay pending with bounded retries; no human-review dependency at this feed level (FR-90–92). |
 | **Colleges are seeded** | Ten of them, inserted by migration. Users cannot create a college. |
 
 ---
@@ -107,6 +108,8 @@ are the source of truth for the data model.** Read the core migration first;
 `20260924191615_image_upload_pipeline.sql` adds private image uploads, and
 `20260924205639_persistent_posts_and_likes.sql` adds ordered attachments and
 replaces the old post content constraint.
+`20260926000000_automatic_post_moderation.sql` adds durable screening state and
+full provider audits; it has not been applied to the shared database.
 
 ---
 
@@ -137,6 +140,8 @@ Fifteen tables of ours, plus Supabase's `auth.users` which we do not own.
 - `posts` — one `space_id`, required title, and one `type` (`text` / `link` /
   `image`). Text requires a body; images may also have text; legacy links use
   `url`. `submission_id` makes post-create retries idempotent per author.
+  Moderation attempt counts, retry time, claim/lease and exhaustion fields make
+  committed pending rows a durable queue for the ForAll worker.
 - `post_media` — ordered `(post_id, position)` attachments referencing completed
   `image_uploads`, with object key and dimensions. A deferred database constraint
   requires media for image posts and forbids it for text/link posts. Nullable
@@ -155,8 +160,9 @@ Fifteen tables of ours, plus Supabase's `auth.users` which we do not own.
   is a `DELETE`.
 
 **Safety**
-- `moderation_checks` — what the model said: label, score, decision, model
-  version, latency. Kept so thresholds can be tuned and false positives audited.
+- `moderation_checks` — label, score, decision, model, latency, full category
+  results, policy version, content hash and attempt number. Written atomically
+  with the publication decision; contains no signed image URLs or credentials.
 - `reports` — what a person said. Targets exactly one of a post, a comment, or
   an account. Content reports go to that space's moderators; account reports go
   to site administrators, enforced by a CHECK constraint.
@@ -203,7 +209,7 @@ pick one** — if a question depends on an open decision, say so.
 | `[D-1]` | Who owns authentication? | **Closed** — Supabase Auth. |
 | `[D-2]` | One `spaces` table or three? | **Closed** — one, with a `kind`. |
 | `[D-3]` | Comment tree as a materialised `ltree` path | Implemented, not yet reviewed by the team. |
-| `[D-4]` | What happens when the classifier does not answer? | **Open.** Fail closed, fail open, or bounded wait. Bounded wait (~2s, then `pending`, retry in background) is recommended but not agreed. Editing raises the same question — an edited body has not been screened. |
+| `[D-4]` | What happens when the classifier does not answer? | **Resolved for new ForAll posts:** remain pending; default 3 total background attempts, with 30s/120s retry delays. Exhausted posts remain private and show a failure notice. Settings are configurable; editing and recovery after exhaustion remain future work. See `docs/moderation.md`. |
 | `[D-5]` | Colleges or departments? | **Open.** The seed holds the ten real colleges, so computer science shares a bucket with biology and maths. Per-department would be ~40–50 spaces. One `INSERT` to change; large effect on how the product feels. |
 
 ---
@@ -224,11 +230,22 @@ that profile and check bans for the target space (FR-95).
 Application queries still use the server's SQLAlchemy connection, not the
 browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
 General posts, ordered images, chronological feed reads and post likes now work
-through `/posts`. Comments and classifier/moderation workflows remain **schema only**.
-OpenAI has been selected for moderation. `backend/moderation.py` provides a
-standalone text-screening function and CLI (FR-90–92), with setup in
-`docs/moderation.md`. Publication rules, audit persistence, image screening,
-and timeout/retry policy [D-4] remain unimplemented or undecided.
+through `/posts`. Comments and reports remain **schema only**.
+When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
+(FR-90–92), selecting
+eligible pending posts oldest first, including the backlog. OpenAI screens
+title/body plus attached images; any flag blocks, otherwise the post is approved.
+Claims and retry counts persist across restarts; stale results cannot publish.
+Audits and verdicts commit together. Pending cards refresh via `GET /posts/{id}`
+and show exhausted failures. There is no human review or account suspension in
+this slice. Report-handling rules are saved for later work (FR-97–99).
+
+Apply the new moderation migration before running this checkout and configure
+the backend-only Storage secret for pending images. Normal upload/preview routes
+still use caller JWTs. Local image posts cannot finish screening through the
+current loopback signed-URL handoff; see `docs/moderation.md`. Isolated PostgreSQL
+integration checks passed with Auth/Storage schema stand-ins; shared deployment
+remains pending.
 
 `/upload-test` is a Next.js page for the reusable image upload pipeline (FR-32).
 Drag/drop or browse one JPEG, PNG, or WebP up to **10,000,000 bytes (10 MB)**;
@@ -243,7 +260,8 @@ to the private `post-images` bucket. Completion checks Storage size/MIME metadat
 Only the owner can list uploads or get an upload preview; post image previews
 also permit readers of approved posts. Verified, active
 accounts are required for writes (FR-02/FR-96). Apply the image-upload migration
-before testing persistence. No service-role key is needed. See
+before testing persistence. Upload routes need no service-role key; the separate
+moderation worker needs backend-only elevated Storage access. See
 `docs/image-uploads.md` for setup, limitations and the post integration seam.
 
 Implemented slice: persistent General/ForAll posts with required titles,
@@ -252,8 +270,8 @@ replaces `posts.image_key`. Existing links remain readable. The main feed has
 no mock posts and uses cursor pagination, most recent first. Verified signed-in
 students can like/unlike through FastAPI; counters, karma and hot rank change
 atomically, and direct browser writes to `post_likes` are denied by RLS.
-New posts remain author-visible `pending`; classifier work and [D-4] remain
-deferred. This does not authorize automatic approval.
+New posts begin author-visible `pending`; the worker publishes only after a
+complete unflagged screening result. Failed screening never approves a post.
 
 Verified authors can soft-delete their own posts from the feed (FR-34), with
 confirmation, through `DELETE /posts/{id}`. The API returns viewer-specific
