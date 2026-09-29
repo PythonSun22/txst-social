@@ -21,6 +21,7 @@ from sqlalchemy.orm import sessionmaker
 
 from models import ImageUpload, ModerationCheck, Post, PostMedia, Profile, Space
 from moderation import ModerationError
+from moderation_context import ContextAssessment
 from moderation_worker import Settings, claim_work, finish_work, run_once
 from posts import get_post
 from test_moderation_worker import verdict
@@ -127,6 +128,51 @@ class ModerationDatabaseTests(unittest.TestCase):
             self.assertEqual(get_post(identity, Response(), db.get(Profile, self.owner), db).status, "blocked")
             audit = db.scalar(select(ModerationCheck).where(ModerationCheck.post_id == identity))
             self.assertNotIn("https://private", str(audit.provider_result))
+
+    def test_context_recheck_approves_lone_violence_and_audits_both_results(self):
+        identity = self.post()
+        first = verdict(True)
+        first.category_scores["violence"] = 0.42
+        context = ContextAssessment(decision="allow", reason_code="media_reference")
+        with (patch("moderation_worker.moderate_content", return_value=first),
+              patch("moderation_worker.moderate_context", return_value=context)):
+            run_once(self.sessions, Settings(context_recheck_enabled=True))
+        with self.sessions() as db:
+            self.assertEqual(db.get(Post, identity).status, "approved")
+            audit = db.scalar(select(ModerationCheck).where(ModerationCheck.post_id == identity))
+            self.assertEqual(audit.decision, "allow")
+            self.assertEqual(audit.policy_version, "forall-context-recheck-v3")
+            self.assertTrue(audit.provider_result["categories"]["violence"])
+            self.assertEqual(audit.provider_result["context_recheck"], context.model_dump())
+
+    def test_past_incident_recheck_approves_combined_flags(self):
+        identity = self.post()
+        first = verdict(True)
+        first.categories["harassment"] = True
+        first.category_scores.update(violence=0.426, harassment=0.568)
+        context = ContextAssessment(decision="allow", reason_code="past_incident")
+        with (patch("moderation_worker.moderate_content", return_value=first),
+              patch("moderation_worker.moderate_context", return_value=context)):
+            run_once(self.sessions, Settings(context_recheck_enabled=True))
+        with self.sessions() as db:
+            self.assertEqual(db.get(Post, identity).status, "approved")
+            audit = db.scalar(select(ModerationCheck).where(ModerationCheck.post_id == identity))
+            self.assertEqual(audit.decision, "allow")
+            self.assertEqual(audit.provider_result["context_recheck"], context.model_dump())
+
+    def test_context_failure_stays_pending_without_success_audit(self):
+        identity = self.post()
+        first = verdict(True)
+        first.category_scores["violence"] = 0.42
+        with (patch("moderation_worker.moderate_content", return_value=first),
+              patch("moderation_worker.moderate_context",
+                    side_effect=ModerationError("Unavailable", code="context_provider"))):
+            run_once(self.sessions, Settings(context_recheck_enabled=True))
+        with self.sessions() as db:
+            post = db.get(Post, identity)
+            self.assertEqual((post.status, post.moderation_attempts, post.moderation_error),
+                             ("pending", 1, "context_provider"))
+            self.assertIsNone(db.scalar(select(ModerationCheck).where(ModerationCheck.post_id == identity)))
 
     def test_failure_retry_does_not_block_newer_post_and_exhausts(self):
         older, newer = self.post(age=5), self.post()
