@@ -99,4 +99,3 @@ class CurrentProfileResponse(ProfileResponse):
     home_college: HomeCollegeResponse | None = None
     followed_space_count: int = 0
     joined_community_count: int = 0
-

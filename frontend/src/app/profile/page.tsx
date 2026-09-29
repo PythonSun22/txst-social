@@ -263,6 +263,11 @@ export default function Profile() {
                 key={`${profile.id}:${post.id}`}
                 post={post}
                 profile={profile}
+                onDelete={(id) =>
+                  setMyPosts((items) =>
+                    items.filter((item) => item.id !== id)
+                  )
+                }
                 onLike={(id, value) =>
                   setMyPosts((items) =>
                     items.map((item) =>

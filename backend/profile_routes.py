@@ -184,4 +184,3 @@ def update_current_profile(
 def get_profiles(db: Session = Depends(get_db)) -> list[Profile]:
     """Return all stored profiles."""
     return list(db.scalars(select(Profile)).all())
-

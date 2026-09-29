@@ -82,4 +82,3 @@ alter table public.majors
 create index majors_college_active_order_idx
     on public.majors (college_id, sort_order)
     where active;
-
