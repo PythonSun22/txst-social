@@ -32,7 +32,32 @@ class Profile(Base):
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     major: Mapped[str | None] = mapped_column(Text, nullable=True)
+    major_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("public.majors.id", ondelete="SET NULL"), nullable=True
+    )
+    student_level: Mapped[str | None] = mapped_column(
+        ENUM(
+            "freshman",
+            "sophomore",
+            "junior",
+            "senior",
+            "graduate",
+            name="profile_student_level",
+            create_type=False,
+        ),
+        nullable=True,
+    )
     profile_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_image_upload_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("public.image_uploads.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    banner_image_upload_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("public.image_uploads.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Mirrored from auth.users by trigger. Never write these from here.
     email: Mapped[str | None] = mapped_column(CITEXT, unique=True, nullable=True)
@@ -81,6 +106,26 @@ class College(Base):
     crest_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     accent_hex: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+
+
+class Major(Base):
+    """An active TXST catalog major/degree choice for profiles."""
+
+    __tablename__ = "majors"
+    __table_args__ = {"schema": "public"}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    degree: Mapped[str] = mapped_column(Text, nullable=False)
+    college_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("public.colleges.space_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
 
 class Post(Base):
     __tablename__ = "posts"

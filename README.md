@@ -48,10 +48,13 @@ test accounts, migrations, and the team's two-approval merge workflow.
 txst-social/
 ├── frontend/              # Next.js application
 ├── backend/               # FastAPI application
-│   ├── main.py            # FastAPI app and endpoints
+│   ├── main.py            # FastAPI assembly, middleware, health checks
 │   ├── database.py        # PostgreSQL connection and DB sessions
 │   ├── models.py          # SQLAlchemy database models
-│   ├── schemas.py         # Pydantic request/response schemas
+│   ├── profile_routes.py  # Profile reads, options, and edits
+│   ├── profile_schemas.py # Profile request/response schemas
+│   ├── posts.py           # Post routes, including /posts/me
+│   ├── schemas.py         # Health response schemas
 │   ├── .env.example       # Environment variable template
 │   ├── pyproject.toml
 │   └── uv.lock
@@ -479,9 +482,9 @@ Current model:
 Profile ↔ public.profiles
 ```
 
-### `schemas.py`
+### `profile_schemas.py`
 
-Contains Pydantic models that define the JSON data FastAPI accepts and returns.
+Contains Pydantic models that define the profile JSON FastAPI accepts and returns.
 
 Current schemas include:
 
@@ -492,7 +495,9 @@ ProfileResponse
 
 ### `main.py`
 
-Contains the FastAPI application and current API endpoints.
+Assembles the FastAPI application, middleware and feature routers. Profile routes
+live in `profile_routes.py`; image routes live in `images.py`; post routes live
+in `posts.py`.
 
 ## Current Development Pipeline
 

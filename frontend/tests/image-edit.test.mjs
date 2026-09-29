@@ -5,7 +5,7 @@ import ts from "typescript";
 
 const source = await readFile(new URL("../src/lib/images/image-edit.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2017 } });
-const { clampCrop, centeredCrop, outputSize, exportImage } =
+const { clampCrop, centeredCrop, moveCrop, outputSize, exportImage, zoomSquareCrop } =
   await import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString("base64")}`);
 
 test("crop coordinates stay within source even at edges", () => {
@@ -16,6 +16,18 @@ test("ratio presets center landscape and portrait crops", () => {
   assert.deepEqual(centeredCrop(1200, 800, 1), { x: 200, y: 0, width: 800, height: 800 });
   assert.deepEqual(centeredCrop(800, 1200, 1), { x: 0, y: 200, width: 800, height: 800 });
   assert.deepEqual(centeredCrop(1200, 800, 1.5), { x: 0, y: 0, width: 1200, height: 800 });
+});
+
+test("profile crop can be dragged without changing its square size", () => {
+  const crop = centeredCrop(1200, 800, 1);
+  assert.deepEqual(moveCrop(crop, 500, 100, 1200, 800), { x: 400, y: 0, width: 800, height: 800 });
+  assert.deepEqual(moveCrop(crop, -500, -100, 1200, 800), { x: 0, y: 0, width: 800, height: 800 });
+});
+
+test("profile crop zooms around its current center and stays in bounds", () => {
+  const crop = centeredCrop(1200, 800, 1);
+  assert.deepEqual(zoomSquareCrop(crop, 2, 1200, 800), { x: 400, y: 200, width: 400, height: 400 });
+  assert.deepEqual(zoomSquareCrop({ x: 400, y: 0, width: 800, height: 800 }, 4, 1200, 800), { x: 700, y: 300, width: 200, height: 200 });
 });
 
 test("resizing preserves ratio, limits both axes, and never enlarges", () => {

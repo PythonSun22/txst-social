@@ -1,28 +1,22 @@
-"""FastAPI application and API routes."""
+"""FastAPI application assembly and health endpoints."""
 
 import os
 
-from fastapi import Depends, FastAPI, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from auth import get_current_profile
-from database import engine, get_db
+from database import engine
 from images import router as images_router
 from posts import router as posts_router
-from models import Profile
-from schemas import (
-    CurrentProfileResponse,
-    DatabaseHealthResponse,
-    HealthResponse,
-    ProfileResponse,
-)
+from profile_routes import router as profile_router
+from schemas import DatabaseHealthResponse, HealthResponse
 
 
 app = FastAPI()
 app.include_router(images_router)
 app.include_router(posts_router)
+app.include_router(profile_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,29 +28,12 @@ app.add_middleware(
         ).split(",")
         if origin.strip()
     ],
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
 
-@app.get("/auth/me", response_model=CurrentProfileResponse)
-def current_profile(
-    response: Response,
-    profile: Profile = Depends(get_current_profile),
-):
-    response.headers["Cache-Control"] = "no-store"
-
-    return CurrentProfileResponse(
-        **ProfileResponse.model_validate(profile).model_dump(),
-        email_verified=profile.email_verified_at is not None,
-    )
-
-
-@app.get(
-    "/health",
-    response_model=HealthResponse,
-    summary="Check API health",
-)
+@app.get("/health", response_model=HealthResponse, summary="Check API health")
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
 
@@ -68,28 +45,12 @@ def health_check() -> HealthResponse:
 )
 def database_health_check() -> DatabaseHealthResponse:
     """Verify the database connection and return the profile count."""
-
     with engine.connect() as connection:
-        result = connection.execute(
+        profile_count = connection.execute(
             text("select count(*) from public.profiles")
-        )
-        profile_count = result.scalar_one()
+        ).scalar_one()
 
     return DatabaseHealthResponse(
         database="connected",
         profile_count=profile_count,
     )
-
-
-@app.get(
-    "/profiles",
-    response_model=list[ProfileResponse],
-    summary="List profiles",
-)
-def get_profiles(db: Session = Depends(get_db)) -> list[Profile]:
-    """Return all stored profiles."""
-
-    statement = select(Profile)
-    profiles = db.scalars(statement).all()
-
-    return list(profiles)

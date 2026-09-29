@@ -14,10 +14,11 @@ interface ImageUploaderProps {
   selectOnly?: boolean;
   disabled?: boolean;
   onSelected?: (image: SelectedImage | null) => void;
+  cropShape?: "rectangle" | "circle";
 }
 
 /** Reusable selector/validator/transfer UI; it has no knowledge of posts or feed state. */
-export default function ImageUploader({ policy, canUpload, onUploaded, selectOnly = false, disabled = false, onSelected }: ImageUploaderProps) {
+export default function ImageUploader({ policy, canUpload, onUploaded, selectOnly = false, disabled = false, onSelected, cropShape = "rectangle" }: ImageUploaderProps) {
   const limitsId = useId();
   const [selected, setSelected] = useState<SelectedImage | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -82,7 +83,7 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
       });
       if (alive.current) {
         setSaved(true); setRetryId(null);
-        setNotice("Image saved privately. It is not published to a post.");
+        setNotice("Image saved privately. Save the form to use it.");
         onUploaded?.(result);
       }
     } catch (cause) {
@@ -121,9 +122,9 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
 
       {inspecting && <p role="status" className="text-sm">Reading image…</p>}
       {selected && <div className="space-y-3">
-        {selected.previewUrl && <img src={selected.previewUrl} alt="Selected image preview"
+        {selected.previewUrl && <img src={selected.previewUrl} alt={cropShape === "circle" ? "Circular profile photo preview" : "Selected image preview"}
           width={selected.width!} height={selected.height!}
-          className="mx-auto max-h-80 w-auto max-w-full rounded-card object-contain" />}
+          className={cropShape === "circle" ? "mx-auto aspect-square max-h-80 w-full max-w-80 rounded-full border-4 border-white object-cover shadow-md ring-2 ring-primary" : "mx-auto max-h-80 w-auto max-w-full rounded-card object-contain"} />}
         <p className="break-all text-sm font-semibold">{selected.file.name}</p>
         <dl className="grid grid-cols-1 gap-3 rounded-card bg-secondary p-3 text-sm sm:grid-cols-3">
           <div><dt className="text-muted-foreground">File size</dt><dd className="font-semibold">{formatBytes(selected.file.size)}</dd><dd className="text-xs text-muted-foreground">{selected.file.size.toLocaleString()} bytes</dd></div>
@@ -145,7 +146,7 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
           {busy ? "Saving…" : saved ? "Saved" : retryId ? "Retry confirmation" : "Submit image"}
         </button>}
       </div>
-      {editing && selected && <ImageEditor image={selected} policy={policy} onDiscard={() => { setEditing(false); onSelected?.(selected); }} onSave={(edited) => {
+      {editing && selected && <ImageEditor image={selected} policy={policy} cropShape={cropShape} onDiscard={() => { setEditing(false); onSelected?.(selected); }} onSave={(edited) => {
         if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
         previewUrl.current = edited.previewUrl;
         onSelected?.(edited);

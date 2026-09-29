@@ -9,6 +9,7 @@ from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
+from auth import get_current_profile
 from auth import get_authenticated_user_id
 from database import get_db
 from main import app
@@ -43,6 +44,20 @@ class PostTests(unittest.TestCase):
         list_posts(Response(),cursor=None,limit=20,viewer=self.user,db=self.db)
         sql=str(self.db.scalars.call_args.args[0].compile(dialect=postgresql.dialect(),compile_kwargs={'literal_binds':True})).replace('public.', '')
         self.assertIn(f"OR posts.author_id = '{self.user.id}'",sql)
+
+    def test_my_posts_uses_feed_post_contract(self):
+        rows=[]
+        for values in ([self.post],[self.user],[],[]):
+            result=Mock(); result.all.return_value=values; rows.append(result)
+        self.db.scalars.side_effect=rows
+        app.dependency_overrides[get_db]=lambda:self.db
+        app.dependency_overrides[get_current_profile]=lambda:self.user
+        with TestClient(app) as client:
+            response=client.get('/posts/me')
+        self.assertEqual(response.status_code,200)
+        post=response.json()[0]
+        self.assertEqual(post['author'],'tester')
+        self.assertEqual((post['type'],post['url'],post['liked'],post['media']),('text',None,False,[]))
 
     def test_cursor(self):
         self.assertEqual(decode_cursor(encode_cursor(self.post)),(self.post.created_at,self.post.id))
