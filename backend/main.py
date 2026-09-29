@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_profile
 from database import engine, get_db
-from models import Profile
 from images import router as images_router
 from posts import router as posts_router
+from models import Profile
 from schemas import (
     CurrentProfileResponse,
     DatabaseHealthResponse,

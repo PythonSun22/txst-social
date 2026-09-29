@@ -9,11 +9,12 @@ from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
+from auth import get_authenticated_user_id
 from database import get_db
 from main import app
 from models import Ban, ImageUpload, Post, PostLike, Profile, Space
 from post_schemas import PostCreate
-from posts import create_post, decode_cursor, encode_cursor, list_posts, set_like
+from posts import create_post, decode_cursor, delete_own_post, encode_cursor, list_posts, serialize_posts, set_like
 
 class PostTests(unittest.TestCase):
     def setUp(self):
@@ -48,12 +49,80 @@ class PostTests(unittest.TestCase):
         for value in ('bad','%%%%',''):
             with self.assertRaises(HTTPException): decode_cursor(value)
 
+    def test_delete_permission_in_response(self):
+        # FR-34: display names are not identities; only verified authors get the control.
+        for viewer, expected in ((self.user, True), (None, False),
+                                 (Profile(id=uuid4(), email_verified_at=self.user.email_verified_at), False),
+                                 (Profile(id=self.user.id), False)):
+            with self.subTest(expected=expected, viewer=viewer):
+                self.assertEqual(serialize_posts(self.db, [self.post], viewer)[0].can_delete, expected)
+
+    def test_soft_delete_text_and_image(self):
+        # FR-34/32: retain the post and reusable media, decrement the space count once.
+        for kind in ('text', 'image', 'link'):
+            with self.subTest(kind=kind):
+                self.db.reset_mock()
+                self.post.type = kind
+                self.post.deleted_at = None
+                response = delete_own_post(self.post.id, self.user, self.db)
+                self.assertEqual(response.status_code, 204)
+                self.assertEqual(response.body, b'')
+                self.assertIsNotNone(self.post.deleted_at.tzinfo)
+                query = self.db.scalar.call_args.args[0].compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True})
+                for clause in (str(self.user.id), 'posts.author_id =', 'posts.deleted_at IS NULL', 'FOR UPDATE'):
+                    self.assertIn(clause, str(query))
+                self.db.execute.assert_called_once()
+                self.db.commit.assert_called_once()
+                self.db.delete.assert_not_called()
+
+    def test_delete_missing_other_author_or_already_deleted(self):
+        self.db.scalar.return_value = None
+        with self.assertRaises(HTTPException) as error:
+            delete_own_post(self.post.id, self.user, self.db)
+        self.assertEqual(error.exception.status_code, 404)
+        self.db.execute.assert_not_called()
+        self.db.commit.assert_not_called()
+
     def test_anonymous_writes(self):
         app.dependency_overrides[get_db]=lambda:self.db
         with TestClient(app) as client:
+            self.assertEqual(client.delete(f'/posts/{self.post.id}').status_code,401)
             self.assertEqual(client.post('/posts',json={'title':'T','body':'B','submission_id':str(uuid4())}).status_code,401)
             for method in ('put','delete'): self.assertEqual(getattr(client,method)(f'/posts/{self.post.id}/like').status_code,401)
         self.db.add.assert_not_called()
+
+    def test_delete_http_uses_authenticated_author_only(self):
+        # FR-34: another account cannot impersonate the owner through request data.
+        app.dependency_overrides[get_db] = lambda: self.db
+        other = Profile(id=uuid4(), username='other', email='other@txstate.edu',
+                        email_verified_at=datetime.now(timezone.utc))
+
+        def select_owned_post(query):
+            params = query.compile().params
+            self.assertEqual(params['id_1'], self.post.id)
+            self.assertEqual(params['author_id_1'], account.id)
+            return self.post if params['author_id_1'] == self.post.author_id else None
+
+        self.db.scalar.side_effect = select_owned_post
+        with TestClient(app) as client:
+            for account in (other, self.user):
+                app.dependency_overrides[get_authenticated_user_id] = lambda: account.id
+                self.db.get.return_value = account
+                for admin in (False, True):
+                    account.is_admin = admin
+                    with self.subTest(owner=account.id == self.user.id, admin=admin):
+                        self.db.reset_mock()
+                        response = client.request('DELETE', f'/posts/{self.post.id}',
+                            params={'author_id': str(self.user.id)},
+                            json={'author_id': str(self.user.id)})
+                        if account.id == self.user.id:
+                            self.assertEqual(response.status_code, 204)
+                            self.db.commit.assert_called_once()
+                        else:
+                            self.assertEqual(response.status_code, 404)
+                            self.assertIsNone(self.post.deleted_at)
+                            self.db.execute.assert_not_called()
+                            self.db.commit.assert_not_called()
 
     def test_invalid_attachment(self):
         self.db.scalar.side_effect=[None,self.space]

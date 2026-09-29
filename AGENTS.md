@@ -243,6 +243,11 @@ atomically, and direct browser writes to `post_likes` are denied by RLS.
 New posts remain author-visible `pending`; classifier work and [D-4] remain
 deferred. This does not authorize automatic approval.
 
+Verified authors can soft-delete their own posts from the feed (FR-34), with
+confirmation, through `DELETE /posts/{id}`. The API returns viewer-specific
+`can_delete`; deletion decrements the space count in the same transaction.
+Media references and reusable private uploads are retained.
+
 Keep the upload/editor modules independent of posts. `ImageUploader` supports
 selection-only mode for the composer and standalone transfer mode for the lab;
 `PostComposer` owns ordered attachments and post submission. Read

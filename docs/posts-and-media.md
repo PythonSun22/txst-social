@@ -51,6 +51,7 @@ PostgreSQL. `backend/models.py` mirrors these migrations by hand.
 |---|---|
 | `POST /posts` | Verified active account required. Accepts `submission_id`, `title`, optional `body`, ordered `image_ids`. Saves to General as pending. |
 | `GET /posts?limit=20&cursor=...` | Approved posts plus the signed-in author's own posts, excluding soft-deleted posts/spaces. Returns `items` and `next_cursor`. |
+| `DELETE /posts/{id}` | Verified active author only (FR-34). Soft-deletes the post and decrements the space count atomically. Returns 204; missing, other authors' and already-deleted posts return 404. |
 | `GET /posts/{id}/media/{position}/preview` | Checks post visibility before returning an expiring Storage URL. |
 | `PUT /posts/{id}/like` | Sets the authenticated verified student's like. Repeated requests do not add extra likes. |
 | `DELETE /posts/{id}/like` | Removes that student's like; retries do not reduce the count again. |
@@ -74,6 +75,12 @@ attachments remain owner-only. Signed preview URLs expire after five minutes;
 previously issued URLs remain bearer capabilities until expiry.
 
 ## Retries and atomicity
+
+Post responses include viewer-specific `can_delete`; the feed offers verified
+authors a Delete post button with confirmation and removes the card after success.
+Deletion works for text, image and legacy link posts. Media references and private
+uploads remain intact because uploads can be reused by other posts. Deleted posts
+cannot issue new post preview URLs; existing signed URLs last until expiry.
 
 The composer caches completed transfers by selected `File` and retries uncertain
 completion without retransferring. Reselect a file to start a new transfer if no
