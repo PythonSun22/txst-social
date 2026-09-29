@@ -113,7 +113,7 @@ Fourteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, bio, major,
-  home college, karma totals, admin flag, suspension. `email` and
+  optional academic level, home college, karma totals, admin flag, suspension. `email` and
   `email_verified_at` are **mirrored from `auth.users` by trigger** — never
   write them from application code.
 - `colleges` — one row per college space: crest, accent colour, sort order.

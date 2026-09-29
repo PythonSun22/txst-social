@@ -4,7 +4,7 @@ import os
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
-from uuid import UUID
+from uuid import UUID, uuid4
 
 # Tests must never connect to a developer's database.
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from auth import require_verified_profile
 from database import get_db
 from main import app
-from models import Profile
+from models import College, Profile, Space
 
 USER_ID = UUID("11111111-1111-4111-8111-111111111111")
 
@@ -35,6 +35,7 @@ class AuthTests(unittest.TestCase):
         )
         self.db = Mock()
         self.db.get.return_value = self.profile
+        self.db.execute.return_value.one.return_value = (0, 0)
         app.dependency_overrides[get_db] = lambda: self.db
         self.addCleanup(app.dependency_overrides.clear)
         self.client = TestClient(app)
@@ -63,6 +64,9 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(USER_ID))
         self.assertTrue(response.json()["email_verified"])
+        self.assertIsNone(response.json()["student_level"])
+        self.assertEqual(response.json()["followed_space_count"], 0)
+        self.assertEqual(response.json()["joined_community_count"], 0)
         self.assertNotIn("email", response.json())
         self.assertNotIn("is_admin", response.json())
         self.assertEqual(response.headers["cache-control"], "no-store")
@@ -72,6 +76,40 @@ class AuthTests(unittest.TestCase):
             headers={"apikey": "test-public-key", "Authorization": "Bearer test-token"},
             timeout=10.0,
         )
+
+    def test_current_profile_resolves_home_college(self):
+        college_id = uuid4()
+        self.profile.home_college_id = college_id
+        self.profile.student_level = "junior"
+        space = Space(
+            id=college_id,
+            kind="college",
+            slug="science_engineering",
+            name="College of Science and Engineering",
+        )
+        college = College(
+            space_id=college_id,
+            short_name="Science and Engineering",
+            accent_hex="#501214",
+            crest_key="science-engineering.png",
+        )
+        self.db.execute.return_value.one_or_none.return_value = (space, college)
+        self.db.execute.return_value.one.return_value = (3, 2)
+
+        response = self.get_me()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["home_college"], {
+            "id": str(college_id),
+            "name": "College of Science and Engineering",
+            "short_name": "Science and Engineering",
+            "slug": "science_engineering",
+            "accent_hex": "#501214",
+            "crest_key": "science-engineering.png",
+        })
+        self.assertEqual(response.json()["student_level"], "junior")
+        self.assertEqual(response.json()["followed_space_count"], 3)
+        self.assertEqual(response.json()["joined_community_count"], 2)
 
     def test_invalid_or_expired_token_is_401(self):
         for status in (401, 403):

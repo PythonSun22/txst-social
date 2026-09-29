@@ -32,6 +32,18 @@ class Profile(Base):
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     major: Mapped[str | None] = mapped_column(Text, nullable=True)
+    student_level: Mapped[str | None] = mapped_column(
+        ENUM(
+            "freshman",
+            "sophomore",
+            "junior",
+            "senior",
+            "graduate",
+            name="profile_student_level",
+            create_type=False,
+        ),
+        nullable=True,
+    )
     profile_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Mirrored from auth.users by trigger. Never write these from here.

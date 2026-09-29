@@ -4,12 +4,12 @@ import os
 
 from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from auth import get_current_profile
 from database import engine, get_db
-from models import Post, Profile
+from models import College, Follow, Post, Profile, Space
 from images import router as images_router
 from posts import router as posts_router, serialize_posts
 from post_schemas import PostResponse
@@ -17,6 +17,7 @@ from schemas import (
     CurrentProfileResponse,
     DatabaseHealthResponse,
     HealthResponse,
+    HomeCollegeResponse,
     ProfileResponse,
 )
 
@@ -44,12 +45,52 @@ app.add_middleware(
 def current_profile(
     response: Response,
     profile: Profile = Depends(get_current_profile),
+    db: Session = Depends(get_db),
 ):
     response.headers["Cache-Control"] = "no-store"
+
+    home_college = None
+    if profile.home_college_id is not None:
+        college_row = db.execute(
+            select(Space, College)
+            .join(College, College.space_id == Space.id)
+            .where(
+                Space.id == profile.home_college_id,
+                Space.kind == "college",
+                Space.deleted_at.is_(None),
+            )
+        ).one_or_none()
+        if college_row is not None:
+            space, college = college_row
+            home_college = HomeCollegeResponse(
+                id=space.id,
+                name=space.name,
+                short_name=college.short_name,
+                slug=space.slug,
+                accent_hex=college.accent_hex,
+                crest_key=college.crest_key,
+            )
+
+    followed_space_count, joined_community_count = db.execute(
+        select(
+            func.count(Follow.space_id),
+            func.count(Follow.space_id).filter(Space.kind == "community"),
+        )
+        .select_from(Follow)
+        .join(Space, Space.id == Follow.space_id)
+        .where(
+            Follow.user_id == profile.id,
+            Space.kind.in_(["college", "community"]),
+            Space.deleted_at.is_(None),
+        )
+    ).one()
 
     return CurrentProfileResponse(
         **ProfileResponse.model_validate(profile).model_dump(),
         email_verified=profile.email_verified_at is not None,
+        home_college=home_college,
+        followed_space_count=followed_space_count,
+        joined_community_count=joined_community_count,
     )
 
 

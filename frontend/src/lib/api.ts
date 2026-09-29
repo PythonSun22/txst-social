@@ -1,9 +1,35 @@
 import { getSupabase } from "./supabase";
 
+export interface HomeCollege {
+  id: string;
+  name: string;
+  short_name: string;
+  slug: string;
+  accent_hex: string | null;
+  crest_key: string | null;
+}
+
+export type StudentLevel =
+  | "freshman"
+  | "sophomore"
+  | "junior"
+  | "senior"
+  | "graduate";
+
 export interface CurrentProfile {
   id: string;
   username: string;
   display_name: string | null;
+  bio: string | null;
+  major: string | null;
+  student_level: StudentLevel | null;
+  profile_image_url: string | null;
+  home_college_id: string | null;
+  home_college: HomeCollege | null;
+  post_karma: number;
+  comment_karma: number;
+  followed_space_count: number;
+  joined_community_count: number;
   email_verified: boolean;
 }
 
