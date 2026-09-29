@@ -10,7 +10,8 @@ without FastAPI or a database connection. The API now starts
 `POST /posts` currently saves General/ForAll posts as author-visible `pending`.
 The committed post row is its durable queue entry. The worker screens eligible
 posts, including the existing pending backlog, and saves `approved` or `blocked`
-plus a moderation audit in one transaction. Any overall or category flag blocks.
+plus a moderation audit in one transaction. By default, any overall or category
+flag blocks; a separate, local-only opt-in can recheck a narrow text case below.
 Failures remain private and retry with a finite limit. Apply
 `20260926000000_automatic_post_moderation.sql` before running this code; this
 migration has not been deployed to the shared database.
@@ -101,6 +102,135 @@ uses the existing visibility checks and lets pending cards refresh every five
 seconds without resetting feed pagination. Refreshing stops on a verdict or
 exhaustion.
 
+### Contextual check experiment — local opt-in
+
+`backend/moderation_context_eval.py` compares the current any-flag policy with
+an experimental second check. The first call uses `omni-moderation-latest`.
+The separate `gpt-4o-mini` call receives an explicit forum policy and returns
+a structured `allow`, `block`, or `uncertain` decision. The local trial can
+override a lone `violence` flag below the current experimental 0.7 ceiling when the
+second check returns `allow`. It can also override exactly `violence` plus
+`harassment` when the scores are below 0.7 and 0.65 respectively **and** the
+second check returns `allow` with `past_incident` or `animal_context` as its
+reason code. No other
+flag combination qualifies. Uncertain results retain the first check's block. A failed
+second check leaves the post pending for the existing bounded retries; it never
+approves a post. The worker uses this rule only when the backend-only
+`MODERATION_CONTEXT_RECHECK_ENABLED=true` setting is explicitly enabled, and
+only for text posts. Images and links keep their existing behavior. The default
+remains the any-flag rule. `backend/moderation_context.py` contains the shared
+rule used by the worker and evaluator. The audit records the first result, the
+second decision and reason code, and policy version
+`forall-context-recheck-v3` for the current rule. The ceilings were
+chosen to test a candidate, not calibrated as a safe production threshold.
+The context instructions explicitly distinguish a completed past incident,
+including another person's aggression or quoted profanity, from a current
+threat or targeted abuse. The combined-flag gate was added after a local post
+received both flags. Direct live checks classified that post as `allow` with
+`past_incident`; examples adding a future threat or current targeted abuse
+returned `block`. These few checks do not establish a safe production threshold.
+Already-blocked posts are not reprocessed; submit a new post after restarting
+the backend to test the changed rule.
+The `animal_context` path allows ordinary discussion of food preparation,
+non-graphic animal ethics, and common pest control involving birds and
+arthropods, including insects and shellfish. It does not apply to people
+described as animals, or to gratuitous cruelty for entertainment. In local live
+checks, the lobster recipe, mosquito post, and peacock post returned `allow`;
+contrasting threats against people and cruelty for entertainment returned
+`block`. These examples do not establish a general animal-welfare policy or
+guarantee that every phrasing receives the same result.
+OpenAI describes category scores as model signals
+whose use in a custom policy may require recalibration when the model changes.
+[OpenAI moderation guidance](https://developers.openai.com/api/docs/guides/moderation).
+
+Two synthetic, agent-labeled text sets in `backend/evals/` were tested live on
+September 28, 2026 using the earlier lone-violence trial. Their totals do not
+measure the newer combined-flag rule:
+
+| Set | Harmless / harmful | Current policy false blocks | Trial false blocks | Harmful approvals (either policy) |
+|---|---:|---:|---:|---:|
+| Development | 10 / 10 | 4 | 0 | 0 |
+| Harder holdout | 10 / 10 | 2 | 0 | 0 |
+
+The first set includes the “Kill Tony” question. A direct group threat in that
+set had a `violence` score near 0.24; a separate harmful threat in the holdout
+also scored near 0.24. Both remained blocked because the contextual check
+identified real-world harm. This is evidence against approving content on a
+simple low-score rule. There were no API failures during either live run.
+
+These 40 synthetic cases are too small and too deliberately constructed to
+establish real-world error rates. The holdout is still authored by the same
+evaluator, the cases contain no images, and the model's short reason codes were
+often generic. Real campus examples should be independently labeled and tested
+before enabling this rule in any shared environment. Existing blocked posts are
+not reprocessed by the worker or republished by running the evaluation.
+
+For local testing, set `MODERATION_CONTEXT_RECHECK_ENABLED=true` in the ignored
+`backend/.env` only after confirming `DATABASE_URL` and `SUPABASE_URL` point to
+your local Supabase instance, then restart FastAPI and submit a **new** text
+post. The setting was enabled in this checkout's local `.env` after checking
+the loopback Supabase ports. For the exact question “does anyone watch a show
+called \"Kill Tony\"?”, a live check on September 28 returned only a
+`violence` flag (score approximately 0.425), and the contextual check returned
+`allow`; the optional rule would approve that result. Results can vary between
+calls and this is not a guarantee for every wording.
+
+From `backend`, validate a corpus without network calls, or explicitly run a
+live comparison using the backend-only `OPENAI_API_KEY`:
+
+```powershell
+.\.venv\Scripts\python.exe moderation_context_eval.py
+.\.venv\Scripts\python.exe moderation_context_eval.py --live
+.\.venv\Scripts\python.exe moderation_context_eval.py --live --cases evals/context_holdout_cases.jsonl
+```
+
+The evaluator prints IDs and decisions but not the post text or API key. It
+never connects to the database. A live run calls OpenAI for each case, including
+the separate contextual model. Structured output is used to constrain the
+second check's decision shape. [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+### Local contextual recheck plans (FR-90–92)
+
+#### Local past-incident recheck follow-up (FR-90–92)
+
+1. Extend the disabled-by-default text recheck only to a combined `violence`
+   and `harassment` signal below explicit experimental ceilings. Require the
+   contextual response to identify a completed past incident before allowing
+   this combined case; keep the earlier lone-violence behavior.
+2. Teach the second check to distinguish a report of someone else's misconduct
+   from the author's current threat, targeted abuse, or future plan. Keep all
+   other category combinations on the default block rule.
+3. Add decision tests and run the exact local example plus contrasting harmful
+   examples through the second check. Record limitations and restart guidance.
+
+**Constraints:** No shared database writes, automatic unblocking of earlier
+posts, image-policy changes, or team-wide rollout. A missing/failed second
+decision leaves a post pending under bounded retries. This is an experimental
+local rule, not a calibrated production threshold.
+
+**Non-goals:** general harassment appeals, report handling, or deciding that
+all historical narratives are safe without examining current intent.
+
+#### Local animal-context recheck follow-up (FR-90–92)
+
+1. Teach the structured text recheck to identify ordinary nonhuman animal
+   cooking, food preparation, pest control, and discussion of birds and
+   arthropods, while still rejecting threats to people and gratuitous cruelty.
+2. Permit a qualified `animal_context` decision through the existing lone
+   violence or narrow violence/harassment gate. Do not change the user's
+   current local violence ceiling or add image handling.
+3. Test the decision gate and run local lobster/mosquito examples plus contrasting
+   human-threat and cruelty examples. Version the audit policy and document the
+   observed limitations.
+
+**Constraints:** Opt-in local behavior only. No shared database writes,
+automatic reprocessing of blocked posts, or blanket approval of animal harm.
+The second check must still return `allow`; failures stay pending for bounded
+retries.
+
+**Non-goals:** general animal-welfare policy, legal hunting advice, changing
+the first moderation model, or claiming a few examples calibrate thresholds.
+
 ### Deferred work and limits
 
 - Recovery after exhaustion, post editing and revision-aware re-screening. Any
@@ -134,6 +264,7 @@ MODERATION_ENABLED=false
 MODERATION_MAX_ATTEMPTS=3
 MODERATION_RETRY_SECONDS=30
 MODERATION_POLL_SECONDS=2
+MODERATION_CONTEXT_RECHECK_ENABLED=false
 ```
 
 Create/manage the key on the [OpenAI API platform](https://platform.openai.com/api-keys).

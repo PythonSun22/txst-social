@@ -101,6 +101,12 @@ the backend Storage secret and explicitly enable the worker before use; no
 shared deployment has occurred. See
 `docs/moderation.md` and `docs/posts-and-media.md`.
 
+An experimental, disabled-by-default local text recheck can clear a lower-score
+`violence` flag alone, or a paired `violence`/`harassment` flag only when a
+second structured decision identifies a past incident or ordinary animal
+context. Image screening
+and the default any-flag policy are unchanged; contextual failures stay pending.
+
 **Current sprint:** Sprint 2 (Sep 14–27) — first full-stack vertical slice.
 Registration/recovery UI, reports and subcommunity moderation remain future work.
 
@@ -142,5 +148,5 @@ context for next time. No match → add a new subsection (name from
 
 ### Misan Parajuli — bgg66@txstate.edu
 
-- **Current focus:** automatic General/ForAll moderation implemented (FR-90–92); local image-screening handoff and migration deployment remain. Automated reports are later work (FR-97–99).
-- **Session context:** no staffed platform admin or human-review dependency. The worker screens text/images oldest first, blocks any flag, and keeps failures pending with 3 total attempts by default (30s/120s delays). State and audits persist; pending cards poll for results. Local signed image URLs caused OpenAI HTTP 400; a one-off Base64 data-URL test succeeded, but the temporary Python adapter was reverted at the user's request. The new migration is not applied to the shared database; pending images require a backend Storage secret. Setup and report safeguards are in `docs/moderation.md`.
+- **Current focus:** automatic General/ForAll moderation implemented (FR-90–92); test the local opt-in contextual text recheck with representative, independently labeled examples before any shared rollout. Local image-screening handoff and migration deployment remain. Automated reports are later work (FR-97–99).
+- **Session context:** no staffed platform admin or human-review dependency. The worker screens text/images oldest first; default policy blocks any flag, while an experimental backend setting rechecks lone lower-score text `violence` or a low-score `violence`/`harassment` pair when context identifies a past incident or ordinary animal context. The current local violence ceiling is 0.7; the harassment ceiling is 0.65. Failures remain pending with 3 total attempts by default (30s/120s delays). State and audits persist; pending cards poll for results. The earlier lone-violence synthetic trial reduced false blocks from 6 to 0 across 20 harmless examples while both rules blocked 20 harmful examples; this does not evaluate the newer combined-flag or animal rule or establish production safety. The ignored local backend `.env` has the option enabled against loopback Supabase, and a fresh post is required because blocked posts are not reprocessed. Local signed image URLs caused OpenAI HTTP 400; a one-off Base64 data-URL test succeeded, but the temporary Python adapter was reverted at the user's request. The new migration is not applied to the shared database; pending images require a backend Storage secret. Setup and report safeguards are in `docs/moderation.md`.

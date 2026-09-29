@@ -64,15 +64,17 @@ export default function Home() {
     finally { paging.current = false; setMore(false); }
   }
 
-  return <>
-    <div className="mb-3 flex items-center justify-between"><h1 className="font-serif text-xl font-bold text-primary">ForAll</h1><span className="text-xs text-muted-foreground">Newest first</span></div>
-    <Link href="/submit" className="mb-4 block rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-primary">+ Create Post</Link>
-    {loading && <p role="status">Loading posts…</p>}
-    {error && <p role="alert" className="mb-3 text-sm text-red-700">{error} <button type="button" className="underline" onClick={() => setReload((n) => n + 1)}>Reload feed</button></p>}
-    <div className="space-y-3">{posts.map((post) => <PostCard key={`${profile?.id ?? 'guest'}:${post.id}`} post={post} profile={profile}
-      onDelete={(id) => setPosts((items) => items.filter((item) => item.id !== id))}
-    {!loading && !error && !posts.length && <p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">No posts to show yet. New posts appear here for their author while awaiting review.</p>}
-      onLike={(id, value) => setPosts((items) => items.map((item) => item.id === id ? { ...item, ...value } : item))} />)}</div>
-    {cursor && <button type="button" disabled={more} onClick={() => void loadMore()} className="mt-4 rounded-full border border-primary px-4 py-2 text-sm text-primary disabled:opacity-40">{more ? "Loading…" : "Load more"}</button>}
-  </>;
+  return (
+    <>
+      <div className="mb-3 flex items-center justify-between"><h1 className="font-serif text-xl font-bold text-primary">ForAll</h1><span className="text-xs text-muted-foreground">Newest first</span></div>
+      <Link href="/submit" className="mb-4 block rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-primary">+ Create Post</Link>
+      {loading && <p role="status">Loading posts…</p>}
+      {error && (<p role="alert" className="mb-3 text-sm text-red-700">{error}{" "}<button type="button" className="underline" onClick={() => setReload((n) => n + 1)}>Reload feed</button></p>)}
+      {!loading && !error && !posts.length && (<p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground"> No posts to show yet. New posts appear here for their author while awaiting automatic screening.</p>)}
+      <div className="space-y-3">
+      {posts.map((post) => (<PostCard key={`${profile?.id ?? "guest"}:${post.id}`} post={post} profile={profile} onStatus={updateStatus} onDelete={(id) => setPosts((items) => items.filter((item) => item.id !== id))}
+      onLike={(id, value) => setPosts((items) => items.map((item) => item.id === id ? { ...item, ...value } : item))}/>))}</div>
+      {cursor && (<button type="button" disabled={more} onClick={() => void loadMore()} className="mt-4 rounded-full border border-primary px-4 py-2 text-sm text-primary disabled:opacity-40">{more ? "Loading…" : "Load more"}</button>)}
+    </>
+  );
 }

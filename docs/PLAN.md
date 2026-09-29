@@ -8,46 +8,27 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ---
 
-## Automatic ForAll moderation (FR-32, FR-60, FR-90–92)
+## Moderation (FR-32, FR-60, FR-90–92)
 
-1. Add migration and matching ORM fields for durable attempt counts, retry times,
-   worker leases, exhausted failures, and full classification audit results.
-2. Extend the existing provider adapter to screen title/body and all attached
-   images. Sign private images with a backend-only Storage secret. Any provider
-   or category flag blocks; only a complete unflagged response approves.
-3. Start an opt-in background worker with FastAPI's lifespan after the migration
-   is applied to the configured database. Claim committed General
-   posts oldest first, including the pending backlog; release database locks
-   during network calls. Lease tokens and content fingerprints reject stale
-   results. Persist the decision and audit in one transaction.
-4. Bound automatic attempts (default 3 total; delays 30s then 120s). Failures
-   stay pending, with a persisted exhaustion state and an author-facing message.
-   Refresh pending cards automatically while preserving feed pagination.
-5. Verify provider, storage, scheduling, crash recovery, concurrency, visibility,
-   and failure behavior offline and against isolated local PostgreSQL when
-   available. Update setup, status docs, and Misan's session notes.
+General/ForAll posts start private and pending. The opt-in worker screens them
+and publishes only an approved result; failed screening retries with a limit.
+A separate, disabled-by-default local text recheck is being evaluated for
+contextual false positives. Comments and user reports are later work.
 
-**Constraints:** no human review for ForAll, no publication on failure, no
-client-controlled status, no tokens or signed URLs in audit/logs. Keep image
-upload modules reusable. SDK retries stay off so the persisted limit is real.
-Do not apply this migration or screen real shared posts before the normal
-review/deployment process; the prior shared-database exceptions do not apply.
+1. Evaluate the contextual rule on representative, independently labeled posts
+   before considering it for a shared environment.
+2. Resolve local image-screening handoff and verify the full post flow locally.
+3. Coordinate the moderation migration with the team after review, before
+   enabling the worker against the shared database.
 
-**Non-goals:** reports, comments, subcommunities, account sanctions, post editing,
-custom score thresholds, profanity rules, and fetching legacy link destinations.
-Legacy link posts remain pending rather than being approved without screening
-their destination. [D-4] is resolved for this slice as pending plus bounded
-retries; timing defaults are configurable. Editing/re-screening policy is deferred.
-
-**Verification:** implementation complete. Backend tests include isolated
-PostgreSQL migration/worker checks with mocked provider calls. Live Supabase
-Storage/OpenAI verification and shared deployment remain outstanding; do not
-treat the PostgreSQL schema stand-ins as full Supabase end-to-end coverage.
+**Constraints:** No shared database changes before review and coordination.
+Unscreened posts stay private, and this feed has no human-review dependency.
+The detailed workflow, local recheck plans, results, and limitations live in
+[moderation.md](moderation.md).
 
 ---
 
 ## Registration (`Signup` branch)
-## OpenAI moderation starter (FR-90–92)
 
 Auth foundation (existing-account sign-in, `/auth/me`, Supabase-validated
 identity) is already merged from `Frontend`. There's currently no way for a
@@ -89,7 +70,10 @@ app code), FR-02 (email verification gates posting/commenting/liking), FR-04
 
 ---
 
-## Then (deferred while registration lands)
+## Earlier post milestone (historical plan)
+
+This sequence records the earlier post slice; consult current feature docs for
+implementation status.
 
 1. General-only retrieval and authenticated text creation (FR-30, FR-60),
    including per-space bans (FR-95). Derive authors from the verified
@@ -101,29 +85,9 @@ app code), FR-02 (email verification gates posting/commenting/liking), FR-04
 3. Verify persistence after refresh and pending-media isolation across
    accounts.
 
-Classifier integration and `[D-4]` remain deferred. No auto-approval.
+The earlier post plan predates automatic moderation; see [moderation.md](moderation.md)
+for the current screening workflow.
 Comments, persistent likes, advanced ranking, and gallery features are
 outside this slice.
 
-1. Install the authorized OpenAI SDK with `uv add openai`, updating the project
-   dependency declaration, lockfile, and backend virtual environment.
-2. Implement a standalone text-screening module returning provider flags, category
-   scores, model identity, and latency, with a local command-line example.
-3. Check success, empty input, missing configuration, and provider failure without
-   using real credentials; document how to run a live check.
-4. Consolidate moderation guidance and setup into `docs/moderation.md`, update
-
-   references, and refresh the project context and Misan's session notes.
-never a successful result. This module makes no publication decision. [D-4]
-**Constraints:** API keys stay server-side. Screening failures raise an error,
-(timeout/retry policy) remains open; the starter's network timeout only bounds
-the standalone request.
-
-**Non-goals:** endpoints, database writes/migrations, image screening, profanity
-rules, policy thresholds, moderator review, or background jobs.
-
-**Verification:** SDK transition and documentation consolidation complete. Six
-offline tests pass using the real SDK with a mocked HTTP transport, including
-invalid responses, provider failures, and no automatic retries. Live provider
-verification requires a local `OPENAI_API_KEY`.
 _Revise this file whenever the plan changes. Keep it short._

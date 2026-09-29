@@ -18,7 +18,9 @@ from main import app
 from models import Post
 from moderation import ModerationError, TextModerationResult, moderate_content
 from moderation_storage import sign_moderation_image
-from moderation_worker import Settings, audit_label, eligible_posts, record_failure
+from moderation_context import ContextAssessment
+from moderation_worker import Settings, Work, audit_label, eligible_posts, record_failure, run_once
+from uuid import uuid4
 
 
 def verdict(flagged=False, category="violence", overall=None):
@@ -28,6 +30,34 @@ def verdict(flagged=False, category="violence", overall=None):
 
 
 class WorkerUnitTests(unittest.TestCase):
+    def test_context_recheck_is_opt_in_text_only_and_failure_retries(self):
+        work = Work(uuid4(), uuid4(), "fingerprint", "Question\n\nKill Tony?", (), "text")
+        first = TextModerationResult(flagged=True, categories={"violence": True},
+            category_scores={"violence": 0.42}, model="test", latency_ms=1)
+        context = ContextAssessment(decision="allow", reason_code="media_reference")
+        with (patch("moderation_worker.claim_work", return_value=work),
+              patch("moderation_worker.moderate_content", return_value=first),
+              patch("moderation_worker.moderate_context", return_value=context) as recheck,
+              patch("moderation_worker.finish_work") as finish):
+            run_once(settings=Settings())
+            recheck.assert_not_called()
+            self.assertIsNone(finish.call_args.args[-1])
+            run_once(settings=Settings(context_recheck_enabled=True))
+            recheck.assert_called_once_with(work.text)
+            self.assertEqual(finish.call_args.args[-1], context)
+            recheck.side_effect = ModerationError("Unavailable", code="context_provider")
+            run_once(settings=Settings(context_recheck_enabled=True))
+            self.assertEqual(finish.call_args.args[4].code, "context_provider")
+
+        image = Work(work.post_id, work.claim, work.content_hash, work.text, ("key",), "image")
+        with (patch("moderation_worker.claim_work", return_value=image),
+              patch("moderation_worker.sign_moderation_image", return_value="https://private/image"),
+              patch("moderation_worker.moderate_content", return_value=first),
+              patch("moderation_worker.moderate_context") as recheck,
+              patch("moderation_worker.finish_work")):
+            run_once(settings=Settings(context_recheck_enabled=True))
+            recheck.assert_not_called()
+
     def test_any_category_blocks_even_when_overall_flag_is_false(self):
         result = verdict(True, "illicit/violent", overall=False)
         self.assertTrue(result.blocked)

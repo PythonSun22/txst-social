@@ -58,7 +58,7 @@ revisit one — several were argued through and closed deliberately.
 | **Supabase Auth owns identity** | We store no passwords. `public.profiles.id` **is** `auth.users.id`. |
 | **`txstate.edu` only** | Enforced in the database by a trigger on `auth.users`, not only in application code. |
 | **Screening precedes publication** | A post exists as `pending` and is invisible to everyone but its author until the classifier approves it. |
-| **ForAll moderation is automatic** | Any overall/category flag blocks publication. Screening failures stay pending with bounded retries; no human-review dependency at this feed level (FR-90–92). |
+| **ForAll moderation is automatic** | By default, any overall/category flag blocks publication. An experimental backend-only local opt-in can recheck lower-score text `violence`, alone or paired with `harassment`, for a confirmed past-incident or ordinary animal context; it is off by default. Screening failures stay pending with bounded retries; no human-review dependency at this feed level (FR-90–92). |
 | **Colleges are seeded** | Ten of them, inserted by migration. Users cannot create a college. |
 
 ---
@@ -234,11 +234,20 @@ through `/posts`. Comments and reports remain **schema only**.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
-title/body plus attached images; any flag blocks, otherwise the post is approved.
+title/body plus attached images; by default any flag blocks, otherwise the post
+is approved. The local, disabled-by-default `MODERATION_CONTEXT_RECHECK_ENABLED`
+option can let a second model clear a lone lower-score text `violence` flag, or
+the combination of `violence` and `harassment` when it identifies a past
+incident or ordinary animal context and both scores are below the experimental
+ceilings.
 Claims and retry counts persist across restarts; stale results cannot publish.
 Audits and verdicts commit together. Pending cards refresh via `GET /posts/{id}`
 and show exhausted failures. There is no human review or account suspension in
 this slice. Report-handling rules are saved for later work (FR-97–99).
+An offline contextual evaluation compares the default any-flag rule with this
+candidate on synthetic text cases; the optional worker path is for local tests
+only pending representative, independently labeled evaluation.
+Results and limitations are in `docs/moderation.md`.
 
 Apply the new moderation migration before running this checkout and configure
 the backend-only Storage secret for pending images. Normal upload/preview routes

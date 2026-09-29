@@ -17,10 +17,13 @@ from sqlalchemy import or_, select
 from database import SessionLocal
 from models import ModerationCheck, Post, PostMedia, Space
 from moderation import ModerationError, TextModerationResult, moderate_content
+from moderation_context import (CONTEXT_MODEL, ContextAssessment, candidate_blocks,
+                                moderate_context, should_recheck)
 from moderation_storage import sign_moderation_image
 
 logger = logging.getLogger(__name__)
 POLICY_VERSION = "forall-any-flag-v1"
+CONTEXT_POLICY_VERSION = "forall-context-recheck-v3"
 LEASE_SECONDS = 300
 
 
@@ -29,6 +32,7 @@ class Settings:
     max_attempts: int = 3
     retry_seconds: int = 30
     poll_seconds: int = 2
+    context_recheck_enabled: bool = False
 
     @classmethod
     def from_env(cls):
@@ -36,6 +40,7 @@ class Settings:
             "max_attempts": int(os.getenv("MODERATION_MAX_ATTEMPTS", "3")),
             "retry_seconds": int(os.getenv("MODERATION_RETRY_SECONDS", "30")),
             "poll_seconds": int(os.getenv("MODERATION_POLL_SECONDS", "2")),
+            "context_recheck_enabled": os.getenv("MODERATION_CONTEXT_RECHECK_ENABLED", "false").lower() == "true",
         }
         if not 1 <= values["max_attempts"] <= 10 or not all(
             1 <= values[key] <= 3600 for key in ("retry_seconds", "poll_seconds")
@@ -132,7 +137,7 @@ def audit_label(result: TextModerationResult) -> tuple[str, float]:
 
 def finish_work(session_factory, settings: Settings, work: Work,
                 result: TextModerationResult | None, failure: ModerationError | None,
-                now: datetime):
+                now: datetime, context: ContextAssessment | None = None):
     with session_factory() as db:
         post = db.scalar(select(Post).where(Post.id == work.post_id).with_for_update())
         if post is None or post.moderation_claim != work.claim:
@@ -149,18 +154,29 @@ def finish_work(session_factory, settings: Settings, work: Work,
         digest, _ = content_snapshot(db, post)
         if digest != work.content_hash:
             failure = ModerationError("Content changed during screening.", code="content_changed")
+        if (failure is None and result is not None and settings.context_recheck_enabled
+                and work.post_type == "text" and should_recheck(result) and context is None):
+            failure = ModerationError("Context screening returned no decision.", code="context_response")
         if failure is not None:
             record_failure(post, settings, now, failure.code, failure.retry_after)
         elif result is not None:
             label, score = audit_label(result)
+            blocked = candidate_blocks(result, context) if (
+                settings.context_recheck_enabled and work.post_type == "text"
+            ) else result.blocked
+            provider_result = result.model_dump()
+            if context is not None:
+                provider_result["context_recheck"] = context.model_dump()
+                provider_result["context_model"] = CONTEXT_MODEL
             db.add(ModerationCheck(
                 post_id=post.id, label=label, score=score,
-                decision="block" if result.blocked else "allow", model_version=result.model,
-                latency_ms=result.latency_ms, provider_result=result.model_dump(),
-                content_hash=work.content_hash, policy_version=POLICY_VERSION,
+                decision="block" if blocked else "allow", model_version=result.model,
+                latency_ms=result.latency_ms, provider_result=provider_result,
+                content_hash=work.content_hash,
+                policy_version=CONTEXT_POLICY_VERSION if context is not None else POLICY_VERSION,
                 attempt=post.moderation_attempts,
             ))
-            post.status = "blocked" if result.blocked else "approved"
+            post.status = "blocked" if blocked else "approved"
             post.moderation_error = None
         else:
             record_failure(post, settings, now, "missing_result")
@@ -175,7 +191,7 @@ def run_once(session_factory=SessionLocal, settings: Settings | None = None) -> 
     work = claim_work(session_factory, settings, datetime.now(timezone.utc))
     if work is None:
         return False
-    result, failure = None, None
+    result, failure, context = None, None, None
     try:
         if work.post_type == "link":
             raise ModerationError("Link destinations are not screened.", code="unsupported_link")
@@ -183,13 +199,15 @@ def run_once(session_factory=SessionLocal, settings: Settings | None = None) -> 
             raise ModerationError("Post attachments are inconsistent.", code="invalid_media")
         urls = tuple(sign_moderation_image(key) for key in work.images)
         result = moderate_content(work.text, urls)
+        if settings.context_recheck_enabled and work.post_type == "text" and should_recheck(result):
+            context = moderate_context(work.text)
     except ModerationError as error:
         failure = error
     except Exception:
         # Never log request bodies, private signed URLs, credentials, or provider errors.
         logger.error("Post moderation failed unexpectedly; the post remains pending.")
         failure = ModerationError("Screening failed.", code="unexpected_failure")
-    finish_work(session_factory, settings, work, result, failure, datetime.now(timezone.utc))
+    finish_work(session_factory, settings, work, result, failure, datetime.now(timezone.utc), context)
     return True
 
 

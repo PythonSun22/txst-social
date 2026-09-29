@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import PawIcon from "./PawIcon";
-import { fetchPost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
-import { deletePost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
+import { fetchPost, deletePost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
 import type { CurrentProfile } from "@/lib/api";
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
@@ -28,10 +27,11 @@ function PostImage({ postId, media }: { postId: string; media: FeedPost["media"]
   </div>;
 }
 
-export default function PostCard({ post, profile, onLike, onDelete }: {
+export default function PostCard({ post, profile, onLike, onDelete, onStatus }: {
   post: FeedPost; profile: CurrentProfile | null;
   onLike: (id: string, value: { liked: boolean; like_count: number }) => void;
   onDelete: (id: string) => void;
+  onStatus: (id: string, status: FeedPost["status"], failed: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
