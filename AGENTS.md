@@ -279,8 +279,15 @@ history, table RLS, private bucket limits and ownership policies were verified.
 A second explicit exception authorized this milestone's shared deployment:
 `20260924204603_update_site_name.sql` and
 `20260924205639_persistent_posts_and_likes.sql` are also applied. Migration history,
-RLS and rollback-only integration checks passed. These exceptions do not waive
-the two-approval merge rule or authorize future shared migrations before review.
+RLS and rollback-only integration checks passed. A third explicit exception was
+authorized on 2026-09-29 so remote profile testing could proceed before merge:
+`20260929052513_add_profile_student_level.sql`,
+`20260929070000_profile_editing.sql`, and
+`20260929080000_link_majors_to_colleges.sql` are applied, and migration history
+was verified. The still-unmerged `20260926000000_automatic_post_moderation.sql`
+has an earlier version number and must be included deliberately when it is later
+deployed. These exceptions do not waive the two-approval merge rule or authorize
+future shared migrations before review.
 Keep all migration files when integrating branches; the shared database records
 them as applied. Older code selecting `posts.image_key` must update with the
 post-media migration.
