@@ -10,7 +10,12 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 
-from auth import bearer, get_optional_profile, require_verified_profile
+from auth import (
+    bearer,
+    get_current_profile,
+    get_optional_profile,
+    require_verified_profile,
+)
 from database import get_db
 from image_schemas import ImagePreviewResponse
 import image_storage
@@ -92,6 +97,25 @@ def list_posts(
     response.headers["Cache-Control"] = "no-store"
     return FeedResponse(items=serialize_posts(db, rows[:limit], viewer),
                         next_cursor=encode_cursor(rows[limit - 1]) if len(rows) > limit else None)
+
+
+@router.get("/me", response_model=list[PostResponse], summary="Get the current user's posts")
+def get_my_posts(
+    response: Response,
+    profile: Profile = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+) -> list[PostResponse]:
+    response.headers["Cache-Control"] = "no-store"
+    posts = db.scalars(
+        select(Post)
+        .where(
+            Post.author_id == profile.id,
+            Post.deleted_at.is_(None),
+            Post.status.in_(["approved", "pending"]),
+        )
+        .order_by(Post.created_at.desc())
+    ).all()
+    return serialize_posts(db, list(posts), profile)
 
 
 @router.post("", response_model=PostResponse, status_code=201)

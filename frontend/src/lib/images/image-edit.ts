@@ -15,6 +15,38 @@ export function centeredCrop(width: number, height: number, ratio: number): Crop
   return clampCrop({ x: (width - w) / 2, y: (height - h) / 2, width: w, height: h }, width, height);
 }
 
+export function moveCrop(
+  crop: CropRect,
+  deltaX: number,
+  deltaY: number,
+  width: number,
+  height: number
+): CropRect {
+  return {
+    ...crop,
+    x: Math.round(Math.max(0, Math.min(width - crop.width, crop.x + deltaX))),
+    y: Math.round(Math.max(0, Math.min(height - crop.height, crop.y + deltaY))),
+  };
+}
+
+export function zoomSquareCrop(
+  crop: CropRect,
+  zoom: number,
+  width: number,
+  height: number
+): CropRect {
+  const safeZoom = Math.max(1, Math.min(4, zoom));
+  const size = Math.max(1, Math.round(Math.min(width, height) / safeZoom));
+  const centerX = crop.x + crop.width / 2;
+  const centerY = crop.y + crop.height / 2;
+  return {
+    x: Math.round(Math.max(0, Math.min(width - size, centerX - size / 2))),
+    y: Math.round(Math.max(0, Math.min(height - size, centerY - size / 2))),
+    width: size,
+    height: size,
+  };
+}
+
 /** Downscale proportionally, with a bounded canvas allocation and no upscaling. */
 export function outputSize(crop: CropRect, requestedWidth: number) {
   const scale = Math.min(1, Math.max(1, requestedWidth) / crop.width,

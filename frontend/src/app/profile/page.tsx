@@ -1,14 +1,18 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Signed private image URLs are generated at runtime. */
+
 import PostCard from "@/components/PostCard";
 import PawIcon from "@/components/PawIcon";
 import JoinedCommunitiesCard from "@/components/JoinedCommunitiesCard";
+import EditProfileModal from "@/components/EditProfileModal";
 import SortBar, { type SortOrder } from "@/components/SortBar";
 import {
   getCurrentProfile,
   type CurrentProfile,
 } from "@/lib/api";
 import { getMyPosts, type FeedPost } from "@/lib/posts";
+import { previewImage } from "@/lib/images/image-api";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -28,13 +32,32 @@ function sortPosts(posts: FeedPost[], order: SortOrder): FeedPost[] {
   return [...posts].sort((a, b) => key(b) - key(a));
 }
 
+function usePrivateImagePreview(uploadId: string | null): string | null {
+  const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (uploadId) {
+      previewImage(uploadId)
+        .then((result) => { if (active) setPreview({ id: uploadId, url: result.url }); })
+        .catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [uploadId]);
+
+  return preview?.id === uploadId ? preview.url : null;
+}
+
 export default function Profile() {
   const [sort, setSort] = useState<SortOrder>("new");
   const [profile, setProfile] = useState<CurrentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
+  const [editing, setEditing] = useState(false);
   const posts = sortPosts(myPosts, sort);
+  const avatarUrl = usePrivateImagePreview(profile?.profile_image_upload_id ?? null);
+  const bannerUrl = usePrivateImagePreview(profile?.banner_image_upload_id ?? null);
 
   // Load the authenticated profile when this component mounts.
   useEffect(() => {
@@ -108,9 +131,13 @@ export default function Profile() {
           className="relative h-40 overflow-hidden"
           style={{ backgroundColor: profile.home_college?.accent_hex ?? "#501214" }}
         >
-          <div className="absolute right-8 top-1/2 -translate-y-1/2 rotate-[-10deg] text-accent/70">
-            <PawIcon size={104} />
-          </div>
+          {bannerUrl ? (
+            <img src={bannerUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="absolute right-8 top-1/2 -translate-y-1/2 rotate-[-10deg] text-accent/70">
+              <PawIcon size={104} />
+            </div>
+          )}
           <div className="absolute inset-x-0 bottom-0 h-1 bg-accent" />
         </div>
 
@@ -120,16 +147,23 @@ export default function Profile() {
               aria-hidden="true"
               className="relative -mt-16 flex h-32 w-32 shrink-0 items-center justify-center rounded-full border-[5px] border-card bg-primary text-3xl font-bold text-white shadow-md sm:-mt-20 sm:h-40 sm:w-40 sm:text-4xl"
             >
-              {initials}
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={`${displayName}'s profile`} className="h-full w-full rounded-full object-cover" />
+              ) : initials}
               <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-card bg-accent text-white">
                 <PawIcon size={17} />
               </span>
             </div>
 
             <div className="min-w-0 flex-1 sm:pt-5">
-              <h1 className="break-words font-serif text-3xl font-bold leading-tight text-primary">
-                {displayName}
-              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="break-words font-serif text-3xl font-bold leading-tight text-primary">
+                  {displayName}
+                </h1>
+                <button type="button" onClick={() => setEditing(true)} className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-primary/90">
+                  Edit Profile
+                </button>
+              </div>
               <p className="mt-1 break-words text-sm text-muted-foreground">
                 @{profile.username}
               </p>
@@ -243,6 +277,17 @@ export default function Profile() {
 
         <JoinedCommunitiesCard />
       </div>
+
+      {editing && (
+        <EditProfileModal
+          profile={profile}
+          onClose={() => setEditing(false)}
+          onSaved={(updated) => {
+            setProfile(updated);
+            setEditing(false);
+          }}
+        />
+      )}
     </section>
   );
 }

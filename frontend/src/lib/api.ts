@@ -22,8 +22,11 @@ export interface CurrentProfile {
   display_name: string | null;
   bio: string | null;
   major: string | null;
+  major_id: string | null;
   student_level: StudentLevel | null;
   profile_image_url: string | null;
+  profile_image_upload_id: string | null;
+  banner_image_upload_id: string | null;
   home_college_id: string | null;
   home_college: HomeCollege | null;
   post_karma: number;
@@ -33,6 +36,35 @@ export interface CurrentProfile {
   email_verified: boolean;
 }
 
+export interface MajorOption {
+  id: string;
+  name: string;
+  degree: string;
+  college_id: string;
+}
+
+  colleges: HomeCollege[];
+export interface ProfileOptions {
+  majors: MajorOption[];
+  student_levels: StudentLevel[];
+}
+
+export interface ProfileUpdate {
+  display_name: string | null;
+  bio: string | null;
+  major_id: string | null;
+  home_college_id: string | null;
+  student_level: StudentLevel | null;
+  profile_image_upload_id: string | null;
+  banner_image_upload_id: string | null;
+
+}
+/** Call FastAPI using the current Supabase session. */
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  publicRead = false
+): Promise<T> {
   return response.json() as Promise<T>;
 /** Call FastAPI with the current Supabase session; application data stays behind the API. */
 export async function apiRequest<T>(path: string, init: RequestInit = {}, publicRead = false): Promise<T> {
@@ -112,3 +144,12 @@ export async function getCurrentProfile(
 
   return apiRequest<CurrentProfile>("/auth/me", { signal });
 }
+
+export const getProfileOptions = (signal?: AbortSignal) =>
+  apiRequest<ProfileOptions>("/profile/options", { signal });
+
+export const updateCurrentProfile = (updates: ProfileUpdate) =>
+  apiRequest<CurrentProfile>("/auth/me", {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });

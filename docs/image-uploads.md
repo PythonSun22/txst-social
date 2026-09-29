@@ -117,6 +117,13 @@ URLs and canvas memory are released when replaced or no longer needed.
 Feed-wide ratio rules remain a discussion: natural ratio preserves all content;
 fixed thumbnail frames can use `object-cover` for a visual crop while a detail
 view shows the whole image. Do not silently burn that rendering crop into uploads.
+The profile-photo editor is the intentional exception: it starts with a centered
+square export and overlays the circular avatar boundary. Dragging repositions the
+photo behind a fixed circular viewport, while the 1×–4× control visibly scales the
+photo without changing that viewport. The surrounding photo remains visible under
+a translucent mask to make repositioning easier, while the circle stays fully
+opaque. The saved square matches the circular profile render. Banner and post editing retain
+the general rectangular crop controls.
 
 ## Post integration and limits
 
@@ -126,6 +133,12 @@ The post-create transaction verifies ownership and completion, rejects duplicate
 attachments, checks space bans (FR-95), and saves text, images or both. Existing
 links remain readable. See [Posts and reusable images](posts-and-media.md) for
 the module boundaries, schema, API, retries and tests agents should preserve.
+
+The profile editor uses the same seam for `profiles.profile_image_upload_id` and
+`profiles.banner_image_upload_id`. `PATCH /auth/me` accepts only completed,
+non-deleted uploads owned by the authenticated profile. The profile page requests
+short-lived URLs from the existing owner-only preview endpoint; no Storage URL is
+persisted on the profile.
 
 An uploaded file is **not approved content** (FR-90). Upload previews are issued
 only to the owner. Post previews additionally allow readers of approved posts.
