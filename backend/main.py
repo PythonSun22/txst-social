@@ -13,14 +13,8 @@ from database import engine
 from images import router as images_router
 from posts import router as posts_router
 from profile_routes import router as profile_router
-from models import Profile
 from moderation_worker import Settings, run_worker
-from schemas import (
-    CurrentProfileResponse,
-    DatabaseHealthResponse,
-    HealthResponse,
-    ProfileResponse,
-)
+from schemas import DatabaseHealthResponse, HealthResponse
 
 
 @asynccontextmanager
