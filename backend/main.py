@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from comments import router as comments_router
 from database import engine
 from images import router as images_router
 from posts import router as posts_router
@@ -17,6 +18,7 @@ app = FastAPI()
 app.include_router(images_router)
 app.include_router(posts_router)
 app.include_router(profile_router)
+app.include_router(comments_router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -171,6 +171,17 @@ def load_visible_post(db: Session, post_id: UUID, viewer: Profile | None, lock: 
     return post
 
 
+@router.get("/{post_id}", response_model=PostResponse)
+def get_post(
+    post_id: UUID, response: Response,
+    viewer: Profile | None = Depends(get_optional_profile), db: Session = Depends(get_db),
+) -> PostResponse:
+    """Fetch a single post, e.g. for a post detail/comments page."""
+    post = load_visible_post(db, post_id, viewer)
+    response.headers["Cache-Control"] = "no-store"
+    return serialize_posts(db, [post], viewer)[0]
+
+
 @router.get("/{post_id}/media/{position}/preview", response_model=ImagePreviewResponse)
 def preview_post_image(
     post_id: UUID, position: int, response: Response,
