@@ -8,6 +8,26 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ---
 
+## Moderation (FR-32, FR-60, FR-90–92)
+
+General/ForAll posts start private and pending. The opt-in worker screens them
+and publishes only an approved result; failed screening retries with a limit.
+A separate, disabled-by-default local text recheck is being evaluated for
+contextual false positives. Comments and user reports are later work.
+
+1. Evaluate the contextual rule on representative, independently labeled posts
+   before considering it for a shared environment.
+2. Resolve local image-screening handoff and verify the full post flow locally.
+3. Coordinate the moderation migration with the team after review, before
+   enabling the worker against the shared database.
+
+**Constraints:** No shared database changes before review and coordination.
+Unscreened posts stay private, and this feed has no human-review dependency.
+The detailed workflow, local recheck plans, results, and limitations live in
+[moderation.md](moderation.md).
+
+---
+
 ## Registration (`Signup` branch)
 
 Auth foundation (existing-account sign-in, `/auth/me`, Supabase-validated
@@ -50,7 +70,10 @@ app code), FR-02 (email verification gates posting/commenting/liking), FR-04
 
 ---
 
-## Then (deferred while registration lands)
+## Earlier post milestone (historical plan)
+
+This sequence records the earlier post slice; consult current feature docs for
+implementation status.
 
 1. General-only retrieval and authenticated text creation (FR-30, FR-60),
    including per-space bans (FR-95). Derive authors from the verified
@@ -62,7 +85,8 @@ app code), FR-02 (email verification gates posting/commenting/liking), FR-04
 3. Verify persistence after refresh and pending-media isolation across
    accounts.
 
-Classifier integration and `[D-4]` remain deferred. No auto-approval.
+The earlier post plan predates automatic moderation; see [moderation.md](moderation.md)
+for the current screening workflow.
 Comments, persistent likes, advanced ranking, and gallery features are
 outside this slice.
 

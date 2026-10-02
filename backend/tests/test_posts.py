@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 from uuid import uuid4
 os.environ['DATABASE_URL']='postgresql+psycopg://test:test@localhost/test'
+os.environ['MODERATION_ENABLED']='false'
 from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 from pydantic import ValidationError

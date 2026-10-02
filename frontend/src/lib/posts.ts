@@ -4,6 +4,7 @@ export interface FeedPost {
   can_delete: boolean;
   type: "text" | "image" | "link";
   status: "pending" | "approved" | "blocked" | "removed";
+  moderation_failed: boolean;
   created_at: string; like_count: number; comment_count: number; liked: boolean;
   media: { position: number; width: number | null; height: number | null }[];
 }
@@ -15,6 +16,8 @@ export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
 export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[] }) =>
   apiRequest<FeedPost>("/posts", { method: "POST", body: JSON.stringify(payload) });
+export const fetchPost = (id: string, signal?: AbortSignal) =>
+  apiRequest<FeedPost>(`/posts/${id}`, { signal }, true);
 export const setPostLike = (id: string, liked: boolean) => apiRequest<{ liked: boolean; like_count: number }>(
   `/posts/${id}/like`, { method: liked ? "PUT" : "DELETE" },
 );

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import PawIcon from "./PawIcon";
-import { deletePost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
+import { fetchPost, deletePost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
 import type { CurrentProfile } from "@/lib/api";
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
@@ -27,10 +27,11 @@ function PostImage({ postId, media }: { postId: string; media: FeedPost["media"]
   </div>;
 }
 
-export default function PostCard({ post, profile, onLike, onDelete }: {
+export default function PostCard({ post, profile, onLike, onDelete, onStatus }: {
   post: FeedPost; profile: CurrentProfile | null;
   onLike: (id: string, value: { liked: boolean; like_count: number }) => void;
   onDelete: (id: string) => void;
+  onStatus: (id: string, status: FeedPost["status"], failed: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -41,6 +42,24 @@ export default function PostCard({ post, profile, onLike, onDelete }: {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  useEffect(() => {
+    if (post.status !== "pending" || post.moderation_failed) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      try {
+        const updated = await fetchPost(post.id, controller.signal);
+        if (controller.signal.aborted) return;
+        onStatus(updated.id, updated.status, updated.moderation_failed);
+        if (updated.status !== "pending" || updated.moderation_failed) return;
+      } catch {
+        if (controller.signal.aborted) return;
+      }
+      timer = setTimeout(() => void refresh(), 5000);
+    }
+    timer = setTimeout(() => void refresh(), 5000);
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [post.id, post.status, post.moderation_failed, onStatus]);
   const canLike = !!profile?.email_verified && (post.status === "pending" || post.status === "approved");
   const canDelete = !!profile?.email_verified && post.can_delete;
   async function remove() {
@@ -68,9 +87,11 @@ export default function PostCard({ post, profile, onLike, onDelete }: {
     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
       <PawIcon size={16} /><strong className="text-primary">General</strong>
       <span>Posted by {post.author}</span><time dateTime={post.created_at}>{dateFormat.format(new Date(post.created_at))}</time>
-      {post.status !== "approved" && <span className="rounded-full bg-accent/10 px-2 py-1 font-semibold text-primary">{post.status === "pending" ? "Pending review · Only you" : post.status}</span>}
+      {post.status !== "approved" && <span className="rounded-full bg-accent/10 px-2 py-1 font-semibold text-primary">{post.status === "pending" ? (post.moderation_failed ? "Screening unavailable · Only you" : "Screening pending · Only you") : post.status}</span>}
     </div>
     <h2 className="mb-2 break-words text-base font-semibold">{post.title}</h2>
+    {post.moderation_failed && <p role="status" className="mb-3 text-sm text-muted-foreground">Automated review could not be completed. Your post remains private; automatic retries have stopped.</p>}
+    {post.status === "blocked" && <p className="mb-3 text-sm text-muted-foreground">Automatic screening flagged this post, so it has not been published.</p>}
     {post.body && <p className="mb-3 whitespace-pre-wrap break-words text-sm">{post.body}</p>}
     {post.url && /^https?:\/\//i.test(post.url) && <a href={post.url} target="_blank" rel="noopener noreferrer" className="mb-3 block break-all text-sm text-primary underline">{post.url}</a>}
     <div className="space-y-3">{post.media.map((media) => <PostImage key={media.position} postId={post.id} media={media} />)}</div>
