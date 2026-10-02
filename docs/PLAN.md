@@ -8,62 +8,68 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ---
 
-## Registration (`Signup` branch)
+## Comments (`feature/comments` branch)
 
-Auth foundation (existing-account sign-in, `/auth/me`, Supabase-validated
-identity) is already merged from `Frontend`. There's currently no way for a
-new student to create an account through the UI — this closes that gap.
-Bumps ahead of the posts work noted below, which stays queued.
+Registration, posts (text/image), likes, and moderation (on a separate
+unmerged branch) are done. Comments are the next big product gap: the
+`comments`/`comment_likes` tables and `Comment`/`CommentLike` models already
+exist (materialized `ltree` path, per `[D-3]`), but there is no router, no
+endpoint, and no UI — `PostCard` shows a comment count with nothing behind it.
 
-**Relevant FRs:** FR-01 (`txstate.edu` only, enforced by a DB trigger — not
-app code), FR-02 (email verification gates posting/commenting/liking), FR-04
-(signed-out visitors keep read-only access; signup doesn't change that).
+**Relevant FRs:** FR-02 (verified email gates commenting), FR-35 (one indexed
+query reads a whole thread via `path`), FR-36 (`posts.comment_count` is a
+denormalized cache, written in the same transaction), FR-41 (depth limit,
+UI must support at least 8 levels), FR-43 (soft delete), FR-45/FR-50/FR-51
+(comment likes — upvote only, same as posts), FR-90 (screening — see below).
+
+**Interim moderation stance:** the moderation worker lives on an unmerged
+branch (`moderation_setup`) and does not exist here. On `dev`, `posts.py`'s
+actual visibility rule (`visible_to()`) is `approved` **or the caller's own**
+— confirmed by testing, not assumed — so a `pending` post from someone else
+is invisible to everyone but its author until moderation merges, exactly as
+FR-90 intends. (`Post.status.in_(["approved", "pending"])` only appears in
+`GET /posts/me`, already scoped to the caller's own posts — it is not a
+general exception.) Comments mirror this exact rule: `pending` is visible
+only to its author, same as posts.
 
 ### Steps
 
-1. Add a sign-up mode to `AuthForm.tsx` — a toggle alongside the existing
-   sign-in form, calling `supabase.auth.signUp({ email, password })`. Same
-   component and patterns already used for sign-in, not a new file.
-2. Handle the post-signup state explicitly: `signUp()` returns no session
-   (confirmed this session against the real project). Show "check your
-   email to confirm your account" — don't fall through to the sign-in form
-   and leave the user guessing why they're not logged in.
-3. Surface real errors instead of a raw dump: non-`txstate.edu` address (the
-   DB trigger's rejection message), already-registered email, weak
-   password, and `429 over_email_send_rate_limit` (hit this ourselves
-   testing — needs a plain "try again shortly," not the raw JSON).
-4. Manual verification: sign up with a real inbox (a fake address can never
-   confirm — proven this session), confirm via the emailed link, then sign
-   in through the same form.
+1. **`backend/comment_schemas.py`** — `CommentCreate` (`body`, optional
+   `parent_id`), `CommentResponse`, `CommentThreadResponse`. Mirror
+   `post_schemas.py`'s style (`ConfigDict(extra="forbid")`, etc.).
+2. **`backend/comments.py`** — new router:
+   - `GET /posts/{post_id}/comments` — full thread, ordered by `path`
+     (one query, no recursion, per `[D-3]`). Same `pending`-is-visible
+     interim rule as posts; `deleted_at` tombstones excluded.
+   - `POST /posts/{post_id}/comments` — `require_verified_profile`, ban
+     check (reuse `check_ban` from `posts.py`), compute the new row's
+     `path`/`depth` from the parent (top-level if `parent_id` is `None`),
+     enforce the depth constraint, bump `posts.comment_count` atomically in
+     the same transaction.
+   - `PUT`/`DELETE /posts/{post_id}/comments/{comment_id}/like` — mirrors
+     `set_like` in `posts.py`; updates `comment_karma`, not `post_karma`.
+   - `DELETE /posts/{post_id}/comments/{comment_id}` — soft-delete own
+     comment, mirroring `delete_own_post` (FR-43).
+3. **`GET /posts/{post_id}`** — doesn't exist yet; needed for a post detail
+   page. Reuse `load_visible_post` + `serialize_posts`.
+4. Wire `comments_router` into `main.py`.
+5. **Frontend:** `lib/comments.ts` (mirrors `lib/posts.ts`), a post detail
+   page at `frontend/src/app/posts/[id]/page.tsx`, a `CommentThread`/
+   `CommentItem` component (indent by `depth`, reply box per comment, a
+   top-level composer). Link `PostCard`'s comment count to the detail page.
+6. Manual verification: post a comment, reply to a reply (depth > 1, confirm
+   ordering), like/unlike, delete own comment, confirm `comment_count` on
+   the post stays correct throughout.
 
 ### Non-goals (this pass)
 
-- No password reset / account recovery UI.
-- No OAuth/social login.
-- No profile-completion step (username selection). This branch's backend
-  has no `POST /profiles/me` yet — the provisional username from the
-  signup trigger is fine for now.
-- No conditional Sidebar (hide/show links by auth state) — related, but a
-  separate piece of work from signup itself.
-- No backend changes. Signup goes straight to Supabase, same as sign-in
-  already does — the backend never sees credentials.
-
----
-
-## Then (deferred while registration lands)
-
-1. General-only retrieval and authenticated text creation (FR-30, FR-60),
-   including per-space bans (FR-95). Derive authors from the verified
-   profile. New posts stay pending and are visible to their author (FR-90).
-2. Add ordered `post_media`, migrate existing image keys, then private
-   Storage uploads and an image-capable composer/card (FR-31, FR-32).
-   Required titles remain; support text only, images only, and text plus
-   images.
-3. Verify persistence after refresh and pending-media isolation across
-   accounts.
-
-Classifier integration and `[D-4]` remain deferred. No auto-approval.
-Comments, persistent likes, advanced ranking, and gallery features are
-outside this slice.
+- No moderation worker integration for comments — see interim stance above.
+- No comment editing (`edited_at` exists in the schema; building the edit
+  flow is separate work).
+- No reports on comments (FR-97–99 — already deferred project-wide).
+- No thread collapsing, lazy-loading, or virtualization for huge threads —
+  render the full thread per load; fine at this project's scale.
+- No changes to post likes/posts.py beyond adding `GET /posts/{post_id}` and
+  exporting `check_ban`/`load_visible_post` if needed for reuse.
 
 _Revise this file whenever the plan changes. Keep it short._
