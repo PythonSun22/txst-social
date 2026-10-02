@@ -80,7 +80,7 @@ export default function PostCard({ post, profile, onLike, onDelete }: {
         className={`rounded-full bg-muted px-3 py-2 font-bold disabled:opacity-50 ${post.liked ? "text-primary" : "text-muted-foreground"}`}>
         ▲ {post.like_count} {post.liked ? "Liked" : "Like"}
       </button>
-      <span className="text-muted-foreground">{post.comment_count} comments</span>
+      <Link href={`/posts/${post.id}`} className="text-muted-foreground underline">{post.comment_count} comments</Link>
       {canDelete && !confirmDelete && <button type="button" disabled={busy} onClick={() => setConfirmDelete(true)}
         className="ml-auto rounded-full px-3 py-2 text-red-700 disabled:opacity-50">Delete post</button>}
       {!profile && <Link href="/login" className="text-primary underline">Sign in to like</Link>}
