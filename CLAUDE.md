@@ -93,11 +93,22 @@ _Claude keeps this current — see above._
 **Working today:** health/profiles, Supabase existing-account login and identity,
 private image uploads with browser crop/resize, persistent General text/image/mixed
 posts, chronological cursor feed and authenticated persistent post likes/unlikes.
-New posts remain author-visible pending (FR-90); comments and moderation are still
-schema only. See `docs/posts-and-media.md` for reusable module contracts and tests.
+ForAll moderation screens text/images in an opt-in background worker (FR-90–92).
+Posts start private/pending, then approve or block automatically; failed screening
+retries with a persisted limit and an author-facing exhaustion notice. Comments
+and reports remain schema only. Apply the new moderation migration and configure
+the backend Storage secret and explicitly enable the worker before use; no
+shared deployment has occurred. See
+`docs/moderation.md` and `docs/posts-and-media.md`.
+
+An experimental, disabled-by-default local text recheck can clear a lower-score
+`violence` flag alone, or a paired `violence`/`harassment` flag only when a
+second structured decision identifies a past incident or ordinary animal
+context. Image screening
+and the default any-flag policy are unchanged; contextual failures stay pending.
 
 **Current sprint:** Sprint 2 (Sep 14–27) — first full-stack vertical slice.
-Registration/recovery UI and classifier integration remain future work.
+Registration/recovery UI, reports and subcommunity moderation remain future work.
 
 ## Team
 
@@ -134,3 +145,8 @@ context for next time. No match → add a new subsection (name from
 - **Notes for Claude:** learning the stack, so wants short, plain explanations.
   The mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for the
   look only, never for product rules.
+
+### Misan Parajuli — bgg66@txstate.edu
+
+- **Current focus:** automatic General/ForAll moderation implemented (FR-90–92); test the local opt-in contextual text recheck with representative, independently labeled examples before any shared rollout. Local image-screening handoff and migration deployment remain. Automated reports are later work (FR-97–99).
+- **Session context:** no staffed platform admin or human-review dependency. The worker screens text/images oldest first; default policy blocks any flag, while an experimental backend setting rechecks lone lower-score text `violence` or a low-score `violence`/`harassment` pair when context identifies a past incident or ordinary animal context. The current local violence ceiling is 0.7; the harassment ceiling is 0.65. Failures remain pending with 3 total attempts by default (30s/120s delays). State and audits persist; pending cards poll for results. The earlier lone-violence synthetic trial reduced false blocks from 6 to 0 across 20 harmless examples while both rules blocked 20 harmful examples; this does not evaluate the newer combined-flag or animal rule or establish production safety. The ignored local backend `.env` has the option enabled against loopback Supabase, and a fresh post is required because blocked posts are not reprocessed. Local signed image URLs caused OpenAI HTTP 400; a one-off Base64 data-URL test succeeded, but the temporary Python adapter was reverted at the user's request. The new migration is not applied to the shared database; pending images require a backend Storage secret. Setup and report safeguards are in `docs/moderation.md`.

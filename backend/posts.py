@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -51,6 +51,18 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
     liked = set(db.scalars(select(PostLike.post_id).where(
         PostLike.post_id.in_(ids), PostLike.user_id == viewer.id,
     )).all()) if viewer else set()
+    pending_ids = [post.id for post in posts if post.status == "pending"]
+    exhausted_ids = set()
+    if pending_ids and db.scalar(text("""
+        select exists (
+            select 1 from information_schema.columns
+            where table_schema = 'public' and table_name = 'posts'
+              and column_name = 'moderation_exhausted_at'
+        )
+    """)) is True:
+        exhausted_ids = set(db.scalars(select(Post.id).where(
+            Post.id.in_(pending_ids), Post.moderation_exhausted_at.is_not(None),
+        )).all())
     result = []
     for post in posts:
         author = authors.get(post.author_id)
@@ -59,6 +71,7 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
             id=post.id, author=name, title=post.title, body=post.body, url=post.url,
             can_delete=bool(viewer and viewer.id == post.author_id and viewer.email_verified_at),
             type=post.type, status=post.status, created_at=post.created_at,
+            moderation_failed=post.id in exhausted_ids,
             like_count=post.like_count, comment_count=post.comment_count,
             liked=post.id in liked, media=attachments[post.id],
         ))
@@ -169,6 +182,14 @@ def load_visible_post(db: Session, post_id: UUID, viewer: Profile | None, lock: 
     if post is None:
         raise HTTPException(404, "Post not found.")
     return post
+
+
+@router.get("/{post_id}", response_model=PostResponse)
+def get_post(post_id: UUID, response: Response,
+             viewer: Profile | None = Depends(get_optional_profile), db: Session = Depends(get_db)):
+    """Refresh a card's screening outcome without losing feed pagination (FR-90)."""
+    response.headers["Cache-Control"] = "no-store"
+    return serialize_posts(db, [load_visible_post(db, post_id, viewer)], viewer)[0]
 
 
 @router.get("/{post_id}/media/{position}/preview", response_model=ImagePreviewResponse)

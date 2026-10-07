@@ -708,7 +708,7 @@ footer {
 
       <div class="decision">
         <div class="dhead"><span class="dtag">D-4</span><h3>What happens when the classifier doesn't answer?</h3></div>
-        <p>FR-90 puts a model call between &ldquo;pressed Post&rdquo; and &ldquo;post exists&rdquo;. That call can be slow, time out, or return 503 because the service is asleep. The schema supports all three answers; the difference is invisible in code review and obvious in a demo.</p>
+        <p>Save the post as <code>pending</code> first, visible only to its author, then call the classifier. FR-90 requires approval before public visibility. That call can be slow, time out, or return 503 because the service is asleep. The schema supports all three answers; the difference is invisible in code review and obvious in a demo.</p>
         <ul class="opts">
           <li><b>Fail closed</b> &mdash; nothing unscreened is ever published, but if the model is down during the presentation, posts silently stop appearing and the app looks broken.</li>
           <li><b>Fail open</b> &mdash; always fast, always works, but content is readable before it has been checked, which is the one thing FR-90 exists to prevent.</li>

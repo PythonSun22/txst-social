@@ -269,8 +269,9 @@ create table public.bans (
 --   'blocked'   the classifier rejected it. Never published; the author is told.
 --   'removed'   a human moderator took it down after publication (FR-93).
 --
--- [D-4] WHAT HAPPENS WHEN THE CLASSIFIER DOES NOT ANSWER. UNDECIDED. FR-90 puts
--- a model call between "user pressed Post" and "post exists". That call can be
+-- [D-4] WHAT HAPPENS WHEN THE CLASSIFIER DOES NOT ANSWER. UNDECIDED. Save the
+-- post as 'pending' first, visible only to its author, then call the classifier.
+-- FR-90 requires approval before public visibility. The model call can be
 -- slow, time out, or return 503 because the model service is asleep. The schema
 -- supports all three answers; the team must pick one and write it down, because
 -- the difference is invisible in code review and obvious in a demo.

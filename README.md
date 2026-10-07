@@ -253,8 +253,9 @@ Before testing persistence, apply
 `supabase/migrations/20260924191615_image_upload_pipeline.sql` with the normal
 `supabase db push` workflow. It creates `image_uploads`, the private
 `post-images` Storage bucket, and ownership policies. Use the same Supabase
-project in both `.env` files and `DATABASE_URL`; no new environment variables
-or service-role key are required. Restart FastAPI to load the new routes.
+project in both `.env` files and `DATABASE_URL`; uploads use the caller's JWT.
+The separate moderation worker requires a backend-only Storage secret for
+pending images; see [moderation setup](docs/moderation.md).
 
 The pipeline exposes `GET /images/policy`, `POST /images`,
 `POST /images/{id}/complete`, `GET /images`, and `GET /images/{id}/preview`.
@@ -273,7 +274,14 @@ Signed-in verified students can like a post and click again to remove the like.
 Both post and like state survive refresh.
 
 New posts are **pending and visible only to their author** until moderation
-approves them. The classifier is not implemented by this milestone.
+approves them. The ForAll worker now screens title/body and images automatically:
+any flag blocks; failures stay pending, with 3 total attempts by default.
+After exhaustion the author sees a failure message; no human review is required.
+Apply `20260926000000_automatic_post_moderation.sql` through the normal migration
+workflow and configure `OPENAI_API_KEY` plus a backend-only `SUPABASE_SECRET_KEY`
+for image screening. The worker is disabled by default; enable it with
+`MODERATION_ENABLED=true` only after the migration is applied to the configured
+database. See [moderation setup and tests](docs/moderation.md).
 
 The API exposes `POST /posts`, `GET /posts`, `DELETE /posts/{post_id}`,
 `GET /posts/{id}/media/{position}/preview`, and `PUT` / `DELETE /posts/{id}/like`.
