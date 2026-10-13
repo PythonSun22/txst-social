@@ -40,17 +40,13 @@ endpoint, and no UI — `PostCard` shows a comment count with nothing behind it.
 query reads a whole thread via `path`), FR-36 (`posts.comment_count` is a
 denormalized cache, written in the same transaction), FR-41 (depth limit,
 UI must support at least 8 levels), FR-43 (soft delete), FR-45/FR-50/FR-51
-(comment likes — upvote only, same as posts), FR-90 (screening — see below).
+(comment likes — upvote only, same as posts), FR-90 (screening applies to posts only — see below).
 
-**Interim moderation stance:** the moderation worker lives on an unmerged
-branch (`moderation_setup`) and does not exist here. On `dev`, `posts.py`'s
-actual visibility rule (`visible_to()`) is `approved` **or the caller's own**
-— confirmed by testing, not assumed — so a `pending` post from someone else
-is invisible to everyone but its author until moderation merges, exactly as
-FR-90 intends. (`Post.status.in_(["approved", "pending"])` only appears in
-`GET /posts/me`, already scoped to the caller's own posts — it is not a
-general exception.) Comments mirror this exact rule: `pending` is visible
-only to its author, same as posts.
+**Moderation stance:** comments are **not screened**. They are created
+`approved` and are visible to everyone immediately. The ForAll worker screens
+posts only (FR-90–92). Comments use the same read rule as `posts.py`'s
+`visible_to()` — `approved` or the caller's own — so a comment later set to
+`blocked`/`removed` (FR-93) is hidden from others.
 
 ### Steps
 
@@ -59,8 +55,8 @@ only to its author, same as posts.
    `post_schemas.py`'s style (`ConfigDict(extra="forbid")`, etc.).
 2. **`backend/comments.py`** — new router:
    - `GET /posts/{post_id}/comments` — full thread, ordered by `path`
-     (one query, no recursion, per `[D-3]`). Same `pending`-is-visible
-     interim rule as posts; `deleted_at` tombstones excluded.
+     (one query, no recursion, per `[D-3]`). Same `approved`-or-own
+     read rule as posts; `deleted_at` tombstones excluded.
    - `POST /posts/{post_id}/comments` — `require_verified_profile`, ban
      check (reuse `check_ban` from `posts.py`), compute the new row's
      `path`/`depth` from the parent (top-level if `parent_id` is `None`),
@@ -83,7 +79,7 @@ only to its author, same as posts.
 
 ### Non-goals (this pass)
 
-- No moderation worker integration for comments — see interim stance above.
+- No classifier screening for comments — see moderation stance above.
 - No comment editing (`edited_at` exists in the schema; building the edit
   flow is separate work).
 - No reports on comments (FR-97–99 — already deferred project-wide).

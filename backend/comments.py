@@ -18,8 +18,9 @@ MAX_DEPTH = 12  # matches the comments_depth_limit CHECK constraint
 
 
 def visible_comment(comment: Comment, viewer: Profile | None) -> bool:
-    # Same rule posts.py's visible_to() uses: approved, or the caller's own —
-    # 'pending' is not visible to anyone but its author (FR-90).
+    # Same rule posts.py's visible_to() uses: approved, or the caller's own.
+    # New comments are approved on create (no screening), so this only hides
+    # comments a moderator later blocks or removes (FR-93).
     if comment.deleted_at is not None:
         return False
     return comment.status == "approved" or (viewer is not None and comment.author_id == viewer.id)
@@ -109,7 +110,9 @@ def create_comment(
 
     comment = Comment(
         id=uuid4(), post_id=post_id, parent_id=payload.parent_id, author_id=profile.id,
-        path=path, depth=depth, body=payload.body, like_count=0, status="pending",
+        path=path, depth=depth, body=payload.body, like_count=0,
+        # Team decision: comments are not screened, so they publish immediately.
+        status="approved",
         created_at=datetime.now(timezone.utc),
     )
     db.add(comment)
