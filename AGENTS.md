@@ -38,9 +38,9 @@ A student posts into exactly one space. Others like it and reply in threaded
 comments. Likes plus age produce a ranking, and each space has Hot, New and Top
 orderings. A student follows spaces to assemble a personal feed.
 
-Every post and comment is screened by a machine-learning classifier **before**
-anyone but its author can see it, and students can report content and accounts
-that the classifier missed.
+Every post is screened by a machine-learning classifier **before** anyone but
+its author can see it. Comments are not screened and publish immediately.
+Students can report content and accounts that the classifier missed.
 
 ---
 
@@ -57,7 +57,7 @@ revisit one — several were argued through and closed deliberately.
 | **One `spaces` table** | Campus, colleges and communities are one table with a `kind` enum, not three parallel tables. This is decision `[D-2]` and reversing it costs six tables and every feed query. |
 | **Supabase Auth owns identity** | We store no passwords. `public.profiles.id` **is** `auth.users.id`. |
 | **`txstate.edu` only** | Enforced in the database by a trigger on `auth.users`, not only in application code. |
-| **Screening precedes publication** | A post exists as `pending` and is invisible to everyone but its author until the classifier approves it. |
+| **Screening precedes publication** | A post exists as `pending` and is invisible to everyone but its author until the classifier approves it. Comments are not screened; they are created `approved`. |
 | **ForAll moderation is automatic** | By default, any overall/category flag blocks publication. An experimental backend-only local opt-in can recheck lower-score text `violence`, alone or paired with `harassment`, for a confirmed past-incident or ordinary animal context; it is off by default. Screening failures stay pending with bounded retries; no human-review dependency at this feed level (FR-90–92). |
 | **Colleges are seeded** | Ten of them, inserted by migration. Users cannot create a college. |
 
