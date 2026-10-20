@@ -71,7 +71,7 @@ export default function Navbar() {
         </ul>
 
         <Link
-          href="/login"
+          href={profile ? "/profile" : "/login"}
           className="ml-auto rounded-full border border-white/50 px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/10"
         >
           {profile ? profile.display_name || profile.username : "Log In"}
