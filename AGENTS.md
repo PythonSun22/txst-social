@@ -235,7 +235,11 @@ When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
 title/body plus attached images; by default any flag blocks, otherwise the post
-is approved. The local, disabled-by-default `MODERATION_CONTEXT_RECHECK_ENABLED`
+is approved. Each image uses a separate request with the title/body. All images
+must pass for approval; the first flag blocks the whole post, while a request
+failure before a blocking verdict leaves it pending for retry. The JSON audit
+retains each checked image's position and result without signed URLs (FR-90–92).
+The local, disabled-by-default `MODERATION_CONTEXT_RECHECK_ENABLED`
 option can let a second model clear a lone lower-score text `violence` flag, or
 the combination of `violence` and `harassment` when it identifies a past
 incident or ordinary animal context and both scores are below the experimental

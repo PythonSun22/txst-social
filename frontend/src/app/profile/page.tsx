@@ -13,7 +13,9 @@ import {
 } from "@/lib/api";
 import { getMyPosts, type FeedPost } from "@/lib/posts";
 import { previewImage } from "@/lib/images/image-api";
+import { getSupabase } from "@/lib/supabase";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 function sortPosts(posts: FeedPost[], order: SortOrder): FeedPost[] {
@@ -49,12 +51,15 @@ function usePrivateImagePreview(uploadId: string | null): string | null {
 }
 
 export default function Profile() {
+  const router = useRouter();
   const [sort, setSort] = useState<SortOrder>("new");
   const [profile, setProfile] = useState<CurrentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const [editing, setEditing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const posts = sortPosts(myPosts, sort);
   const avatarUrl = usePrivateImagePreview(profile?.profile_image_upload_id ?? null);
   const bannerUrl = usePrivateImagePreview(profile?.banner_image_upload_id ?? null);
@@ -94,6 +99,23 @@ export default function Profile() {
       active = false;
     };
   }, []);
+
+  async function signOut() {
+    setSigningOut(true);
+    setSignOutError(null);
+    try {
+      const { error } = await getSupabase().auth.signOut({ scope: "local" });
+      if (error) throw error;
+      setProfile(null);
+      setMyPosts([]);
+      setEditing(false);
+      router.replace("/login");
+    } catch (cause) {
+      setSignOutError(cause instanceof Error ? cause.message : "Sign-out failed. Please try again.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   if (loading) {
     return <p>Loading your profile...</p>;
@@ -163,7 +185,16 @@ export default function Profile() {
                 <button type="button" onClick={() => setEditing(true)} className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-primary/90">
                   Edit Profile
                 </button>
+                <button
+                  type="button"
+                  onClick={signOut}
+                  disabled={signingOut}
+                  className="ml-auto shrink-0 rounded-full border border-primary/30 px-4 py-2 text-sm font-bold text-primary shadow-sm transition-colors hover:bg-primary hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60"
+                >
+                  {signingOut ? "Signing out..." : "Sign Out"}
+                </button>
               </div>
+              {signOutError && <p role="alert" className="mt-2 text-sm text-primary">{signOutError}</p>}
               <p className="mt-1 break-words text-sm text-muted-foreground">
                 @{profile.username}
               </p>
