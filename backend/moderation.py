@@ -56,11 +56,21 @@ class _ProviderResponse(BaseModel):
     results: list[ModerationCategories] = Field(min_length=1, max_length=1)
 
 
+class ImageModerationResult(ModerationCategories):
+    """FR-92: one text/image check identified by attachment position, never URL."""
+
+    position: int
+    model: str
+    latency_ms: int
+
+
 class TextModerationResult(ModerationCategories):
-    """Screening signals and metadata for future FR-92 audit integration."""
+    """Post-level signals with individual image checks for the FR-92 audit."""
 
     model: str
     latency_ms: int
+    image_count: int = 0
+    image_results: list[ImageModerationResult] = Field(default_factory=list)
 
 
 def moderate_text(text: str) -> TextModerationResult:
@@ -77,14 +87,50 @@ def moderate_text(text: str) -> TextModerationResult:
 
 
 def moderate_content(text: str, image_urls: tuple[str, ...] = ()) -> TextModerationResult:
-    """Screen a complete post in one request; private URLs are never returned or logged."""
+    """Screen text with each image; all must pass before the post can be approved.
+
+    Stop on the first blocking verdict or failed request. Failures raise instead
+    of returning partial approval; the worker retries the whole post. Image
+    positions match the ordered post snapshot, and audits contain no URLs.
+    """
     if not text.strip():
         raise ValueError("Text to screen must not be blank.")
     if len(image_urls) > 10:
         raise ValueError("At most ten images can be screened per post.")
-    payload = text if not image_urls else [
+    if not image_urls:
+        return _moderate_request(text)
+
+    started = perf_counter()
+    checks = []
+    for position, url in enumerate(image_urls):
+        result = _moderate_request(text, url)
+        checks.append(ImageModerationResult(
+            position=position, flagged=result.flagged, categories=result.categories,
+            category_scores=result.category_scores, model=result.model,
+            latency_ms=result.latency_ms,
+        ))
+        # One violation is enough to block; remaining images cannot overturn it.
+        if result.blocked:
+            break
+
+    categories = {name for check in checks for name in check.categories}
+    return TextModerationResult(
+        flagged=any(check.flagged for check in checks),
+        categories={name: any(check.categories.get(name, False) for check in checks)
+                    for name in sorted(categories)},
+        category_scores={name: max(check.category_scores.get(name, 0) for check in checks)
+                         for name in sorted(categories)},
+        model=", ".join(sorted({check.model for check in checks})),
+        latency_ms=round((perf_counter() - started) * 1000),
+        image_count=len(image_urls), image_results=checks,
+    )
+
+
+def _moderate_request(text: str, image_url: str | None = None) -> TextModerationResult:
+    """Validate one provider verdict for text and at most one private image."""
+    payload = text if image_url is None else [
         {"type": "text", "text": text},
-        *({"type": "image_url", "image_url": {"url": url}} for url in image_urls),
+        {"type": "image_url", "image_url": {"url": image_url}},
     ]
 
     load_dotenv(Path(__file__).resolve().with_name(".env"))
