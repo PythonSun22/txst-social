@@ -7,7 +7,7 @@ from unittest.mock import patch
 import httpx2 as httpx
 from openai import OpenAI
 
-from moderation import ModerationError, moderate_text
+from moderation import ModerationError, moderate_content, moderate_text
 
 
 class ModerationTests(unittest.TestCase):
@@ -103,6 +103,71 @@ class ModerationTests(unittest.TestCase):
                 )
                 with self.assertRaises(ModerationError):
                     moderate_text("A sample post")
+
+    @patch("moderation.OpenAI")
+    def test_later_image_flag_blocks_even_with_false_overall_flag(self, send):
+        for overall in (False, True):
+            with self.subTest(overall=overall):
+                requests = []
+                def handle(request):
+                    requests.append(json.loads(request.content))
+                    flagged = len(requests) == 2
+                    return httpx.Response(200, json={"model": "test-model", "results": [{
+                        "flagged": overall if flagged else False,
+                        "categories": {"violence": flagged, "sexual": False},
+                        "category_scores": {"violence": 0.9 if flagged else 0.01,
+                                            "sexual": 0.02 if flagged else 0.1},
+                    }]})
+                send.side_effect = lambda **kwargs: OpenAI(**kwargs,
+                    http_client=httpx.Client(transport=httpx.MockTransport(handle)))
+                result = moderate_content("Title and body", ("https://first", "https://second", "https://third"))
+                self.assertTrue(result.blocked)
+                self.assertEqual(result.flagged, overall)
+                self.assertEqual(result.categories, {"violence": True, "sexual": False})
+                self.assertEqual(result.category_scores, {"violence": 0.9, "sexual": 0.1})
+                self.assertEqual(result.image_count, 3)
+                self.assertEqual([check.position for check in result.image_results], [0, 1])
+                self.assertFalse(result.image_results[0].blocked)
+                self.assertTrue(result.image_results[1].blocked)
+                # A later error cannot turn an already decisive block into retries.
+                self.assertEqual(len(requests), 2)
+
+    @patch("moderation.OpenAI")
+    def test_later_image_failure_never_returns_partial_approval(self, send):
+        safe = {"flagged": False, "categories": {"violence": False},
+                "category_scores": {"violence": 0.01}}
+        for failure, code in (
+            ("timeout", "provider_connection"), ("rate_limit", "provider_http_429"),
+            ("empty", "provider_response"), ("multiple", "provider_response"),
+            ("malformed", "provider_response"),
+        ):
+            with self.subTest(failure=failure):
+                requests = []
+                def handle(request):
+                    requests.append(request)
+                    if len(requests) == 1:
+                        return httpx.Response(200, json={"model": "test-model", "results": [safe]})
+                    if failure == "timeout":
+                        raise httpx.ReadTimeout("private")
+                    if failure == "rate_limit":
+                        return httpx.Response(429, headers={"retry-after": "180"},
+                                              json={"error": {"message": "private"}})
+                    results = {"empty": [], "multiple": [safe, safe], "malformed": [{"flagged": False}]}
+                    return httpx.Response(200, json={"model": "test-model", "results": results[failure]})
+                send.side_effect = lambda **kwargs: OpenAI(**kwargs,
+                    http_client=httpx.Client(transport=httpx.MockTransport(handle)))
+                with self.assertRaises(ModerationError) as caught:
+                    moderate_content("Title and body", ("https://first", "https://second", "https://third"))
+                self.assertEqual(caught.exception.code, code)
+                if failure == "rate_limit":
+                    self.assertEqual(caught.exception.retry_after, 180)
+                self.assertEqual(len(requests), 2)
+
+    @patch("moderation.OpenAI")
+    def test_too_many_images_does_not_call_provider(self, send):
+        with self.assertRaises(ValueError):
+            moderate_content("Title", ("https://private",) * 11)
+        send.assert_not_called()
 
 
 if __name__ == "__main__":

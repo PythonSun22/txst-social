@@ -3,7 +3,7 @@ import json
 import os
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
 os.environ["MODERATION_ENABLED"] = "false"
@@ -15,7 +15,7 @@ from openai import OpenAI
 from sqlalchemy.dialects import postgresql
 
 from main import app
-from models import Post
+from models import Post, Space
 from moderation import ModerationError, TextModerationResult, moderate_content
 from moderation_storage import sign_moderation_image
 from moderation_context import ContextAssessment
@@ -93,18 +93,86 @@ class WorkerUnitTests(unittest.TestCase):
         def handle(request):
             requests.append(json.loads(request.content))
             return httpx2.Response(200, json={"model": "test-model", "results": [
-                {"flagged": False, "categories": {"violence": False}, "category_scores": {"violence": 0.01}}
+                {"flagged": False, "categories": {"violence": False},
+                 "category_scores": {"violence": len(requests) / 100}}
             ]})
         client.side_effect = lambda **kwargs: OpenAI(**kwargs,
             http_client=httpx2.Client(transport=httpx2.MockTransport(handle)))
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
-            result = moderate_content("Title\n\nBody", ("https://test/first", "https://test/second"))
-        self.assertFalse(result.blocked)
-        self.assertEqual(requests[0]["input"], [
-            {"type": "text", "text": "Title\n\nBody"},
-            {"type": "image_url", "image_url": {"url": "https://test/first"}},
-            {"type": "image_url", "image_url": {"url": "https://test/second"}},
-        ])
+        for count in (1, 2, 10):
+            with self.subTest(count=count), patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+                requests.clear()
+                urls = tuple(f"https://private/image-{i}?token=secret" for i in range(count))
+                result = moderate_content("Title\n\nBody", urls)
+                self.assertFalse(result.blocked)
+                self.assertEqual(len(requests), count)
+                self.assertEqual(result.image_count, count)
+                self.assertEqual(result.category_scores, {"violence": count / 100})
+                self.assertEqual([check.position for check in result.image_results], list(range(count)))
+                self.assertEqual([check.category_scores["violence"] for check in result.image_results],
+                                 [(i + 1) / 100 for i in range(count)])
+                self.assertTrue(all(check.model == "test-model" for check in result.image_results))
+                self.assertNotIn("https://private", result.model_dump_json())
+                self.assertNotIn("secret", result.model_dump_json())
+                for request, url in zip(requests, urls, strict=True):
+                    self.assertEqual(request["input"], [
+                        {"type": "text", "text": "Title\n\nBody"},
+                        {"type": "image_url", "image_url": {"url": url}},
+                    ])
+
+    @patch("moderation.load_dotenv")
+    @patch("moderation.OpenAI")
+    def test_multiple_image_verdicts_reach_post_status_and_audit(self, client, dotenv):
+        """FR-90–92: exercise real screening and finish logic with HTTP/DB doubles."""
+        for outcome in ("allow", "block", "timeout", "exhausted"):
+            with self.subTest(outcome=outcome):
+                requests = []
+                def handle(request):
+                    requests.append(json.loads(request.content))
+                    if len(requests) == 2 and outcome in ("timeout", "exhausted"):
+                        raise httpx2.ReadTimeout("private URL must not be logged")
+                    flagged = len(requests) == 2 and outcome == "block"
+                    return httpx2.Response(200, json={"model": "test-model", "results": [
+                        {"flagged": flagged, "categories": {"violence": flagged},
+                         "category_scores": {"violence": 0.9 if flagged else 0.01}}
+                    ]})
+                client.side_effect = lambda **kwargs: OpenAI(**kwargs,
+                    http_client=httpx2.Client(transport=httpx2.MockTransport(handle)))
+                work = Work(uuid4(), uuid4(), "fingerprint", "Title\n\nBody", ("first", "second"), "image")
+                post = Post(id=work.post_id, status="pending", moderation_claim=work.claim,
+                            moderation_lease_until=datetime.now(timezone.utc) + timedelta(seconds=300),
+                            moderation_attempts=3 if outcome == "exhausted" else 1)
+                sessions = MagicMock()
+                db = sessions.return_value.__enter__.return_value
+                db.scalar.return_value = post
+                db.get.return_value = Space(kind="campus", slug="general", deleted_at=None)
+                with (patch.dict(os.environ, {"OPENAI_API_KEY": "test"}),
+                      patch("moderation_worker.claim_work", return_value=work),
+                      patch("moderation_worker.content_snapshot", return_value=(work.content_hash, work.images)),
+                      patch("moderation_worker.sign_moderation_image",
+                            side_effect=lambda key: f"https://private/{key}?token=secret")):
+                    self.assertTrue(run_once(sessions, Settings()))
+                self.assertEqual(len(requests), 2)
+                db.commit.assert_called_once()
+                self.assertIsNone(post.moderation_claim)
+                self.assertIsNone(post.moderation_lease_until)
+                if outcome in ("allow", "block"):
+                    self.assertEqual(post.status, "approved" if outcome == "allow" else "blocked")
+                    audit = db.add.call_args.args[0]
+                    self.assertEqual(audit.decision, outcome)
+                    self.assertEqual(audit.content_hash, work.content_hash)
+                    self.assertEqual(audit.provider_result["image_count"], 2)
+                    self.assertEqual(len(audit.provider_result["image_results"]), 2)
+                    self.assertNotIn("https://private", json.dumps(audit.provider_result))
+                    self.assertNotIn("secret", json.dumps(audit.provider_result))
+                else:
+                    self.assertEqual(post.status, "pending")
+                    self.assertEqual(post.moderation_error, "provider_connection")
+                    db.add.assert_not_called()
+                    if outcome == "exhausted":
+                        self.assertIsNotNone(post.moderation_exhausted_at)
+                    else:
+                        self.assertIsNone(post.moderation_exhausted_at)
+                        self.assertIsNotNone(post.moderation_next_attempt_at)
 
     @patch("moderation.load_dotenv")
     @patch("moderation.OpenAI")

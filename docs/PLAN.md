@@ -10,6 +10,31 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ## Moderation (FR-32, FR-60, FR-90–92)
 
+### Multiple-image screening (FR-32, FR-90–92)
+
+Implemented and verified offline: 70 backend tests passed; 13 database
+integration tests skipped. Live Storage/provider validation remains outstanding.
+
+1. Screen each ordered attachment in its own request with the post title/body;
+   retain the single text request for posts without images.
+2. Combine category flags with OR and scores with maximums. Approve only after
+   every attachment passes; stop and block on a flagged attachment. A failed
+   check before a blocking verdict leaves the entire post pending for retry.
+3. Preserve each checked attachment's position, signals, model and latency in
+   the existing JSON audit, without signed URLs. Keep atomic publication,
+   content hashes, retry limits and expired-lease rejection.
+4. Add offline provider/worker regression tests for 1–10 images, later-image
+   flags and failures, invalid responses, and audit privacy; update feature docs.
+
+**Constraints:** Sequential requests, no partial approval, and no automatic
+retry of exhausted posts. The existing five-minute worker lease remains the
+publication deadline; each provider request retains its ten-second network
+timeout and no SDK retries.
+**Non-goals:** Schema/configuration changes, live provider or shared database
+operations, local loopback image handoff, frontend changes, and retry tooling.
+
+### Remaining moderation work
+
 General/ForAll posts start private and pending. The opt-in worker screens them
 and publishes only an approved result; failed screening retries with a limit.
 A separate, disabled-by-default local text recheck is being evaluated for

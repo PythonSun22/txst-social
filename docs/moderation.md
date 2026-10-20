@@ -29,8 +29,21 @@ feed, including its backlog of pending posts. Automated user-report handling
 is recorded here for later work.
 College/subcommunity workflows and human moderation tools are outside this
 immediate slice. Posts with images require screening of their attachments as
-well as text before approval. The worker sends the title/body and every attachment
-together in one moderation request (FR-32/90).
+well as text before approval. Each attachment is screened in a separate,
+sequential request containing the title/body and that one image (FR-32/90).
+Text-only posts still use one text request. Approval requires every image to
+pass. The first overall or category flag blocks the whole post immediately;
+remaining images cannot overturn that verdict and are not requested. A failed
+check before a blocking verdict leaves the post pending, and a later attempt
+rechecks the whole post. Successful partial checks never authorize publication.
+
+The post-level result combines flags with OR and category scores with maximums,
+not averages. Its existing `provider_result` JSON audit includes `image_count`
+and `image_results`: the zero-based attachment position, category flags/scores,
+returned model, and latency for each completed check (FR-92). The checked list
+can be shorter than `image_count` for an early block. Signed URLs and post text
+are excluded. No schema migration is needed for these audit fields. Exhausted
+posts are not automatically retried by this code change.
 
 ### Post and report transitions
 
@@ -342,6 +355,12 @@ This bounds a network operation, not total job duration. Publication does not
 wait inside `POST /posts`; [D-4] is pending plus bounded background retries for
 this ForAll slice.
 
+An image post can now make up to ten sequential moderation requests, in addition
+to signing its attachments, so it can take longer than a text-only post. The
+existing five-minute claim lease and signed-URL lifetime remain unchanged.
+The worker rejects publication after lease expiry, even if all checks passed;
+an expired job is reclaimed or exhausted under the existing attempt limit.
+
 `ModerationError` means screening failed, never that content is safe. The caller
 must not substitute an unflagged result after an exception. Provider flags are
 interpreted by the worker's any-flag policy, not a guarantee of profanity detection.
@@ -357,6 +376,10 @@ uv run python -m unittest discover -s tests -v
 Tests exercise the real SDK with a mocked HTTP transport, so they require no key, database, or network. They
 check provider results, blank input, missing keys, authentication/rate-limit
 errors, timeouts, invalid responses, multimodal payloads, signing and lifecycle.
+Multi-image regressions cover one, two and ten safe attachments, a flagged later
+attachment, later timeouts/rate limits/malformed responses, aggregate scores,
+audit privacy, and worker approval/block/retry/exhaustion using HTTP/database
+doubles. These checks do not establish live provider or Storage behavior.
 They do not measure model accuracy. Database tests are skipped unless explicitly
 configured with a disposable local test database.
 
