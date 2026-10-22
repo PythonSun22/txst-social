@@ -2,6 +2,7 @@ import { apiRequest } from "../api";
 import { getSupabase } from "../supabase";
 import type { ImagePolicy } from "./image-policy";
 import type { SelectedImage } from "./image-file";
+import { prepareImage } from "./image-prepare";
 export type ImagePurpose = "post" | "avatar" | "banner";
 export type ImageVariant = "preview" | "expanded" | "avatar_small" | "avatar_large" | "banner";
 
@@ -22,7 +23,7 @@ export interface SavedImage {
   original_deleted_at: string | null;
 }
 
-export interface UploadTicket { upload: SavedImage; token: string }
+export interface UploadTicket { upload: SavedImage; upload_expires_at: string; image: SelectedImage }
 export interface StorageBudget {
   limit_bytes: number; stored_bytes: number; reserved_bytes: number;
   used_bytes: number; available_bytes: number;
@@ -37,9 +38,15 @@ function uploadPayload(image: SelectedImage, purpose: ImagePurpose) {
 }
 
 /** Reserve the complete selection atomically before any file bytes are transferred. */
-export const reserveImages = (images: SelectedImage[], purpose: ImagePurpose = "post") =>
-  apiRequest<UploadTicket[]>("/images/batch", { method: "POST",
-    body: JSON.stringify({ images: images.map((image) => uploadPayload(image, purpose)) }) });
+export async function reserveImages(images: SelectedImage[], purpose: ImagePurpose = "post"): Promise<UploadTicket[]> {
+  const policy = await getImagePolicy();
+  const prepared: SelectedImage[] = [];
+  // Bound canvas memory by preparing one image at a time before reserving anything.
+  for (const image of images) prepared.push(await prepareImage(image, purpose, policy.max_upload_bytes));
+  const tickets = await apiRequest<Omit<UploadTicket, "image">[]>("/images/batch", { method: "POST",
+    body: JSON.stringify({ images: prepared.map((image) => uploadPayload(image, purpose)) }) });
+  return tickets.map((ticket, index) => ({ ...ticket, image: prepared[index] }));
+}
 
 export async function getImagePolicy(signal?: AbortSignal): Promise<ImagePolicy> {
   const base = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -56,31 +63,34 @@ export const previewImage = (id: string, variant?: ImageVariant) =>
 
 /** Carries the reservation across failures so a completed transfer can be confirmed again. */
 export class ImageTransferError extends Error {
-  constructor(message: string, public readonly uploadId: string) {
+  constructor(message: string, public readonly uploadId: string, public readonly ticket?: UploadTicket) {
     super(message);
     this.name = "ImageTransferError";
   }
 }
 
-/** Transfers an inspected original or edited File without coupling the asset to a post. */
+/** Prepare locally, reserve, then transfer without coupling the asset to a post. */
 export async function uploadImage(image: SelectedImage, onStage: (stage: string) => void, purpose: ImagePurpose = "post"): Promise<SavedImage> {
-  onStage("Preparing upload…");
-  const ticket = await apiRequest<UploadTicket>("/images", {
-    method: "POST",
-    body: JSON.stringify(uploadPayload(image, purpose)),
-  });
-  return uploadReservedImage(image, ticket, onStage);
+  onStage("Compressing image and reserving space…");
+  const [ticket] = await reserveImages([image], purpose);
+  return uploadReservedImage(ticket, onStage);
 }
 
-export async function uploadReservedImage(image: SelectedImage, ticket: UploadTicket, onStage: (stage: string) => void): Promise<SavedImage> {
+export async function uploadReservedImage(ticket: UploadTicket, onStage: (stage: string) => void): Promise<SavedImage> {
   try {
+    if (Date.now() >= Date.parse(ticket.upload_expires_at)) throw new Error("This upload reservation expired. Select the image again.");
     onStage("Uploading image…");
+    const image = ticket.image;
     const { error } = await getSupabase().storage.from(ticket.upload.bucket_id)
-      .uploadToSignedUrl(ticket.upload.object_key, ticket.token, image.file, { contentType: image.file.type });
-    if (error) throw new Error("The transfer could not be confirmed. Retry confirmation or select the image again.");
+      .upload(ticket.upload.object_key, image.file, { contentType: image.file.type, upsert: false });
+    if (error) {
+      // A lost success response or duplicate transfer can still be confirmed.
+      try { return await completeImage(ticket.upload.id); }
+      catch { throw new Error("The transfer could not be confirmed. Retry or select the image again."); }
+    }
     onStage("Confirming saved image…");
     return await completeImage(ticket.upload.id);
   } catch (cause) {
-    throw new ImageTransferError(cause instanceof Error ? cause.message : "The upload could not be completed.", ticket.upload.id);
+    throw new ImageTransferError(cause instanceof Error ? cause.message : "The upload could not be completed.", ticket.upload.id, ticket);
   }
 }

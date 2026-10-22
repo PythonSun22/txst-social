@@ -1,7 +1,6 @@
 """Small Storage adapter. Only metadata/signatures transit FastAPI (FR-32)."""
 
 import os
-from urllib.parse import parse_qs, urlparse
 
 import httpx
 from fastapi import HTTPException
@@ -34,17 +33,6 @@ def storage_request(method: str, path: str, token: str | None, body: dict | None
         return data
     except ValueError:
         raise HTTPException(503, "Image storage returned an invalid response.") from None
-
-
-def sign_upload(object_key: str, token: str) -> str:
-    """Return a token for a server-generated object key, without allowing overwrite."""
-    data = storage_request("POST", f"object/upload/sign/{IMAGE_BUCKET}/{object_key}", token, {})
-    signed_url = data.get("url")
-    if isinstance(signed_url, str):
-        tokens = parse_qs(urlparse(signed_url).query).get("token")
-        if tokens:
-            return tokens[0]
-    raise HTTPException(503, "Image storage did not return an upload token.")
 
 
 def object_info(object_key: str, token: str) -> dict:

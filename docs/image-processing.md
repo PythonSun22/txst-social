@@ -30,7 +30,7 @@ dimensions reduce pixels as well. These are settings, not guaranteed KB targets.
 Test photographs AND screenshots/text-heavy flyers before lowering quality.
 
 `MAX_SOURCE_PIXELS` caps decoded inputs at 25 million pixels, independently of
-the existing 10,000,000-byte upload cap. Only still JPEG, PNG and WebP inputs are
+the 2,000,000-byte transfer cap (legacy decoding still permits 10,000,000 bytes). Only still JPEG, PNG and WebP inputs are
 accepted. The worker verifies the actual decoder format against declared MIME,
 applies EXIF orientation, preserves alpha, strips source metadata and re-encodes
 as WebP. Browser editing remains optional and is not trusted validation.
@@ -90,11 +90,12 @@ minutes; removing a reference does not revoke a URL already issued.
 ## Original deletion and unused-asset cleanup
 
 After all versions are stored and screening has a final verdict, the worker
-schedules deletion of the temporary original via the Storage API. It waits at
-least **7,500 seconds after issuing an upload token** (two hours plus five minutes) because
-issued Supabase signed upload tokens can remain valid for two hours. Otherwise
-a late transfer could recreate an already deleted original. Existing old inputs
-whose grace window has elapsed can be deleted on the next cleanup tick.
+schedules deletion of the temporary input via the Storage API. New authenticated
+uploads close their reservation at completion and need no two-hour wait. A Storage
+metadata trigger fences late writes on the same upload row lock. Inputs remain
+available through processing retries; terminal results make cleanup eligible.
+Legacy signed uploads still wait at least **7,500 seconds after token issuance**.
+Old tokens are not revoked by switching the frontend.
 
 `original_deleted_at` records successful cleanup; failures retry after five
 minutes. Deletion of the original never deletes the ready variants. `size_bytes`
@@ -104,14 +105,15 @@ still describes the original even after its bytes are removed; inspect
 The shared account budget is now 50 MB with 10 unfinished slots. The storage
 ledger holds capacity before transfer, counts uncertain variant writes, and
 reconciles actual bytes atomically at terminal processing. Expired abandoned and
-failed-job originals are cleaned after the same token grace; interrupted variant
+failed-job inputs are cleaned once their reservation is closed (legacy inputs retain token grace); interrupted variant
 writes are cleaned after their attempt ends. Failed deletion retains the charge.
 See [storage accounting](image-uploads.md#account-storage-budget-and-unfinished-uploads-fr-32).
 Reference-aware cleanup now permanently removes unused image files. Post deletion
 still retains a post tombstone and media/audit metadata. A deleted post queues its
 images, and profile activation queues the previous image only after its replacement
 is approved. Cleanup rechecks all live references before retiring an asset, then
-deletes variants after a five-minute grace and originals after token expiry.
+deletes variants after a five-minute grace and inputs after safe reservation closure
+(or legacy token expiry).
 Never-attached uploads have a 24-hour grace. See
 [cleanup details](image-uploads.md#unused-file-cleanup-and-hard-deletion-fr-3234).
 Processing and cleanup require the image worker to be running.
@@ -168,7 +170,7 @@ Browser checklist:
    stay visible until approval; rejected or failed replacements never replace them.
 4. Compare original bytes against variant totals in `/upload-test`; check actual
    sharpness on a phone and high-density display, especially flyer text.
-5. After the original-token grace period, confirm `original_deleted_at`, missing
+5. After terminal processing (or legacy token grace), confirm `original_deleted_at`, missing
    original bytes and still-working optimized previews. Restart to test recovery.
 6. Disable either worker or simulate Storage/provider failure: content must stay
    private and show processing/failure status rather than publishing unscreened.
@@ -222,3 +224,18 @@ Browser checklist:
 - `frontend/src/lib/images/image-api.ts`
 - `frontend/src/lib/posts.ts`
 
+
+## Browser preparation and authenticated transfer
+
+`frontend/src/lib/images/image-prepare.ts` contains `UPLOAD_PRESETS`: posts use a
+2000 px maximum edge / 1 MB target; avatars a centered square up to 512 px / 200 KB
+target; banners a 1600 px maximum edge / 600 KB target. Canvas tries WebP qualities
+0.85, 0.75, 0.65 and 0.55, then smaller dimensions if needed. JPEG is the fallback
+when WebP export is unavailable; transparent JPEG fallbacks use a white background.
+The hard transfer cap is 2 MB. Encoding failure never falls back to the untouched
+original. Targets are estimates; final worker presets/byte caps remain authoritative.
+
+Apply `20261022120000_authenticated_image_uploads.sql`, which lowers the bucket cap,
+adds `upload_method`/`upload_expires_at`, and preserves old signed rows/charges.
+Stop older backend instances before migration; restart both apps afterward. No new
+secrets are required. Old browser tabs must reload.

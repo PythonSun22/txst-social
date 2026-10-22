@@ -4,7 +4,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { inspectImage, type SelectedImage } from "@/lib/images/image-file";
 import { aspectRatio, formatBytes, type ImagePolicy } from "@/lib/images/image-policy";
-import { completeImage, ImageTransferError, uploadImage, type SavedImage, type ImagePurpose } from "@/lib/images/image-api";
+import { ImageTransferError, uploadImage, uploadReservedImage, type UploadTicket, type SavedImage, type ImagePurpose } from "@/lib/images/image-api";
 import ImageEditor from "@/components/images/ImageEditor";
 
 interface ImageUploaderProps {
@@ -29,7 +29,7 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
   const [notice, setNotice] = useState("");
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [retryId, setRetryId] = useState<string | null>(null);
+  const [retryTicket, setRetryTicket] = useState<UploadTicket | null>(null);
   const generation = useRef({ request: 0 });
   const previewUrl = useRef<string | null>(null);
   const alive = useRef(true);
@@ -51,7 +51,7 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
     const request = ++generation.current.request;
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = null;
-    setSelected(null); setError(""); setNotice(""); setSaved(false); setRetryId(null);
+    setSelected(null); setError(""); setNotice(""); setSaved(false); setRetryTicket(null);
     if (files.length !== 1) {
       setInspecting(false);
       setError("Choose one image at a time.");
@@ -79,17 +79,18 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
     inFlight.current = true;
     setBusy(true); setError("");
     try {
-      const result = retryId ? await completeImage(retryId) : await uploadImage(selected, (stage) => {
+      const onStage = (stage: string) => {
         if (alive.current) setNotice(stage);
-      }, purpose);
+      };
+      const result = retryTicket ? await uploadReservedImage(retryTicket, onStage) : await uploadImage(selected, onStage, purpose);
       if (alive.current) {
-        setSaved(true); setRetryId(null);
+        setSaved(true); setRetryTicket(null);
         setNotice("Upload saved. Processing and screening will run automatically. Save the form to request this image.");
         onUploaded?.(result);
       }
     } catch (cause) {
       if (alive.current) {
-        if (cause instanceof ImageTransferError) setRetryId(cause.uploadId);
+        if (cause instanceof ImageTransferError) setRetryTicket(cause.ticket ?? null);
         setError(cause instanceof Error ? cause.message : "Upload failed. Try again.");
         setNotice("");
       }
@@ -117,7 +118,7 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
         <span className="text-3xl text-primary" aria-hidden="true">↑</span>
         <span className="font-semibold text-primary">Drop an image here, or click to browse</span>
         <span id={limitsId} className="text-sm text-muted-foreground">
-          JPEG, PNG, WebP · Up to {formatBytes(policy.max_bytes)} · Original aspect ratio
+          JPEG, PNG, WebP · Select up to {formatBytes(policy.max_bytes)} · Compressed before upload to at most {formatBytes(policy.max_upload_bytes)}
         </span>
       </label>
 
@@ -144,14 +145,14 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
           className="rounded-full border border-primary px-5 py-2 text-sm font-bold text-primary enabled:ring-2 enabled:ring-accent enabled:ring-offset-2 enabled:hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40">Edit image</button>
         {!selectOnly && <button type="button" onClick={() => void submit()} disabled={!ready}
           className="rounded-full bg-primary px-5 py-2 text-sm font-bold text-primary-foreground transition-shadow enabled:ring-2 enabled:ring-accent enabled:ring-offset-2 enabled:hover:bg-[#3a0c0e] disabled:cursor-not-allowed disabled:opacity-40">
-          {busy ? "Saving…" : saved ? "Saved" : retryId ? "Retry confirmation" : "Submit image"}
+          {busy ? "Saving…" : saved ? "Saved" : retryTicket ? "Retry upload" : "Submit image"}
         </button>}
       </div>
       {editing && selected && <ImageEditor image={selected} policy={policy} cropShape={cropShape} onDiscard={() => { setEditing(false); onSelected?.(selected); }} onSave={(edited) => {
         if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
         previewUrl.current = edited.previewUrl;
         onSelected?.(edited);
-        setSelected(edited); setSaved(false); setRetryId(null); setError("");
+        setSelected(edited); setSaved(false); setRetryTicket(null); setError("");
         setNotice(selectOnly ? "Edits saved locally. Post to upload this version." : "Edits saved locally. Submit image to upload this version.");
         setEditing(false);
       }} />}

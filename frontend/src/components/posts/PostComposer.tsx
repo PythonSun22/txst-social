@@ -5,7 +5,7 @@ import Link from "next/link";
 import ImageUploader from "@/components/images/ImageUploader";
 import type { SelectedImage } from "@/lib/images/image-file";
 import type { ImagePolicy } from "@/lib/images/image-policy";
-import { completeImage, getImagePolicy, getStorageBudget, ImageTransferError, reserveImages, uploadReservedImage,
+import { getImagePolicy, getStorageBudget, ImageTransferError, reserveImages, uploadReservedImage,
   type UploadTicket, type StorageBudget } from "@/lib/images/image-api";
 import { formatBytes } from "@/lib/images/image-policy";
 import { createPost } from "@/lib/posts";
@@ -53,7 +53,7 @@ export default function PostComposer() {
       const unreserved = attachments.map((attachment) => attachment.image!)
         .filter((image) => !transfers.current.has(image.file) && !tickets.current.has(image.file));
       if (unreserved.length) {
-        setNotice("Reserving space for all selected images…");
+        setNotice("Compressing images and reserving space…");
         const reserved = await reserveImages(unreserved);
         unreserved.forEach((image, index) => tickets.current.set(image.file, reserved[index]));
       }
@@ -63,8 +63,7 @@ export default function PostComposer() {
         if (cached?.complete) { ids.push(cached.id); continue; }
         setNotice(`Saving image ${index + 1} of ${attachments.length}…`);
         try {
-          const saved = cached ? await completeImage(cached.id)
-            : await uploadReservedImage(image, tickets.current.get(image.file)!, setNotice);
+          const saved = await uploadReservedImage(tickets.current.get(image.file)!, setNotice);
           transfers.current.set(image.file, { id: saved.id, complete: true });
           ids.push(saved.id);
         } catch (cause) {

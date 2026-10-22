@@ -12,7 +12,6 @@ from sqlalchemy.exc import IntegrityError
 from images.budget import stage_outputs, storage_budget, write_reserved
 from images.cleanup import cleanup_orphan_once, delete_retired_once, retire_unused_once
 from images.processing import process_image
-from images.routes import sign_reserved_upload
 from images.worker import Settings, claim_work, finish_work
 from models import ImageProcessingCheck, ImageStorageObject, ImageUpload, ImageVariant, Post, PostMedia, Profile
 from moderation.client import ModerationError
@@ -29,7 +28,7 @@ class ImageCleanupDatabaseTests(ImageDatabaseFixture):
         identity = uuid4()
         self.uploads.append(identity)
         with self.sessions.begin() as db:
-            upload = ImageUpload(id=identity, owner_id=self.owner, purpose=purpose, processing_status=status,
+            upload = ImageUpload(id=identity, owner_id=self.owner, purpose=purpose, processing_status=status, upload_method='signed',
                 object_key=f'{self.owner}/{identity}.png', original_name='image.png', content_type='image/png',
                 size_bytes=100, width=10, height=10, uploaded_at=self.now)
             db.add(upload)
@@ -188,11 +187,6 @@ class ImageCleanupDatabaseTests(ImageDatabaseFixture):
         identity = self.asset()
         self.force_due(identity, source_due=False)
         retire_unused_once(self.sessions)
-        with self.sessions() as db, patch('images.routes.image_storage.sign_upload') as sign:
-            with self.assertRaises(HTTPException) as expired:
-                sign_reserved_upload(db, identity, 'test-token')
-            self.assertEqual(expired.exception.status_code, 410)
-            sign.assert_not_called()
         with self.sessions() as db, self.assertRaises(HTTPException) as caught:
             create_post(PostCreate(submission_id=uuid4(), title='Too late', image_ids=[identity]),
                 Response(), db.get(Profile, self.owner), db)

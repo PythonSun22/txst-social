@@ -19,15 +19,15 @@ from images.processing import Output, process_image
 from images.worker_storage import image_data_url, read_image, remove_images, write_image
 from images.schemas import SOURCE_GRACE_SECONDS
 from images.budget import (cleanup_attempt, cleanup_staged_once, delete_recorded,
-                           expire_unfinished, release_processing, stage_outputs, write_reserved)
+                           expire_unfinished, release_processing, source_cleanup_time, stage_outputs, write_reserved)
 from images.cleanup import cleanup_orphan_once, delete_retired_once, retire_unused_once
 from models import ImageProcessingCheck, ImageUpload, ImageVariant, PostMedia, Profile
 from moderation.client import ModerationError, moderate_content
 
 logger = logging.getLogger(__name__)
 LEASE_SECONDS = 600
-# Supabase signed upload tokens last two hours. Wait for expiry before deleting
-# the source, otherwise an outstanding token could recreate it after cleanup.
+# Legacy signed uploads retain their two-hour grace. Authenticated uploads close
+# on completion and can be cleaned as soon as processing is terminal.
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ def claim_work(sessions, settings: Settings, now: datetime) -> Work | None:
             upload.processing_error = "attempt_limit"
             upload.processing_claim = upload.processing_lease_until = None
             release_processing(db, upload)
-            upload.original_cleanup_after = max(now, upload.original_cleanup_after or now, upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
+            upload.original_cleanup_after = source_cleanup_time(upload, now)
             db.commit()
             return None
         token = uuid4()
@@ -129,7 +129,7 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
             largest, largest_key = outputs[-1]
             upload.processing_status = "blocked" if result.blocked else "ready"
             upload.processing_error = None
-            upload.original_cleanup_after = max(now, upload.original_cleanup_after or now, upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
+            upload.original_cleanup_after = source_cleanup_time(upload, now)
             db.add(ImageProcessingCheck(
                 image_upload_id=upload.id, attempt=upload.processing_attempts,
                 decision="block" if result.blocked else "allow", model=result.model,
@@ -144,7 +144,7 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
                 activate_profile(db, upload)
         if upload.processing_status in {"ready", "blocked", "failed"}:
             release_processing(db, upload)
-            upload.original_cleanup_after = max(now, upload.original_cleanup_after or now, upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
+            upload.original_cleanup_after = source_cleanup_time(upload, now)
         upload.processing_claim = upload.processing_lease_until = None
         db.commit()
         return failure is None

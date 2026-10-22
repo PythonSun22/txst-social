@@ -1,6 +1,7 @@
 /** Upload policy comes from FastAPI so UI limits cannot silently drift from the API. */
 export interface ImagePolicy {
   max_bytes: number;
+  max_upload_bytes: number;
   allowed_types: string[];
   max_images_per_post: number;
   uploads_per_minute: number;

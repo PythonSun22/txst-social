@@ -68,7 +68,8 @@ PostgreSQL. `backend/models.py` mirrors these migrations by hand.
 
 Limits: title 1–300 characters, optional body up to 20,000 characters, up to 4
 images. Blank text is treated as absent; at least text or one image is required.
-Each image is JPEG, PNG or WebP, at most 10,000,000 bytes. Browser editing remains
+Selections accept JPEG, PNG or WebP up to 10,000,000 bytes; browser preparation
+produces an upload of at most 2,000,000 bytes before reserving space. Browser editing remains
 optional; feed images use their natural ratio with `object-contain`. No permanent
 crop is imposed by rendering. See [image details](image-uploads.md) for editing,
 format and trusted-validation limitations.

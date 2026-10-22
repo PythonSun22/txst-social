@@ -7,7 +7,8 @@ temporary; generated WebP versions are the retained/displayed assets.
 The `/upload-test` Next.js route is a test harness for a reusable image uploader.
 It does not create a post. The first version accepts one JPEG, PNG, or WebP up
 to **10 MB = 10,000,000 bytes**, and shows file size, pixel dimensions, reduced
-ratio and a local preview. Unedited uploads preserve original bytes/aspect ratio.
+ratio and a local preview. Every upload is prepared locally to at most 2 MB;
+post/banner aspect ratios are preserved and avatars use a square crop.
 The optional browser editor can crop and proportionally resize before submission.
 
 ## Data flow
@@ -20,11 +21,12 @@ sequenceDiagram
     participant Storage as Private Supabase Storage
     Browser->>API: GET /images/policy
     Browser->>Browser: Validate file and decode dimensions
-    Browser->>API: POST /images (metadata + bearer token)
+    Browser->>Browser: Resize/re-encode to at most 2 MB
+    Browser->>API: POST /images/batch (prepared metadata + bearer token)
     API->>DB: Reserve image_uploads row for authenticated owner
-    API->>Storage: Sign object key using caller JWT
-    API-->>Browser: Upload ID, bucket, key, upload token
-    Browser->>Storage: Transfer file using signed token
+    API-->>Browser: Upload ID, bucket, key, reservation deadline
+    Browser->>Storage: Transfer compressed file using Auth session
+    Storage->>DB: Require exact open owner reservation; fence final write
     Browser->>API: POST /images/{id}/complete
     API->>Storage: Read object size and MIME metadata
     API->>DB: Mark upload completed if metadata matches
@@ -36,8 +38,9 @@ sequenceDiagram
 The browser never queries application tables. Storage requests are the explicit
 direct-transfer exception in AGENTS.md. Supabase Auth manages sessions; FastAPI
 checks verified email and active account status for upload/complete (FR-02,
-FR-96). Read routes check the active owner. FastAPI signs with the user's JWT
-and the existing publishable key, allowing Storage RLS to enforce ownership.
+FR-96). Read routes check the active owner. Browser uploads use the Auth session;
+Storage RLS requires an open, unexpired reservation for the exact account and path.
+Preview signing still uses the caller JWT.
 These upload/preview routes need no service-role key. The separate image-processing and post
 moderation workers use a backend-only Storage secret for bounded byte transfers
 without an author session; see [moderation](moderation.md).
@@ -47,6 +50,7 @@ without an author session; see [moderation](moderation.md).
 | Module | Responsibility |
 |---|---|
 | `frontend/src/lib/images/image-policy.ts` | Pure file limits, format signatures, byte and ratio formatting |
+| `frontend/src/lib/images/image-prepare.ts` | Automatic purpose-specific resizing/compression before reservation |
 | `frontend/src/lib/images/image-file.ts` | Browser decode and object URL for preview |
 | `frontend/src/lib/images/image-edit.ts` | Crop geometry, proportional sizing and canvas export |
 | `frontend/src/components/images/ImageEditor.tsx` | Modal crop/resize session with Save and Discard |
@@ -72,11 +76,11 @@ are denied. Storage INSERT requires a recent reservation for the same owner
 and path. Storage SELECT permits owned records; the post-media migration also permits
 objects attached to approved, nondeleted posts in active spaces. There is no public
 bucket or object overwrite. A reservation is committed before
-signing because Storage checks policies through a separate database connection.
+transfer because Storage checks policies through a separate database connection.
 
-The migration creates the `post-images` bucket with a 10,000,000-byte limit and
-the three allowed MIME types. The global Storage upload limit must also allow
-10 MB; a lower project-wide limit will still reject uploads. Keep the migration
+The original migration created the bucket with a 10 MB limit.
+`20261022120000_authenticated_image_uploads.sql` lowers it to **2,000,000 bytes**
+with the same three allowed MIME types. The global upload limit must allow 2 MB; a lower project-wide limit will still reject uploads. Keep the migration
 constraints, bucket limits and `backend/images/schemas.py` in step when limits
 change. The frontend fetches its policy from FastAPI.
 
@@ -161,13 +165,14 @@ limit, strips metadata, generates WebP versions and screens them. Source
 width/height remain historical browser metadata; variant dimensions are measured.
 Optional browser editing is not trusted validation. See [processing](image-processing.md).
 
-Interrupted transfers or failed signing can leave unused reservations; transfers
+Interrupted transfers can leave unused reservations; transfers
 whose confirmation fails can leave private objects. Retry confirmation uses the
 same upload ID and is idempotent. Selecting the file again starts a new reservation.
 Automatic reference-aware cleanup is implemented below. Post deletion and profile
 replacement queue unused assets for Storage deletion. A standalone manual upload
-delete endpoint is not part of this feature. Signed upload capabilities may remain
-valid for two hours, so originals continue to reserve capacity until their safe
+delete endpoint is not part of this feature. New authenticated reservations
+expire after 15 minutes and close on completion. Terminal processing can clean
+inputs without a two-hour wait. Legacy signed capabilities retain their old safe
 deletion horizon. Never delete rows from `storage.objects` directly.
 
 ## Shared account upload limits (FR-32)
@@ -209,8 +214,8 @@ release their unfinished slot; all retained files still consume capacity.
 `image_storage_objects` is a backend-only, RLS-protected ledger keyed by object
 key. It counts each physical asset once regardless of references. Deleted-object
 ledger rows and historical upload sizes do not consume capacity. Unknown transfers
-reserve **10 MB per original**, because a signed upload capability permits the
-bucket's full limit regardless of the browser's declared size. Successful
+reserve **2 MB per input**, matching the bucket limit, regardless of the
+browser's declared size. Legacy signed reservations retain their original 10 MB charge. Successful
 completion reconciles that source reservation to Storage's confirmed actual size.
 
 Additional processing headroom per original is **2 MB for posts, 250 KB for
@@ -220,18 +225,19 @@ preview 250 KB, expanded 1.75 MB, small avatar 50 KB, large avatar 200 KB, banne
 reduce quality to 50 and then dimensions until they fit. This makes the reserved
 space a real upper bound rather than an estimate.
 
-Thus four maximum-size post images initially need **48 MB**. An account already
-using more than 2 MB cannot reserve that batch. Even smaller selected files need
-the full initial capability reservation until completion confirms their size.
-The composer calls `POST /images/batch` (1–4 assets) before ANY new transfer;
-quota or slot rejection creates no reservations and issues no tokens for that
-batch. Single avatar/banner uploads use the same checked reservation path.
+Four new post images initially need **16 MB**. A batch that does not fit is
+rejected before any transfer. The composer calls `POST /images/batch` (1–4 assets)
+after compressing the complete selection; single avatar/banner transfers use the
+same path. No upload token is issued. Storage accepts the caller's Auth session
+only for the exact open owner reservation, and denies overwrites.
 `GET /images/budget` exposes stored, reserved, total used, available bytes and
 unfinished slots. The composer displays these values and explains headroom.
 
 Rate, slot and capacity checks and reservation inserts hold the same account row
-lock. Budget totals use one database snapshot. Upload URLs are signed after
-commit. Signing failures retain capacity until token expiry and confirmed cleanup.
+lock. Budget totals use one database snapshot. Reservations commit before transfer.
+A final-write trigger locks the upload row, including internal Storage writes,
+and rejects closed/expired reservations or mismatched metadata. Completion takes
+the same row lock, closes the reservation, and reconciles source bytes atomically.
 
 The worker persists every planned variant key before attempting its write. Actual
 or uncertain writes are covered by the asset's held headroom, including interrupted
@@ -242,12 +248,11 @@ Storage. Bounded writes and deletion serialize on object rows, so a stale worker
 cannot recreate an object after its charge has been released. Failed deletion
 never releases capacity. Provider calls never hold database locks.
 
-An abandoned, unconfirmed reservation expires after its token-safe cleanup horizon
-(initially 7,500 seconds, extended after signing a token). Signing and cleanup
-serialize on the upload row, including delayed token minting. Expiry releases
-its unfinished slot and unused processing headroom, while its possible original
-stays charged until Storage confirms deletion. Terminally failed job originals
-also receive this cleanup. Keep the image worker enabled for automatic deletion.
+An abandoned authenticated reservation expires after 15 minutes. Expiry releases
+its unfinished slot and processing headroom; input capacity stays charged until
+Storage confirms deletion. Completed inputs are eligible after terminal processing,
+including terminal failures. Legacy signed uploads retain their 7,500-second grace
+and are not retroactively reduced to a 2 MB charge. Keep the worker enabled.
 The original upload row remains for rate history, audits and historical metadata.
 
 Apply `20261022095634_image_storage_budget.sql` before starting this backend.
@@ -279,7 +284,7 @@ using backend-only Storage credentials. Cleanup does not call OpenAI.
 | Selection removed/cancelled | Queue the detached selection for five minutes later. |
 | Never attached upload | Keep a 24-hour grace so composing, editing and retries can finish. |
 | Blocked/terminally failed upload | Queue after five minutes; any undeleted post reference still protects it. |
-| Original input | Always respect its token-safe cleanup horizon, even if variants can go sooner. |
+| Original input | Delete after terminal processing and reservation closure; legacy signed inputs retain token grace. |
 | Unlinked inventory orphan | Wait 24 hours and check legacy file-key references and source capabilities before deleting. |
 
 These durations are persisted by database defaults/triggers in the migration;
@@ -319,7 +324,7 @@ is introduced.
 Manual local acceptance checks (in addition to automated integration tests):
 
 1. Publish images, delete the post, and wait five minutes. Its unused variants
-   should disappear; an original younger than its token horizon remains charged.
+   should disappear; a legacy signed input younger than its token horizon remains charged.
 2. Replace an avatar/banner. The old image stays while the new one is pending.
    After approval, the replacement stays and the old unused variants are reclaimed.
 3. Try a rejected replacement: the approved current image must remain.
@@ -352,11 +357,13 @@ provider/Storage requests remain mocked in those tests.
 
 Coverage includes authorization, size/type boundaries, batch reservations,
 account quota/slot races, RLS, worker leases, profile activation, deletion retries,
-shared and legacy references, attachment/retirement races, delayed token minting,
+shared and legacy references, attachment/retirement races, late transfer fencing,
 and retained audits/rate metadata. Frontend tests cover upload validation, editing,
-API failures and the expanded viewer. A separate live local Storage smoke check
-verified real generated-file writes, reads, deletion and repeated deletion for
-new random test keys. Manual browser acceptance still uses the checklist below.
+API failures, automatic compression, authenticated transfers and the expanded viewer.
+A separate live local Auth/Storage smoke check verified owner uploads, cross-owner
+and anonymous rejection, the 2 MB transfer limit, duplicate/overwrite denial,
+idempotent completion and denial after deletion. Temporary test accounts and files
+were removed afterward. Manual browser acceptance still uses the checklist below.
 
 Manual checks with both apps running:
 
@@ -376,3 +383,20 @@ Storage references:
 [signed uploads](https://supabase.com/docs/reference/javascript/file-buckets-createsigneduploadurl),
 [file limits](https://supabase.com/docs/guides/storage/uploads/file-limits),
 [access control](https://supabase.com/docs/guides/storage/security/access-control).
+
+## Authenticated-upload rollout and regression checks
+
+Stop older API/worker instances, apply `20261022120000_authenticated_image_uploads.sql`
+locally with `supabase migration up --local`, restart the backend/frontend, and reload
+old tabs. Shared deployment requires normal review. No new environment variables
+are needed. Existing stored inputs up to 10 MB remain decodable; an old tab trying
+to transfer over 2 MB must reload and reselect. Existing signed capabilities retain
+their old cleanup protection.
+
+Verify a 5–10 MB selection transfers a new WebP/JPEG of at most 2 MB; four post
+images initially reserve 16 MB. Verify owner-only exact paths, no overwrites,
+closed/expired reservation rejection, cross-account rejection, completion retry,
+late Storage metadata writes, early source cleanup, unchanged moderation privacy,
+and retained ledger charges on uncertain deletion. A failed Storage transfer may
+leave an uncommitted internal object version; Storage owns cleanup of those provider
+versions. Our ledger tracks registered objects and application-planned writes.

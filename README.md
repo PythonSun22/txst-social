@@ -213,7 +213,7 @@ belongs in these Auth settings; never put a service-role or secret key in a
 
 Open `/login` and sign in with an existing Texas State email/password account.
 Supabase's browser SDK manages session persistence and refresh. Passwords go
-directly to Supabase Auth. The browser uses Supabase for Auth and signed image
+directly to Supabase Auth. The browser uses Supabase for Auth and authenticated image
 transfers; application records continue through FastAPI. Account signup/reset UI is not part of this
 foundation stage.
 
@@ -267,15 +267,24 @@ subject to review; no shared migrations were applied for this change.
 Open `/upload-test` from the **Upload test** navigation link. The page accepts
 one JPEG, PNG, or WebP up to 10 MB (10,000,000 bytes), displays its dimensions
 and aspect ratio, and enables upload for verified students when validation passes.
-Original bytes and aspect ratio are preserved unless you choose **Edit image**.
+Every selection is compressed before transfer to at most 2 MB; post/banner aspect
+ratios are preserved and avatars use a square crop. The untouched original stays local.
 The browser editor supports drag cropping, ratio presets and proportional resizing.
 **Save changes** revalidates the edited file; **Discard changes** keeps the current
 selection. Submit uploads the chosen version as a new private asset.
 
-Before testing persistence, apply
-`supabase/migrations/20260924191615_image_upload_pipeline.sql` with the normal
-`supabase db push` workflow. It creates `image_uploads`, the private
-`post-images` Storage bucket, and ownership policies. Use the same Supabase
+Before testing this checkout, stop the backend and apply local migrations with
+`supabase migration up --local`, then restart both apps. The latest migration is
+`20261022120000_authenticated_image_uploads.sql`: authenticated reservations expire
+after 15 minutes, completed inputs can be cleaned after terminal processing, and
+legacy signed uploads retain their old expiry protection. Shared deployment still
+follows the review/migration workflow. Browser targets are in
+`frontend/src/lib/images/image-prepare.ts`; final variants are configured in
+`backend/images/processing.py`.
+
+The original migration, `20260924191615_image_upload_pipeline.sql`, creates
+`image_uploads`, the private `post-images` bucket, and ownership policies.
+Apply every subsequent migration as well. Use the same Supabase
 project in both `.env` files and `DATABASE_URL`; uploads use the caller's JWT.
 The separate moderation worker requires a backend-only Storage secret for
 pending images; see [moderation setup](docs/moderation.md).

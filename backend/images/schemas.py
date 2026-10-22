@@ -7,6 +7,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_IMAGE_BYTES = 10_000_000
+# Keep the legacy decode limit for already stored originals during rollout.
+MAX_UPLOAD_BYTES = 2_000_000
+UPLOAD_RESERVATION_SECONDS = 900
 MAX_POST_IMAGES = 4
 UPLOADS_PER_MINUTE = 10
 UPLOADS_PER_HOUR = 40
@@ -23,7 +26,7 @@ ImagePurpose = Literal["post", "avatar", "banner"]
 VariantName = Literal["preview", "expanded", "avatar_small", "avatar_large", "banner"]
 
 
-class ImageUploadCreate(BaseModel):
+class ImageMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     original_name: str = Field(min_length=1, max_length=255)
@@ -32,6 +35,10 @@ class ImageUploadCreate(BaseModel):
     width: int = Field(gt=0, le=2_147_483_647, strict=True)
     height: int = Field(gt=0, le=2_147_483_647, strict=True)
     purpose: ImagePurpose = "post"
+
+
+class ImageUploadCreate(ImageMetadata):
+    size_bytes: int = Field(gt=0, le=MAX_UPLOAD_BYTES, strict=True)
 
 
 class ImageVariantResponse(BaseModel):
@@ -43,7 +50,7 @@ class ImageVariantResponse(BaseModel):
     content_type: str
 
 
-class ImageUploadResponse(ImageUploadCreate):
+class ImageUploadResponse(ImageMetadata):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -58,7 +65,7 @@ class ImageUploadResponse(ImageUploadCreate):
 
 class ImageUploadTicket(BaseModel):
     upload: ImageUploadResponse
-    token: str
+    upload_expires_at: datetime
 
 
 class ImageUploadBatch(BaseModel):
@@ -78,13 +85,14 @@ class ImageStorageBudget(BaseModel):
 
 class ImageUploadPolicy(BaseModel):
     max_bytes: int = MAX_IMAGE_BYTES
+    max_upload_bytes: int = MAX_UPLOAD_BYTES
     allowed_types: list[str] = list(IMAGE_TYPES)
     max_images_per_post: int = MAX_POST_IMAGES
     uploads_per_minute: int = UPLOADS_PER_MINUTE
     uploads_per_hour: int = UPLOADS_PER_HOUR
     account_storage_bytes: int = ACCOUNT_STORAGE_BYTES
     max_unfinished_uploads: int = MAX_UNFINISHED_UPLOADS
-    original_reservation_bytes: int = MAX_IMAGE_BYTES
+    original_reservation_bytes: int = MAX_UPLOAD_BYTES
     processing_headroom: dict[str, int] = PROCESSING_HEADROOM
 
 

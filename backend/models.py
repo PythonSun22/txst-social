@@ -214,6 +214,8 @@ class ImageUpload(Base):
     original_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     original_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     processing_reserved_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    upload_method: Mapped[str] = mapped_column(Text, nullable=False, server_default="authenticated")
+    upload_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     asset_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, server_default=text("now()+interval '24 hours'"))
     asset_cleanup_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     asset_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)

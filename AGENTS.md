@@ -216,7 +216,7 @@ that must be written in the same transaction as the row they summarise.
 7. **Rankings are computed on write, never on read.** `hot_rank` is a stored
    column: `log(greatest(like_count,1)) + extract(epoch from created_at)/45000`.
 8. **Images never enter the database.** Store object keys; upload directly
-   from browser to Storage with a signed URL. Trusted background workers may
+   from browser to Storage using the student’s Auth session and an open reservation. Trusted background workers may
    read image bytes for validation, optimization and screening; API requests
    continue to carry metadata.
 
@@ -296,7 +296,7 @@ are separate from active references: old approved assets stay visible until a
 replacement passes; rejection/failure preserves them. Active approved profile
 assets support signed public previews, including small avatars beside posts.
 Original input files are deleted through Storage after terminal processing and
-a token-safe grace (at least 7,500 seconds after token issuance). Expired abandoned
+safe reservation closure. Legacy signed inputs retain at least 7,500 seconds after token issuance. Expired abandoned
 uploads and failed jobs receive the same safe cleanup. Account rates, storage
 budgets and reference-aware hard deletion are implemented below. Changing presets
 affects future processing; ready assets are not regenerated. Existing uploads queue for processing; old profile assets are hidden
@@ -309,10 +309,10 @@ Drag/drop or browse one JPEG, PNG, or WebP up to **10,000,000 bytes (10 MB)**;
 display byte size, dimensions and aspect ratio. An optional browser editor offers
 drag cropping, ratio presets, pixel controls and proportional downscaling (maximum
 export edge 4096 px). Save replaces the local selection after revalidation;
-Discard preserves it. Edits are re-encoded as still images; unedited uploads
-preserve original bytes. Editing an uploaded selection creates a new asset on
+Discard preserves it. Every selection is automatically resized/re-encoded before
+transfer to at most 2 MB (WebP, with JPEG fallback). The untouched source stays local. Editing an uploaded selection creates a new asset on
 the next submission, never overwrites the old object. FastAPI `/images` reserves an owner-scoped
-object key and signs with the caller's JWT; the browser transfers bytes directly
+object key with a 15-minute authenticated reservation; the browser transfers bytes directly
 to the private `post-images` bucket. Completion checks Storage size/MIME metadata.
 Only the owner can list uploads or get an upload preview; post image previews
 also permit readers of approved posts. Verified, active
@@ -352,14 +352,23 @@ tracks physical object keys, confirmed sizes, pending writes and confirmed delet
 `image_uploads.processing_reserved_bytes` holds processing headroom. Assets count
 once regardless of post references, and source-size metadata after confirmed
 removal costs nothing. Unknown source transfers reserve the full bucket limit
-(10 MB), then reconcile to confirmed size; processing reserves 2 MB for posts,
+(2 MB for new authenticated uploads), then reconcile to confirmed size; processing reserves 2 MB for posts,
 250 KB for avatars and 1 MB for banners. The encoder enforces per-variant byte caps.
 The composer uses atomic `POST /images/batch` before transferring a multi-image
 selection. `GET /images/budget` returns stored/reserved/available bytes and slots.
 Terminal jobs release their unfinished slot and reconcile headroom to retained
 files; failed/uncertain writes remain charged until deletion is confirmed. Source
 cleanup also handles expired abandoned uploads and terminal failures after the
-7,500-second grace after token issuance (extended atomically if signing is delayed).
+reservation deadline (15 minutes) or terminal processing. Existing signed uploads
+keep their original 7,500-second token horizon and 10 MB source reservation. New
+Storage INSERTs require the exact open owner reservation; overwrites are denied.
+A Storage metadata-write trigger locks the reservation and rejects late writes
+even from internal Storage roles after completion/expiry/deletion. Apply
+`20261022120000_authenticated_image_uploads.sql` before starting this checkout;
+stop old API/workers first and restart the frontend too. Backend decoders retain
+the legacy 10 MB input limit for already stored originals. Four new post images
+reserve 16 MB. Browser preparation settings live in `image-prepare.ts`; final
+variant presets remain in `backend/images/processing.py`.
 Staged-write cleanup handles interrupted worker files.
 Apply `20261022095634_image_storage_budget.sql`; its backfill uses Storage inventory
 for historical files. Accounts already over budget are blocked from new uploads;
@@ -375,7 +384,8 @@ images; soft-deleted profiles do not protect them. Shared assets are retired onl
 after their final live reference disappears. Database reference guards and a
 consistent account-before-upload lock order prevent reattachment/deletion races.
 Retirement sets an upload tombstone and fences workers; unused variants are
-removed through Storage, while originals still wait for token expiry. Confirmed
+removed through Storage; authenticated inputs need only safe reservation closure,
+while legacy signed inputs still wait for token expiry. Confirmed
 file deletion releases quota; failures persist error codes and retry with capped
 backoff. `files_deleted_at` records completion. Uploads, media/variant metadata,
 moderation audits and ledger tombstones remain, preserving rate history. This is
@@ -464,7 +474,7 @@ on existing databases; it was applied under the explicit exception above.
 browser INSERT/DELETE policies on `post_likes`, ensuring counters cannot be
 bypassed. Older direct-write policies for comment likes and follows still exist;
 when implementing those features, reconcile them with the frontend-to-FastAPI
-rule. Auth and signed Storage transfers remain intentional browser integrations.
+rule. Auth and authenticated Storage transfers remain intentional browser integrations.
 
 ---
 

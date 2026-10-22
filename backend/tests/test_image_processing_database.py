@@ -25,7 +25,7 @@ class ImageProcessingDatabaseTests(ImageDatabaseFixture):
         uid = uuid4()
         self.uploads.append(uid)
         with self.sessions.begin() as db:
-            db.add(ImageUpload(id=uid, owner_id=self.owner, purpose=purpose, object_key=f"{self.owner}/{uid}.png",
+            db.add(ImageUpload(id=uid, owner_id=self.owner, purpose=purpose, upload_method="signed", object_key=f"{self.owner}/{uid}.png",
                 original_name="test.png", content_type="image/png", size_bytes=len(source()), width=1200, height=800,
                 uploaded_at=self.now))
         return uid

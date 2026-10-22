@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy import case, func, or_, select, true, update
 
-from images.schemas import (ACCOUNT_STORAGE_BYTES, MAX_IMAGE_BYTES, MAX_UNFINISHED_UPLOADS,
+from images.schemas import (ACCOUNT_STORAGE_BYTES, MAX_UPLOAD_BYTES, MAX_UNFINISHED_UPLOADS,
                             PROCESSING_HEADROOM, SOURCE_GRACE_SECONDS, ImageStorageBudget)
 from models import ImageStorageObject, ImageUpload, ImageVariant
 from moderation.client import ModerationError
@@ -35,18 +35,30 @@ def release_processing(db, upload):
     upload.processing_reserved_bytes = 0
 
 
+def source_cleanup_time(upload, now):
+    """Closed authenticated reservations cannot receive another registered object.
+
+    Existing signed capabilities must retain their old expiry protection.
+    """
+    if upload.upload_method == "authenticated":
+        return now
+    return max(now, upload.original_cleanup_after or now,
+               upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
+
+
 def expire_unfinished(db, now, owner=None):
     query = select(ImageUpload).where(ImageUpload.processing_status.in_(["pending", "processing"]),
         or_(ImageUpload.deleted_at.is_not(None),
-            (ImageUpload.uploaded_at.is_(None) & (ImageUpload.original_cleanup_after <= now))))
+            (ImageUpload.uploaded_at.is_(None) & or_(
+                (ImageUpload.upload_method == "authenticated") & (ImageUpload.upload_expires_at <= now),
+                (ImageUpload.upload_method == "signed") & (ImageUpload.original_cleanup_after <= now)))))
     if owner is not None:
         query = query.where(ImageUpload.owner_id == owner)
     for upload in db.scalars(query.with_for_update(skip_locked=True)).all():
         upload.processing_status = "failed"
         upload.processing_error = "upload_expired"
         upload.processing_claim = upload.processing_lease_until = None
-        upload.original_cleanup_after = max(now, upload.original_cleanup_after or now,
-            upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
+        upload.original_cleanup_after = source_cleanup_time(upload, now)
         release_processing(db, upload)
     db.flush()
 
@@ -56,11 +68,11 @@ def check_capacity(db, owner, images):
     if budget.unfinished_uploads + len(images) > MAX_UNFINISHED_UPLOADS:
         raise HTTPException(409, f"At most {MAX_UNFINISHED_UPLOADS} unfinished image uploads are allowed per account. "
             f"You have {budget.unfinished_uploads}; wait for processing or expired-upload cleanup before adding {len(images)} more.")
-    required = sum(MAX_IMAGE_BYTES + PROCESSING_HEADROOM[image.purpose] for image in images)
+    required = sum(MAX_UPLOAD_BYTES + PROCESSING_HEADROOM[image.purpose] for image in images)
     if required > budget.available_bytes:
         raise HTTPException(413, f"These {len(images)} image upload(s) need {required / 1_000_000:.2f} MB of reserved capacity, "
             f"including temporary originals and processing space. You have {budget.available_bytes / 1_000_000:.2f} MB available "
-            "in your 50 MB account budget. Four maximum-size post images need 48 MB while originals are retained; "
+            "in your 50 MB account budget. Four maximum-size post images need 16 MB while inputs are retained; "
             "existing images may leave too little room. No files from this batch have been transferred.")
 
 

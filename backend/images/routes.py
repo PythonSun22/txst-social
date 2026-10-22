@@ -15,6 +15,7 @@ from images.schemas import (
     ImageUploadPolicy, ImageUploadResponse, ImageUploadTicket,
     ImageVariantResponse, VariantName,
     ImageUploadBatch, ImageStorageBudget, PROCESSING_HEADROOM, SOURCE_GRACE_SECONDS,
+    UPLOAD_RESERVATION_SECONDS,
 )
 from images import storage as image_storage
 from images.limits import reserve_upload_slot
@@ -46,7 +47,7 @@ def own_upload(db: Session, upload_id: UUID, profile: Profile) -> ImageUpload:
 
 @router.get("/policy", response_model=ImageUploadPolicy)
 def upload_policy() -> ImageUploadPolicy:
-    """The browser uses the same byte/type limits as the API and Storage bucket."""
+    """Selection, transfer and account limits supplied to every upload UI."""
     return ImageUploadPolicy()
 
 
@@ -54,13 +55,12 @@ def upload_policy() -> ImageUploadPolicy:
 def create_upload(
     payload: ImageUploadCreate, response: Response,
     profile: Profile = Depends(require_verified_profile),
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> ImageUploadTicket:
-    return reserve_images([payload], response, profile, credentials, db)[0]
+    return reserve_images([payload], response, profile, db)[0]
 
 
-def reserve_images(images, response, profile, credentials, db):
+def reserve_images(images: list[ImageUploadCreate], response: Response, profile: Profile, db: Session) -> list[ImageUploadTicket]:
     created_at = reserve_upload_slot(db, profile.id, len(images))
     expire_unfinished(db, created_at, profile.id)
     check_capacity(db, profile.id, images)
@@ -69,6 +69,8 @@ def reserve_images(images, response, profile, credentials, db):
         upload_id = uuid4()
         upload = ImageUpload(id=upload_id, owner_id=profile.id, bucket_id=IMAGE_BUCKET, created_at=created_at,
             object_key=f"{profile.id}/{upload_id}.{IMAGE_TYPES[payload.content_type]}",
+            upload_method="authenticated",
+            upload_expires_at=created_at + timedelta(seconds=UPLOAD_RESERVATION_SECONDS),
             processing_reserved_bytes=PROCESSING_HEADROOM[payload.purpose], **payload.model_dump())
         db.add(upload)
         uploads.append(upload)
@@ -78,33 +80,15 @@ def reserve_images(images, response, profile, credentials, db):
     tickets = []
     for upload in uploads:
         db.refresh(upload)
-        token = sign_reserved_upload(db, upload.id, credentials.credentials)
-        db.refresh(upload)
-        tickets.append(ImageUploadTicket(upload=upload_response(db, upload), token=token))
+        tickets.append(ImageUploadTicket(upload=upload_response(db, upload), upload_expires_at=upload.upload_expires_at))
     return tickets
-
-
-def sign_reserved_upload(db, upload_id, credentials):
-    # Serialize minting with expiry/deletion. A delayed signing call must extend
-    # the cleanup horizon BEFORE returning its token to the browser.
-    upload = db.scalar(select(ImageUpload).where(ImageUpload.id == upload_id).with_for_update()
-        .execution_options(populate_existing=True))
-    now = datetime.now(timezone.utc)
-    if (upload is None or upload.deleted_at is not None or upload.files_deleted_at is not None
-            or upload.original_deleted_at is not None or upload.processing_status == "failed"
-            or upload.original_cleanup_after <= now):
-        raise HTTPException(410, "This image reservation expired. Select the image again.")
-    token = image_storage.sign_upload(upload.object_key, credentials)
-    upload.original_cleanup_after = datetime.now(timezone.utc) + timedelta(seconds=SOURCE_GRACE_SECONDS)
-    db.commit()
-    return token
 
 
 @router.post("/batch", response_model=list[ImageUploadTicket], status_code=201)
 def create_upload_batch(payload: ImageUploadBatch, response: Response,
     profile: Profile = Depends(require_verified_profile),
-    credentials: HTTPAuthorizationCredentials = Depends(bearer), db: Session = Depends(get_db)):
-    return reserve_images(payload.images, response, profile, credentials, db)
+    db: Session = Depends(get_db)):
+    return reserve_images(payload.images, response, profile, db)
 
 
 @router.get("/budget", response_model=ImageStorageBudget)
@@ -121,11 +105,18 @@ def complete_upload(
     db: Session = Depends(get_db),
 ) -> ImageUploadResponse:
     upload = own_upload(db, upload_id, profile)
+    # The Storage write guard takes this same lock. Close authorization and
+    # reconcile the ledger in one transaction, including concurrent completions.
+    db.refresh(upload, with_for_update=True)
+    if upload.deleted_at is not None:
+        raise HTTPException(404, "Image upload not found.")
     response.headers["Cache-Control"] = "no-store"
     if upload.uploaded_at is not None:
         return upload_response(db, upload)  # Safe after an uncertain transfer.
+    expires_at = (upload.upload_expires_at if upload.upload_method == "authenticated" else
+                  upload.original_cleanup_after or upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
     if (upload.original_deleted_at is not None or upload.processing_status == "failed"
-            or (upload.original_cleanup_after or upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS)) <= datetime.now(timezone.utc)):
+            or expires_at <= datetime.now(timezone.utc)):
         raise HTTPException(410, "This upload reservation expired. Select the image again.")
     info = image_storage.object_info(upload.object_key, credentials.credentials)
     # Check Storage's actual object metadata, not a client "success" flag.

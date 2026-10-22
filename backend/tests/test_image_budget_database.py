@@ -13,7 +13,7 @@ from images.budget import (cleanup_attempt, cleanup_staged_once, expire_unfinish
     stage_outputs, storage_budget, write_reserved)
 from images.processing import process_image
 from images.routes import complete_upload, reserve_images
-from images.schemas import ImageUploadCreate, MAX_IMAGE_BYTES, SOURCE_GRACE_SECONDS
+from images.schemas import ImageUploadCreate, MAX_UPLOAD_BYTES, SOURCE_GRACE_SECONDS
 from images.worker import Settings, claim_work, cleanup_original_once, finish_work
 from models import ImageStorageObject, ImageUpload, ImageVariant, PostMedia, Profile
 from moderation.client import ModerationError
@@ -22,18 +22,12 @@ from test_moderation_database import ImageDatabaseFixture
 
 
 class ImageBudgetDatabaseTests(ImageDatabaseFixture):
-    def setUp(self):
-        super().setUp()
-        self.sign = patch('images.routes.image_storage.sign_upload', return_value='test-token')
-        self.signer = self.sign.start()
-        self.addCleanup(self.sign.stop)
-
     def reserve(self, count=1, purpose='post', size=100):
         payload = ImageUploadCreate(original_name='test.png', content_type='image/png', size_bytes=size,
             width=1200, height=800, purpose=purpose)
         with self.sessions() as db:
             return reserve_images([payload] * count, Response(), db.get(Profile, self.owner),
-                HTTPAuthorizationCredentials(scheme='Bearer', credentials='test'), db)
+                db)
 
     def complete(self, ticket):
         with self.sessions() as db, patch('images.routes.image_storage.object_info',
@@ -53,7 +47,7 @@ class ImageBudgetDatabaseTests(ImageDatabaseFixture):
 
     def test_initial_reservation_completion_and_original_cleanup_reconcile(self):
         ticket = self.reserve(size=len(source()))[0]
-        self.assertEqual(self.budget().used_bytes, 12_000_000)
+        self.assertEqual(self.budget().used_bytes, 4_000_000)
         self.assertEqual(self.budget().stored_bytes, 0)
         self.complete(ticket)
         self.assertEqual(self.budget().used_bytes, len(source()) + 2_000_000)
@@ -80,24 +74,23 @@ class ImageBudgetDatabaseTests(ImageDatabaseFixture):
             cleanup_original_once(self.sessions)
         self.assertEqual(self.budget().used_bytes, actual)
 
-    def test_four_image_batch_rejected_before_tokens_when_existing_files_leave_less_than_48mb(self):
+    def test_four_image_batch_rejected_before_tokens_when_existing_files_leave_less_than_16mb(self):
         # Existing bytes need no image metadata to be charged (e.g. an old interrupted write).
         with self.sessions.begin() as db:
             db.add(ImageStorageObject(object_key=f'{self.owner}/old.webp', owner_id=self.owner,
-                kind='orphan', size_bytes=3_000_000, confirmed_at=datetime.now(timezone.utc)))
+                kind='orphan', size_bytes=35_000_000, confirmed_at=datetime.now(timezone.utc)))
         with self.assertRaises(HTTPException) as caught:
-            self.reserve(count=4, size=MAX_IMAGE_BYTES)
+            self.reserve(count=4, size=MAX_UPLOAD_BYTES)
         self.assertEqual(caught.exception.status_code, 413)
-        self.assertIn('48.00 MB', caught.exception.detail)
-        self.signer.assert_not_called()
+        self.assertIn('16.00 MB', caught.exception.detail)
         with self.sessions() as db:
             self.assertEqual(db.scalar(select(func.count()).select_from(ImageUpload).where(ImageUpload.owner_id == self.owner)), 0)
-        self.assertEqual(self.budget().used_bytes, 3_000_000)
+        self.assertEqual(self.budget().used_bytes, 35_000_000)
 
     def test_concurrent_requests_cannot_spend_same_last_bytes(self):
         with self.sessions.begin() as db:
             db.add(ImageStorageObject(object_key=f'{self.owner}/existing.webp', owner_id=self.owner,
-                kind='orphan', size_bytes=38_000_000, confirmed_at=datetime.now(timezone.utc)))
+                kind='orphan', size_bytes=46_000_000, confirmed_at=datetime.now(timezone.utc)))
         barrier = Barrier(2)
         def request():
             barrier.wait(timeout=10)
@@ -144,25 +137,14 @@ class ImageBudgetDatabaseTests(ImageDatabaseFixture):
             self.assertEqual(sorted(f.result(timeout=15) for f in futures), [201, 409])
         self.assertEqual(self.budget().unfinished_uploads, 10)
 
-    def test_signing_failure_retains_source_capacity_and_unfinished_slot(self):
-        self.signer.side_effect = HTTPException(503, 'Signing unavailable')
-        with self.assertRaises(HTTPException):
-            self.reserve()
-        self.assertEqual(self.budget().used_bytes, 12_000_000)
-        self.assertEqual(self.budget().unfinished_uploads, 1)
-
-    def test_delayed_token_minting_extends_the_source_cleanup_horizon(self):
-        before = datetime.now(timezone.utc)
-        after = before + timedelta(hours=1)
-        with patch('images.routes.datetime') as clock:
-            clock.now.side_effect = [before, after]
-            ticket = self.reserve()[0]
-        with self.sessions.begin() as db:
+    def test_new_reservation_has_short_deadline_and_no_upload_token(self):
+        ticket = self.reserve()[0]
+        self.assertFalse(hasattr(ticket, 'token'))
+        with self.sessions() as db:
             upload = db.get(ImageUpload, ticket.upload.id)
-            self.assertEqual(upload.original_cleanup_after, after + timedelta(seconds=SOURCE_GRACE_SECONDS))
-            expire_unfinished(db, before + timedelta(seconds=SOURCE_GRACE_SECONDS + 5), self.owner)
-        self.assertEqual(self.budget().unfinished_uploads, 1)
-        self.assertEqual(self.budget().used_bytes, 12_000_000)
+            self.assertEqual(upload.upload_method, 'authenticated')
+            self.assertEqual(upload.upload_expires_at, upload.created_at + timedelta(minutes=15))
+        self.assertEqual(self.budget().used_bytes, 4_000_000)
 
     def test_expired_abandoned_source_charged_until_storage_deletion(self):
         ticket = self.reserve()[0]
@@ -170,10 +152,11 @@ class ImageBudgetDatabaseTests(ImageDatabaseFixture):
             upload = db.get(ImageUpload, ticket.upload.id)
             upload.created_at = datetime.now(timezone.utc) - timedelta(seconds=SOURCE_GRACE_SECONDS + 1)
             upload.original_cleanup_after = datetime.now(timezone.utc) - timedelta(seconds=1)
+            upload.upload_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
             db.flush()
             expire_unfinished(db, datetime.now(timezone.utc), self.owner)
         self.assertEqual(self.budget().unfinished_uploads, 0)
-        self.assertEqual(self.budget().used_bytes, MAX_IMAGE_BYTES)
+        self.assertEqual(self.budget().used_bytes, MAX_UPLOAD_BYTES)
         with patch('images.worker.remove_images'):
             cleanup_original_once(self.sessions)
         self.assertEqual(self.budget().used_bytes, 0)
