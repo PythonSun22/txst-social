@@ -115,7 +115,7 @@ full provider audits; it has not been applied to the shared database.
 
 ## 4. The data model
 
-Fifteen tables of ours, plus Supabase's `auth.users` which we do not own.
+Seventeen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, bio, a
@@ -152,8 +152,13 @@ Fifteen tables of ours, plus Supabase's `auth.users` which we do not own.
 - `image_uploads` — an owner, private Storage object key, file name, MIME type,
   byte size, browser-measured width/height, and upload timestamps. Independent
   of posts so the upload pipeline can be tested and reused before post creation.
-  `uploaded_at` means transfer confirmed, **not moderation approved**. Dimensions
-  are browser-reported; server-side image decoding is not implemented yet.
+  `uploaded_at` means transfer confirmed, **not moderation approved**. Source
+  dimensions are browser-reported. A trusted worker independently decodes still
+  images and generates purpose-specific WebP versions; see `docs/image-processing.md`.
+- `image_variants` — immutable optimized versions per upload: post preview/expanded,
+  avatar small/large, or one banner; measured size and dimensions, private object keys.
+- `image_processing_checks` — asset-level screening audit, separate from post audits.
+  Uploads carry durable processing claims, retries and original cleanup state.
 
 **Engagement**
 - `post_likes`, `comment_likes` — composite PK `(user_id, target_id)`. Unliking
@@ -194,8 +199,10 @@ that must be written in the same transaction as the row they summarise.
    query. If a query mysteriously returns nothing, suspect RLS first.
 7. **Rankings are computed on write, never on read.** `hot_rank` is a stored
    column: `log(greatest(like_count,1)) + extract(epoch from created_at)/45000`.
-8. **Images never enter the database.** Store the object key; upload directly
-   from browser to storage with a signed URL.
+8. **Images never enter the database.** Store object keys; upload directly
+   from browser to Storage with a signed URL. Trusted background workers may
+   read image bytes for validation, optimization and screening; API requests
+   continue to carry metadata.
 
 ---
 
@@ -229,8 +236,9 @@ dependency requires verified email (FR-02). Post routes derive `author_id` from
 that profile and check bans for the target space (FR-95).
 Application queries still use the server's SQLAlchemy connection, not the
 browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
-General posts, ordered images, chronological feed reads and post likes now work
-through `/posts`. Comments and reports remain **schema only**.
+General posts, ordered images, chronological feed reads and post likes work
+through `/posts`. Threaded comments, replies, comment likes and deletion are also
+implemented. Reports remain **schema only**.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
@@ -253,12 +261,33 @@ candidate on synthetic text cases; the optional worker path is for local tests
 only pending representative, independently labeled evaluation.
 Results and limitations are in `docs/moderation.md`.
 
-Apply the new moderation migration before running this checkout and configure
-the backend-only Storage secret for pending images. Normal upload/preview routes
-still use caller JWTs. Local image posts cannot finish screening through the
-current loopback signed-URL handoff; see `docs/moderation.md`. Isolated PostgreSQL
-integration checks passed with Auth/Storage schema stand-ins; shared deployment
-remains pending.
+Apply the moderation and `20261022072231_image_variants.sql` migrations before
+running this checkout. The latter is not deployed to the shared database.
+Enable `IMAGE_PROCESSING_ENABLED` separately from `MODERATION_ENABLED`. The image
+worker decodes still images (25 million pixel cap), strips metadata, generates
+WebP versions and screens the largest version before marking an asset ready.
+Post assets produce preview + expanded versions; avatars produce small + large;
+banners produce one. Presets/quality live in `backend/image_processing.py`.
+Posts wait for image processing without consuming post-screening attempts, then
+retain title/body-plus-image screening. Both workers send bounded inline image
+bytes, so local loopback Storage no longer needs to be fetchable by OpenAI.
+Normal upload/preview routes still use caller JWTs; worker transfers require the
+backend-only Storage secret. New lifecycle/RLS tests are opt-in and still need
+local database execution; shared deployment remains pending. See `docs/image-processing.md`.
+
+Avatars and banners now require asset-level screening. Pending profile selections
+are separate from active references: old approved assets stay visible until a
+replacement passes; rejection/failure preserves them. Active approved profile
+assets support signed public previews, including small avatars beside posts.
+Original input files are deleted through Storage only after all versions and a
+final screening verdict persist, and after signed upload tokens expire (7,500
+seconds after reservation). This is temporary-input cleanup only. Per-account
+quotas/rate limits and general hard deletion of abandoned/replaced/deleted assets
+are deferred. Changing presets affects future processing; ready assets are not
+regenerated. Existing uploads queue for processing; old profile assets are hidden
+until approved. Previously approved image posts return to pending for processing
+and screening. Legacy sources shared across purposes may require re-upload.
+
 
 `/upload-test` is a Next.js page for the reusable image upload pipeline (FR-32).
 Drag/drop or browse one JPEG, PNG, or WebP up to **10,000,000 bytes (10 MB)**;
@@ -294,8 +323,8 @@ Media references and reusable private uploads are retained.
 Keep the upload/editor modules independent of posts. `ImageUploader` supports
 selection-only mode for the composer and standalone transfer mode for the lab;
 `PostComposer` owns ordered attachments and post submission. The profile editor
-also uses standalone transfers for private avatar and banner assets, then stores
-the completed upload IDs on `profiles`. Read
+also uses standalone transfers for private avatar and banner assets, then submits
+completed purpose-specific upload IDs as pending selections on `profiles`. Read
 [posts and media](docs/posts-and-media.md) before extending these features.
 
 Sprint 2 (Sept 14–27) is the first vertical slice: posts through every layer,

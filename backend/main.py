@@ -15,6 +15,7 @@ from images import router as images_router
 from posts import router as posts_router
 from profile_routes import router as profile_router
 from moderation_worker import Settings, run_worker
+from image_processing_worker import Settings as ImageSettings, run_worker as run_image_worker
 from schemas import DatabaseHealthResponse, HealthResponse
 
 
@@ -23,6 +24,11 @@ async def lifespan(app: FastAPI):
     """Screen committed ForAll posts while the API runs (FR-90–92)."""
     stop = Event()
     worker = None
+    image_worker = None
+    if os.getenv("IMAGE_PROCESSING_ENABLED", "false").lower() in {"true", "1", "yes"}:
+        image_worker = Thread(target=run_image_worker, args=(stop, ImageSettings.from_env()), daemon=True,
+                              name="image-processing")
+        image_worker.start()
     if os.getenv("MODERATION_ENABLED", "false").lower() in {"true", "1", "yes"}:
         worker = Thread(target=run_worker, args=(stop, Settings.from_env()), daemon=True,
                         name="post-moderation")
@@ -34,6 +40,8 @@ async def lifespan(app: FastAPI):
         if worker:
             # Interrupted work is recoverable through its persisted lease and attempt count.
             await asyncio.to_thread(worker.join, 5)
+        if image_worker:
+            await asyncio.to_thread(image_worker.join, 5)
 
 
 app = FastAPI(lifespan=lifespan)

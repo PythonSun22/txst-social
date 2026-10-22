@@ -1,5 +1,9 @@
 # Image upload pipeline (FR-32)
 
+For current trusted processing, version sizes, profile screening and original
+cleanup, read [optimized image assets](image-processing.md). Originals are
+temporary; generated WebP versions are the retained/displayed assets.
+
 The `/upload-test` Next.js route is a test harness for a reusable image uploader.
 It does not create a post. The first version accepts one JPEG, PNG, or WebP up
 to **10 MB = 10,000,000 bytes**, and shows file size, pixel dimensions, reduced
@@ -34,8 +38,8 @@ direct-transfer exception in AGENTS.md. Supabase Auth manages sessions; FastAPI
 checks verified email and active account status for upload/complete (FR-02,
 FR-96). Read routes check the active owner. FastAPI signs with the user's JWT
 and the existing publishable key, allowing Storage RLS to enforce ownership.
-These upload/preview routes need no service-role key. The separate automatic
-moderation worker uses a backend-only Storage secret to sign pending attachments
+These upload/preview routes need no service-role key. The separate image-processing and post
+moderation workers use a backend-only Storage secret for bounded byte transfers
 without an author session; see [moderation](moderation.md).
 
 ## Modules
@@ -138,9 +142,10 @@ the module boundaries, schema, API, retries and tests agents should preserve.
 
 The profile editor uses the same seam for `profiles.profile_image_upload_id` and
 `profiles.banner_image_upload_id`. `PATCH /auth/me` accepts only completed,
-non-deleted uploads owned by the authenticated profile. The profile page requests
-short-lived URLs from the existing owner-only preview endpoint; no Storage URL is
-persisted on the profile.
+non-deleted, purpose-matching uploads owned by the authenticated profile. Pending
+selections do not replace the current image until the worker approves them.
+Approved active profile assets support public signed previews; unapproved assets
+are owner-only. No Storage URL is persisted on the profile.
 
 An uploaded file is **not approved content** (FR-90). Upload previews are issued
 only to the owner. Post previews additionally allow readers of approved posts.
@@ -148,13 +153,13 @@ Both return expiring bearer URLs valid for five minutes. Newly submitted posts
 remain author-visible pending until the ForAll worker screens text and images.
 Failures stay pending with bounded retries under [D-4].
 
-This test pipeline is not a server-side image sanitizer. Browser signature and
+The transfer-completion endpoint itself is not an image sanitizer. Browser signature and
 decode checks provide feedback; Storage enforces byte count and declared MIME
 type. Completion compares Storage's actual size/MIME metadata with the reservation.
-Width/height and content type are not independently verified by decoding bytes
-on a trusted worker. Add that validation/re-encoding stage before treating those
-values as trusted content checks. Unedited uploads are not stripped or compressed;
-optional browser editing re-encodes pixels but is not a trusted sanitization step.
+A separate trusted worker now independently decodes the bytes, enforces a pixel
+limit, strips metadata, generates WebP versions and screens them. Source
+width/height remain historical browser metadata; variant dimensions are measured.
+Optional browser editing is not trusted validation. See [processing](image-processing.md).
 
 Interrupted transfers or failed signing can leave unused reservations; transfers
 whose confirmation fails can leave private objects. Retry confirmation uses the

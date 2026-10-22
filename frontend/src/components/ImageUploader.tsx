@@ -4,7 +4,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { inspectImage, type SelectedImage } from "@/lib/images/image-file";
 import { aspectRatio, formatBytes, type ImagePolicy } from "@/lib/images/image-policy";
-import { completeImage, ImageTransferError, uploadImage, type SavedImage } from "@/lib/images/image-api";
+import { completeImage, ImageTransferError, uploadImage, type SavedImage, type ImagePurpose } from "@/lib/images/image-api";
 import ImageEditor from "./ImageEditor";
 
 interface ImageUploaderProps {
@@ -15,10 +15,11 @@ interface ImageUploaderProps {
   disabled?: boolean;
   onSelected?: (image: SelectedImage | null) => void;
   cropShape?: "rectangle" | "circle";
+  purpose?: ImagePurpose;
 }
 
 /** Reusable selector/validator/transfer UI; it has no knowledge of posts or feed state. */
-export default function ImageUploader({ policy, canUpload, onUploaded, selectOnly = false, disabled = false, onSelected, cropShape = "rectangle" }: ImageUploaderProps) {
+export default function ImageUploader({ policy, canUpload, onUploaded, selectOnly = false, disabled = false, onSelected, cropShape = "rectangle", purpose = "post" }: ImageUploaderProps) {
   const limitsId = useId();
   const [selected, setSelected] = useState<SelectedImage | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -80,10 +81,10 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
     try {
       const result = retryId ? await completeImage(retryId) : await uploadImage(selected, (stage) => {
         if (alive.current) setNotice(stage);
-      });
+      }, purpose);
       if (alive.current) {
         setSaved(true); setRetryId(null);
-        setNotice("Image saved privately. Save the form to use it.");
+        setNotice("Upload saved. Processing and screening will run automatically. Save the form to request this image.");
         onUploaded?.(result);
       }
     } catch (cause) {

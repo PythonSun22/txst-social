@@ -241,6 +241,17 @@ Persistent posts, images and likes are described below.
 
 ### Image upload test (FR-02, FR-32, FR-90)
 
+The current image pipeline generates compressed WebP versions: post preview +
+expanded, avatar small + large, and one banner. Profile replacements require
+screening before activation. Read [image processing and compression settings](docs/image-processing.md)
+for migration/setup steps, original cleanup, current limitations and browser checks.
+`backend/image_processing.py` contains all version dimensions and quality settings.
+Apply `20261022072231_image_variants.sql`, run `uv sync`, and enable both
+`IMAGE_PROCESSING_ENABLED=true` and `MODERATION_ENABLED=true` with backend Storage
+and OpenAI credentials before testing the full workflow. Shared deployment remains
+subject to review; no shared migrations were applied for this change.
+
+
 Open `/upload-test` from the **Upload test** navigation link. The page accepts
 one JPEG, PNG, or WebP up to 10 MB (10,000,000 bytes), displays its dimensions
 and aspect ratio, and enables upload for verified students when validation passes.

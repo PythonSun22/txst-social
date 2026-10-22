@@ -2,6 +2,12 @@
 
 ## Current implementation
 
+As of October 22, 2026, the separate image worker also screens post/avatar/banner
+assets and generates optimized variants. See [image processing](image-processing.md).
+Post jobs wait for asset processing without using their retry budget; image-only
+asset screening does not replace title/body-plus-image post screening. Both use
+inline image bytes, so loopback signed URLs are no longer a blocker.
+
 `backend/moderation.py` calls the official OpenAI moderation endpoint with
 `omni-moderation-latest` for text and images. The standalone text CLI still works
 without FastAPI or a database connection. The API now starts
@@ -286,15 +292,13 @@ The module loads `backend/.env` explicitly and preserves existing environment
 variables. The database password is unrelated to this credential.
 
 The Storage secret is required for pending images because the worker has no user
-session. `backend/moderation_storage.py` signs only persisted attachment keys for
-five minutes. A legacy `SUPABASE_SERVICE_ROLE_KEY` also works if the new secret
+session. `backend/image_worker_storage.py` reads persisted optimized attachment
+keys and sends inline bytes, including with local loopback Storage. A legacy `SUPABASE_SERVICE_ROLE_KEY` also works if the new secret
 is absent. Never place either key in frontend variables. Public image/upload
 routes still use the caller's JWT and do not use this elevated adapter.
-Local Supabase signs images with a `127.0.0.1` URL, which OpenAI cannot fetch.
-The worker currently passes that URL through, so local image posts may exhaust
-their retries and remain pending. A one-off Base64 data-URL check with a local
-image succeeded, but that temporary adapter was reverted. Text screening is
-unaffected.
+Set `IMAGE_PROCESSING_ENABLED=true` as well as `MODERATION_ENABLED=true` after
+applying `20261022072231_image_variants.sql`. Source files are processed first;
+inline optimized bytes let OpenAI screen images from local Supabase.
 [Supabase API key guidance](https://supabase.com/docs/guides/getting-started/api-keys)
 
 Start normally with `uv run fastapi dev main.py`. The worker is disabled by

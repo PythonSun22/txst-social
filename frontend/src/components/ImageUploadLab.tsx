@@ -21,6 +21,14 @@ export default function ImageUploadLab() {
   const [reload, setReload] = useState(0);
   const previewGeneration = useRef({ request: 0 });
 
+  const processing = images.some(image => ["pending", "processing"].includes(image.processing_status));
+  useEffect(() => {
+    if (!processing) return;
+    const controller = new AbortController();
+    const timer = setInterval(() => { void listImages(controller.signal).then(setImages).catch(() => {}); }, 3000);
+    return () => { clearInterval(timer); controller.abort(); };
+  }, [processing]);
+
   useEffect(() => {
     const lifecycle = previewGeneration.current;
     const controller = new AbortController();
@@ -76,7 +84,6 @@ export default function ImageUploadLab() {
     {profile && !profile.email_verified && <p className="text-sm">Verify your Texas State email before saving an image.</p>}
     {policy && <ImageUploader policy={policy} canUpload={!loading && !!profile?.email_verified} onUploaded={(image) => {
       setImages((current) => [image, ...current.filter((item) => item.id !== image.id)].slice(0, 20));
-      void showPreview(image);
     }} />}
     <section className="space-y-3" aria-labelledby="saved-images-heading">
       <h2 id="saved-images-heading" className="font-serif text-lg font-bold text-primary">Your recent uploads</h2>
@@ -84,8 +91,10 @@ export default function ImageUploadLab() {
       {!loading && images.length === 0 && <p className="text-sm text-muted-foreground">No saved images to show.</p>}
       {images.length > 0 && <ul className="divide-y divide-border rounded-card border border-border bg-card">
         {images.map((image) => <li key={image.id} className="flex items-center justify-between gap-3 p-3 text-sm">
-          <div className="min-w-0"><p className="break-all font-semibold">{image.original_name}</p><p className="text-xs text-muted-foreground">{formatBytes(image.size_bytes)} · {image.width} × {image.height} px · {aspectRatio(image.width, image.height)}</p></div>
-          <button type="button" className="shrink-0 rounded-full border border-primary px-3 py-1 font-bold text-primary hover:bg-secondary" onClick={() => void showPreview(image)}>View saved</button>
+          <div className="min-w-0"><p className="break-all font-semibold">{image.original_name}</p><p className="text-xs text-muted-foreground">Original: {formatBytes(image.size_bytes)} · {image.width} × {image.height} px · {aspectRatio(image.width, image.height)} · {image.processing_status}</p>
+            {image.variants.map(version => <p key={version.name} className="text-xs text-muted-foreground">{version.name}: {version.width} × {version.height} · {formatBytes(version.size_bytes)}</p>)}
+            {!!image.variants.length && <p className="text-xs text-muted-foreground">Versions total: {formatBytes(image.variants.reduce((sum, v) => sum + v.size_bytes, 0))} · {image.original_deleted_at ? "Original removed" : "Original awaiting token expiry and cleanup"}</p>}</div>
+          <button type="button" disabled={!image.variants.length} className="shrink-0 rounded-full border border-primary px-3 py-1 font-bold text-primary hover:bg-secondary disabled:opacity-40" onClick={() => void showPreview(image)}>View saved</button>
         </li>)}
       </ul>}
       {previewBusy && <p role="status" className="text-sm">Loading saved image…</p>}

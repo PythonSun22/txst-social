@@ -44,6 +44,7 @@ class PostResponse(BaseModel):
     comment_count: int
     liked: bool
     media: list[PostMediaResponse]
+    author_avatar_upload_id: UUID | None = None
 
 
 class FeedResponse(BaseModel):

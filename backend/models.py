@@ -58,6 +58,8 @@ class Profile(Base):
         ForeignKey("public.image_uploads.id", ondelete="SET NULL"),
         nullable=True,
     )
+    pending_profile_image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="SET NULL"), nullable=True)
+    pending_banner_image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="SET NULL"), nullable=True)
 
     # Mirrored from auth.users by trigger. Never write these from here.
     email: Mapped[str | None] = mapped_column(CITEXT, unique=True, nullable=True)
@@ -195,6 +197,42 @@ class ImageUpload(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, server_default="post")
+    processing_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    processing_next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    processing_claim: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    processing_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    original_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    original_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    original_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ImageVariant(Base):
+    __tablename__ = "image_variants"
+    __table_args__ = {"schema": "public"}
+    image_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="CASCADE"), primary_key=True)
+    name: Mapped[str] = mapped_column(Text, primary_key=True)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="image/webp")
+
+
+class ImageProcessingCheck(Base):
+    __tablename__ = "image_processing_checks"
+    __table_args__ = {"schema": "public"}
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    image_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="CASCADE"), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    decision: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    policy_version: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_result: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class Follow(Base):

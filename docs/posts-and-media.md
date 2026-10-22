@@ -1,3 +1,7 @@
+> Current image lifecycle: [optimized image assets](image-processing.md) covers
+> trusted WebP processing, preview/expanded delivery, profile moderation and
+> temporary-original cleanup. General asset hard deletion is deferred.
+
 # Persistent posts and reusable images
 
 The General/ForAll feed now reads database posts, newest first. `/submit` saves
@@ -40,7 +44,9 @@ during submission. `/upload-test` continues exercising standalone upload mode.
 Migration `20260924205639_persistent_posts_and_likes.sql` replaces
 `posts.image_key` with `post_media`. Its primary key is `(post_id, position)`;
 each attachment stores an upload reference, object key and dimensions. New posts
-reference owned, completed, nondeleted `image_uploads`. An upload can be reused
+reference owned, completed, nondeleted post-purpose `image_uploads`.
+Processing/screening must finish before publication; feed URLs resolve `preview`,
+and the expanded viewer requests `expanded` only on click. An upload can be reused
 across posts, but cannot appear twice in one post. Legacy image keys are backfilled
 with nullable upload references/dimensions instead of invented metadata.
 
@@ -74,7 +80,8 @@ karma and stored hot ranking change in one transaction under a post row lock
 policies on `post_likes` are removed: all post like writes must use FastAPI.
 
 Private Storage retains owner access. A separate SELECT policy permits reading
-objects attached to approved, nondeleted posts in nondeleted spaces. Pending
+ready variants attached to approved, nondeleted posts in nondeleted spaces,
+and active approved profile variants. Original upload keys remain owner-only. Pending
 attachments remain owner-only. Signed preview URLs expire after five minutes;
 previously issued URLs remain bearer capabilities until expiry.
 

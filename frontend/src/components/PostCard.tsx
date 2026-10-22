@@ -3,25 +3,46 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import PawIcon from "./PawIcon";
+import ImageViewer from "./ImageViewer";
+import { apiRequest } from "@/lib/api";
 import { fetchPost, deletePost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
 import type { CurrentProfile } from "@/lib/api";
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
 
-function PostImage({ postId, media }: { postId: string; media: FeedPost["media"][number] }) {
+function AuthorAvatar({ id }: { id: string }) {
+  const [image, setImage] = useState<{ id: string; url: string } | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    apiRequest<{ url: string }>(`/images/${id}/published-preview?variant=avatar_small`, { signal: controller.signal }, true)
+      .then(({ url }) => { if (!controller.signal.aborted) setImage({ id, url }); }).catch(() => {});
+    return () => controller.abort();
+  }, [id]);
+  return <span className="flex h-12 w-12 shrink-0 items-center justify-center">
+    {image?.id === id ? <img src={image.url} alt="" width={48} height={48} loading="lazy" className="h-full w-full rounded-full object-cover" /> : <PawIcon size={24} />}
+  </span>;
+}
+
+function PostImage({ postId, media, status, onOpen }: { postId: string; media: FeedPost["media"][number]; status: string; onOpen: () => void }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     getPostImage(postId, media.position, controller.signal).then((result) => {
-      if (!controller.signal.aborted) setUrl(result.url);
-    }).catch(() => { if (!controller.signal.aborted) setError("Image unavailable."); });
-    return () => controller.abort();
-  }, [postId, media.position, retry]);
+      if (!controller.signal.aborted) { setUrl(result.url); setError(""); }
+    }).catch(() => { if (!controller.signal.aborted) {
+      setError(status === "pending" ? "Image processing is pending." : "Image unavailable.");
+      if (status === "pending") timer = setTimeout(() => setRetry(n => n + 1), 5000);
+    } });
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [postId, media.position, retry, status]);
   return <div>
-    {url && !error && <img src={url} alt={`Post image ${media.position + 1}`} width={media.width ?? undefined} height={media.height ?? undefined}
-      className="mx-auto max-h-[36rem] w-auto max-w-full rounded-card object-contain" onError={() => setError("Image preview expired or unavailable.")} />}
+    {url && !error && <button type="button" onClick={onOpen} aria-label={`Open image ${media.position + 1}`} className="block w-full rounded-card focus-visible:outline-2 focus-visible:outline-primary">
+      <img src={url} loading="lazy" alt={`Post image ${media.position + 1}`} width={media.width ?? undefined} height={media.height ?? undefined}
+      className="mx-auto max-h-96 w-auto max-w-full rounded-card object-contain" onError={() => setError("Image is processing, expired or unavailable.")} />
+    </button>}
     {!url && !error && <p role="status" className="text-sm text-muted-foreground">Loading image…</p>}
     {error && <p className="text-sm">{error} <button type="button" className="underline" onClick={() => { setError(""); setUrl(""); setRetry((n) => n + 1); }}>Retry image</button></p>}
   </div>;
@@ -31,26 +52,27 @@ export default function PostCard({ post, profile, onLike, onDelete, onStatus }: 
   post: FeedPost; profile: CurrentProfile | null;
   onLike: (id: string, value: { liked: boolean; like_count: number }) => void;
   onDelete: (id: string) => void;
-  onStatus: (id: string, status: FeedPost["status"], failed: boolean) => void;
+  onStatus?: (id: string, status: FeedPost["status"], failed: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const inFlight = useRef(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [viewing, setViewing] = useState<number | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
   useEffect(() => {
-    if (post.status !== "pending" || post.moderation_failed) return;
+    if (post.status !== "pending" || post.moderation_failed || !onStatus) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       try {
         const updated = await fetchPost(post.id, controller.signal);
         if (controller.signal.aborted) return;
-        onStatus(updated.id, updated.status, updated.moderation_failed);
+        onStatus?.(updated.id, updated.status, updated.moderation_failed);
         if (updated.status !== "pending" || updated.moderation_failed) return;
       } catch {
         if (controller.signal.aborted) return;
@@ -85,7 +107,7 @@ export default function PostCard({ post, profile, onLike, onDelete, onStatus }: 
   }
   return <article className="rounded-card border border-border bg-card p-4">
     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-      <PawIcon size={16} /><strong className="text-primary">General</strong>
+      {post.author_avatar_upload_id ? <AuthorAvatar id={post.author_avatar_upload_id} /> : <PawIcon size={16} />}<strong className="text-primary">General</strong>
       <span>Posted by {post.author}</span><time dateTime={post.created_at}>{dateFormat.format(new Date(post.created_at))}</time>
       {post.status !== "approved" && <span className="rounded-full bg-accent/10 px-2 py-1 font-semibold text-primary">{post.status === "pending" ? (post.moderation_failed ? "Screening unavailable · Only you" : "Screening pending · Only you") : post.status}</span>}
     </div>
@@ -94,7 +116,14 @@ export default function PostCard({ post, profile, onLike, onDelete, onStatus }: 
     {post.status === "blocked" && <p className="mb-3 text-sm text-muted-foreground">Automatic screening flagged this post, so it has not been published.</p>}
     {post.body && <p className="mb-3 whitespace-pre-wrap break-words text-sm">{post.body}</p>}
     {post.url && /^https?:\/\//i.test(post.url) && <a href={post.url} target="_blank" rel="noopener noreferrer" className="mb-3 block break-all text-sm text-primary underline">{post.url}</a>}
-    <div className="space-y-3">{post.media.map((media) => <PostImage key={media.position} postId={post.id} media={media} />)}</div>
+    <div className={`grid gap-3 ${post.media.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+      {post.media.map((media, index) => <PostImage key={media.position} postId={post.id} media={media} status={post.moderation_failed ? "failed" : post.status} onOpen={() => setViewing(index)} />)}
+    </div>
+    {viewing !== null && post.media[viewing] && <ImageViewer
+      resource={`/posts/${post.id}/media/${post.media[viewing].position}/preview?variant=expanded`}
+      title={`${post.title} — image ${viewing + 1} of ${post.media.length}`} onClose={() => setViewing(null)}
+      onPrevious={viewing > 0 ? () => setViewing(viewing - 1) : undefined}
+      onNext={viewing < post.media.length - 1 ? () => setViewing(viewing + 1) : undefined} />}
     <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
       <button type="button" onClick={() => void toggle()} disabled={!canLike || busy} aria-pressed={post.liked}
         aria-label={post.liked ? "Unlike post" : "Like post"}

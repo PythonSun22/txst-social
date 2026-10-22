@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 from uuid import UUID
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
+os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 os.environ["MODERATION_ENABLED"] = "false"
 
 import httpx

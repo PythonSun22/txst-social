@@ -15,11 +15,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import or_, select
 
 from database import SessionLocal
-from models import ModerationCheck, Post, PostMedia, Space
+from models import ImageUpload, ImageVariant, ModerationCheck, Post, PostMedia, Space
 from moderation import ModerationError, TextModerationResult, moderate_content
 from moderation_context import (CONTEXT_MODEL, ContextAssessment, candidate_blocks,
                                 moderate_context, should_recheck)
-from moderation_storage import sign_moderation_image
+from image_worker_storage import image_data_url, read_image
 
 logger = logging.getLogger(__name__)
 POLICY_VERSION = "forall-any-flag-v1"
@@ -60,6 +60,12 @@ class Work:
     text: str
     images: tuple[str, ...]
     post_type: str
+    asset_status: str = "ready"
+
+
+def moderation_image_input(key: str) -> str:
+    """Screen stored optimized bytes; works with private and loopback Storage."""
+    return image_data_url(read_image(key))
 
 
 def content_snapshot(db, post: Post) -> tuple[str, tuple[str, ...]]:
@@ -70,7 +76,11 @@ def content_snapshot(db, post: Post) -> tuple[str, tuple[str, ...]]:
                post.edited_at.isoformat() if post.edited_at else None,
                [(m.position, str(m.image_upload_id), m.object_key) for m in media]]
     digest = hashlib.sha256(json.dumps(content, ensure_ascii=False).encode()).hexdigest()
-    return digest, tuple(m.object_key for m in media)
+    keys = []
+    for item in media:
+        version = db.get(ImageVariant, (item.image_upload_id, "expanded")) if item.image_upload_id else None
+        keys.append(version.object_key if version else item.object_key)
+    return digest, tuple(keys)
 
 
 def eligible_posts(now: datetime):
@@ -80,6 +90,11 @@ def eligible_posts(now: datetime):
         Post.status == "pending", Post.deleted_at.is_(None),
         Post.moderation_exhausted_at.is_(None), Post.moderation_next_attempt_at <= now,
         or_(Post.moderation_lease_until.is_(None), Post.moderation_lease_until <= now),
+        # Waiting for image work does not consume the post's screening budget.
+        ~select(ImageUpload.id).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id).where(
+            PostMedia.post_id == Post.id,
+            ImageUpload.processing_status.in_(["pending", "processing"]),
+        ).exists(),
     ).order_by(Post.created_at, Post.id).limit(1).with_for_update(of=Post, skip_locked=True)
 
 
@@ -97,11 +112,16 @@ def claim_work(session_factory, settings: Settings, now: datetime) -> Work | Non
             db.commit()
             return None
         digest, images = content_snapshot(db, post)
+        states = list(db.scalars(select(ImageUpload.processing_status).join(
+            PostMedia, PostMedia.image_upload_id == ImageUpload.id,
+        ).where(PostMedia.post_id == post.id)).all()) if images else []
+        asset_status = ("blocked" if "blocked" in states else
+                        "failed" if len(states) != len(images) or any(state != "ready" for state in states) else "ready")
         token = uuid4()
         post.moderation_attempts += 1
         post.moderation_claim = token
         post.moderation_lease_until = now + timedelta(seconds=LEASE_SECONDS)
-        work = Work(post.id, token, digest, f"{post.title}\n\n{post.body or ''}", images, post.type)
+        work = Work(post.id, token, digest, f"{post.title}\n\n{post.body or ''}", images, post.type, asset_status)
         # Count before the network call so a crash cannot reset the retry budget.
         db.commit()
         return work
@@ -197,8 +217,14 @@ def run_once(session_factory=SessionLocal, settings: Settings | None = None) -> 
             raise ModerationError("Link destinations are not screened.", code="unsupported_link")
         if (work.post_type == "image") != bool(work.images):
             raise ModerationError("Post attachments are inconsistent.", code="invalid_media")
-        urls = tuple(sign_moderation_image(key) for key in work.images)
-        result = moderate_content(work.text, urls)
+        if work.asset_status == "failed":
+            raise ModerationError("An attachment could not be processed.", code="image_processing_failed")
+        if work.asset_status == "blocked":
+            result = TextModerationResult(flagged=True, categories={"other": True}, category_scores={"other": 1},
+                                          model="image-any-flag-v1", latency_ms=0)
+        else:
+            urls = tuple(moderation_image_input(key) for key in work.images)
+            result = moderate_content(work.text, urls)
         if settings.context_recheck_enabled and work.post_type == "text" and should_recheck(result):
             context = moderate_context(work.text)
     except ModerationError as error:

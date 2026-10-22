@@ -19,7 +19,7 @@ from auth import (
 from database import get_db
 from image_schemas import ImagePreviewResponse
 import image_storage
-from models import Ban, ImageUpload, Post, PostLike, PostMedia, Profile, Space
+from models import Ban, ImageUpload, ImageVariant, Post, PostLike, PostMedia, Profile, Space
 from post_schemas import FeedResponse, LikeResponse, PostCreate, PostMediaResponse, PostResponse
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -74,6 +74,7 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
             moderation_failed=post.id in exhausted_ids,
             like_count=post.like_count, comment_count=post.comment_count,
             liked=post.id in liked, media=attachments[post.id],
+            author_avatar_upload_id=author.profile_image_upload_id if author and author.deleted_at is None and author.suspended_at is None else None,
         ))
     return result
 
@@ -153,6 +154,7 @@ def create_post(
     uploads = list(db.scalars(select(ImageUpload).where(
         ImageUpload.id.in_(payload.image_ids), ImageUpload.owner_id == profile.id,
         ImageUpload.uploaded_at.is_not(None), ImageUpload.deleted_at.is_(None),
+        ImageUpload.purpose == "post", ImageUpload.processing_status.not_in(["blocked", "failed"]),
     ).order_by(ImageUpload.id).with_for_update()).all()) if payload.image_ids else []
     if len(uploads) != len(payload.image_ids):
         raise HTTPException(422, "Every image must be your own completed upload.")
@@ -166,8 +168,11 @@ def create_post(
     db.flush()
     for position, image_id in enumerate(payload.image_ids):
         upload = by_id[image_id]
+        version = db.get(ImageVariant, (image_id, "expanded")) if upload.processing_status == "ready" else None
         db.add(PostMedia(post_id=post.id, position=position, image_upload_id=image_id,
-                         object_key=upload.object_key, width=upload.width, height=upload.height))
+                         object_key=version.object_key if version else upload.object_key,
+                         width=version.width if version else upload.width,
+                         height=version.height if version else upload.height))
     db.execute(update(Space).where(Space.id == space.id).values(post_count=Space.post_count + 1))
     db.commit()
     response.headers["Cache-Control"] = "no-store"
@@ -197,6 +202,7 @@ def preview_post_image(
     post_id: UUID, position: int, response: Response,
     viewer: Profile | None = Depends(get_optional_profile),
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db),
+    variant: str = Query(default="preview", pattern="^(preview|expanded)$"),
 ) -> ImagePreviewResponse:
     """Issue a short-lived private image URL only after checking post visibility."""
     load_visible_post(db, post_id, viewer)
@@ -204,7 +210,10 @@ def preview_post_image(
     if media is None:
         raise HTTPException(404, "Image not found.")
     response.headers["Cache-Control"] = "no-store"
-    return ImagePreviewResponse(url=image_storage.sign_preview(media.object_key, credentials.credentials if credentials else None))
+    version = db.get(ImageVariant, (media.image_upload_id, variant)) if media.image_upload_id else None
+    if version is None:
+        raise HTTPException(409, "Image versions are not ready. Please try again shortly.")
+    return ImagePreviewResponse(url=image_storage.sign_preview(version.object_key, credentials.credentials if credentials else None))
 
 
 def set_like(db: Session, post_id: UUID, profile: Profile, liked: bool) -> LikeResponse:

@@ -2,6 +2,8 @@ import { apiRequest } from "../api";
 import { getSupabase } from "../supabase";
 import type { ImagePolicy } from "./image-policy";
 import type { SelectedImage } from "./image-file";
+export type ImagePurpose = "post" | "avatar" | "banner";
+export type ImageVariant = "preview" | "expanded" | "avatar_small" | "avatar_large" | "banner";
 
 export interface SavedImage {
   id: string;
@@ -14,6 +16,10 @@ export interface SavedImage {
   height: number;
   created_at: string;
   uploaded_at: string | null;
+  purpose: ImagePurpose;
+  processing_status: "pending" | "processing" | "ready" | "blocked" | "failed";
+  variants: { name: ImageVariant; width: number; height: number; size_bytes: number; content_type: string }[];
+  original_deleted_at: string | null;
 }
 
 export async function getImagePolicy(signal?: AbortSignal): Promise<ImagePolicy> {
@@ -25,7 +31,9 @@ export async function getImagePolicy(signal?: AbortSignal): Promise<ImagePolicy>
 
 export const listImages = (signal?: AbortSignal) => apiRequest<SavedImage[]>("/images", { signal });
 export const completeImage = (id: string) => apiRequest<SavedImage>(`/images/${id}/complete`, { method: "POST" });
-export const previewImage = (id: string) => apiRequest<{ url: string }>(`/images/${id}/preview`);
+export const getImage = (id: string, signal?: AbortSignal) => apiRequest<SavedImage>(`/images/${id}`, { signal });
+export const previewImage = (id: string, variant?: ImageVariant) =>
+  apiRequest<{ url: string }>(`/images/${id}/preview${variant ? `?variant=${variant}` : ""}`);
 
 /** Carries the reservation across failures so a completed transfer can be confirmed again. */
 export class ImageTransferError extends Error {
@@ -36,7 +44,7 @@ export class ImageTransferError extends Error {
 }
 
 /** Transfers an inspected original or edited File without coupling the asset to a post. */
-export async function uploadImage(image: SelectedImage, onStage: (stage: string) => void): Promise<SavedImage> {
+export async function uploadImage(image: SelectedImage, onStage: (stage: string) => void, purpose: ImagePurpose = "post"): Promise<SavedImage> {
   if (image.errors.length || !image.width || !image.height) throw new Error("Choose a valid image first.");
   onStage("Preparing upload…");
   const ticket = await apiRequest<{ upload: SavedImage; token: string }>("/images", {
@@ -44,6 +52,7 @@ export async function uploadImage(image: SelectedImage, onStage: (stage: string)
     body: JSON.stringify({
       original_name: image.file.name.trim(), content_type: image.file.type,
       size_bytes: image.file.size, width: image.width, height: image.height,
+      purpose,
     }),
   });
   try {

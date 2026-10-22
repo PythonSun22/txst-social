@@ -35,7 +35,7 @@ def college_response(row: tuple[Space, College]) -> HomeCollegeResponse:
 
 
 def validate_profile_image(
-    db: Session, upload_id: UUID | None, profile: Profile
+    db: Session, upload_id: UUID | None, profile: Profile, purpose: str
 ) -> ImageUpload | None:
     upload = db.get(ImageUpload, upload_id) if upload_id else None
     if upload_id and (
@@ -43,12 +43,17 @@ def validate_profile_image(
         or upload.owner_id != profile.id
         or upload.uploaded_at is None
         or upload.deleted_at is not None
+        or upload.purpose != purpose
     ):
-        raise HTTPException(422, "Choose one of your completed image uploads.")
+        raise HTTPException(422, "Choose one of your completed uploads for this image type.")
+    if upload and upload.processing_status in {"blocked", "failed"}:
+        raise HTTPException(422, "This image was rejected or could not be processed. Choose another image.")
     return upload
 
 
 def current_profile_response(db: Session, profile: Profile) -> CurrentProfileResponse:
+    pending_avatar = db.get(ImageUpload, profile.pending_profile_image_upload_id) if profile.pending_profile_image_upload_id else None
+    pending_banner = db.get(ImageUpload, profile.pending_banner_image_upload_id) if profile.pending_banner_image_upload_id else None
     home_college = None
     if profile.home_college_id is not None:
         college_row = db.execute(
@@ -83,6 +88,10 @@ def current_profile_response(db: Session, profile: Profile) -> CurrentProfileRes
         home_college=home_college,
         followed_space_count=followed_space_count,
         joined_community_count=joined_community_count,
+        pending_profile_image_upload_id=profile.pending_profile_image_upload_id,
+        pending_banner_image_upload_id=profile.pending_banner_image_upload_id,
+        profile_image_status=pending_avatar.processing_status if pending_avatar else None,
+        banner_image_status=pending_banner.processing_status if pending_banner else None,
     )
 
 
@@ -126,6 +135,10 @@ def update_current_profile(
     profile: Profile = Depends(require_verified_profile),
     db: Session = Depends(get_db),
 ) -> CurrentProfileResponse:
+    # Serialize profile selections with worker activation; refresh before editing
+    # so a stale request cannot overwrite a newly activated image.
+    db.execute(select(Profile.id).where(Profile.id == profile.id).with_for_update())
+    db.refresh(profile)
     updates = payload.model_fields_set
 
     if "display_name" in updates:
@@ -167,12 +180,25 @@ def update_current_profile(
     if "major_id" in updates:
         profile.major_id = payload.major_id
         profile.major = selected_major.name if selected_major else None
-    if "profile_image_upload_id" in updates:
-        validate_profile_image(db, payload.profile_image_upload_id, profile)
-        profile.profile_image_upload_id = payload.profile_image_upload_id
-    if "banner_image_upload_id" in updates:
-        validate_profile_image(db, payload.banner_image_upload_id, profile)
-        profile.banner_image_upload_id = payload.banner_image_upload_id
+    for field, pending, purpose in (
+        ("profile_image_upload_id", "pending_profile_image_upload_id", "avatar"),
+        ("banner_image_upload_id", "pending_banner_image_upload_id", "banner"),
+    ):
+        if field not in updates:
+            continue
+        selected = getattr(payload, field)
+        # Unchanged current selections do not cancel a pending replacement.
+        if selected is not None and selected in {getattr(profile, field), getattr(profile, pending)}:
+            continue
+        upload = validate_profile_image(db, selected, profile, purpose)
+        if upload is None:
+            setattr(profile, field, None)
+            setattr(profile, pending, None)
+        elif upload.processing_status == "ready":
+            setattr(profile, field, upload.id)
+            setattr(profile, pending, None)
+        else:
+            setattr(profile, pending, upload.id)
 
     db.commit()
     db.refresh(profile)

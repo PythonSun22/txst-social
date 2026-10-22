@@ -27,6 +27,10 @@ export interface CurrentProfile {
   profile_image_url: string | null;
   profile_image_upload_id: string | null;
   banner_image_upload_id: string | null;
+  pending_profile_image_upload_id: string | null;
+  pending_banner_image_upload_id: string | null;
+  profile_image_status: string | null;
+  banner_image_status: string | null;
   home_college_id: string | null;
   home_college: HomeCollege | null;
   post_karma: number;

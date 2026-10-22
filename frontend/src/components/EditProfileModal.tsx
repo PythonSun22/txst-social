@@ -20,8 +20,8 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
   const [majorId, setMajorId] = useState(profile.major_id ?? "");
   const [collegeId, setCollegeId] = useState(profile.home_college_id ?? "");
   const [level, setLevel] = useState<StudentLevel | "">(profile.student_level ?? "");
-  const [avatarId, setAvatarId] = useState(profile.profile_image_upload_id);
-  const [bannerId, setBannerId] = useState(profile.banner_image_upload_id);
+  const [avatarId, setAvatarId] = useState(profile.pending_profile_image_upload_id ?? profile.profile_image_upload_id);
+  const [bannerId, setBannerId] = useState(profile.pending_banner_image_upload_id ?? profile.banner_image_upload_id);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const availableMajors = options?.majors.filter(
@@ -132,7 +132,8 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
               <h3 className="font-semibold text-primary">Profile photo</h3>
               {avatarId && <button type="button" onClick={() => setAvatarId(null)} className="text-sm font-semibold text-primary underline">Remove</button>}
             </div>
-            {policy ? <ImageUploader policy={policy} canUpload={profile.email_verified} cropShape="circle" onUploaded={(image) => setAvatarId(image.id)} /> : <p className="text-sm text-muted-foreground">Loading image uploader…</p>}
+            <p className="mb-2 text-sm text-muted-foreground">Your current photo stays visible until its replacement passes screening.</p>
+            {policy ? <ImageUploader purpose="avatar" policy={policy} canUpload={profile.email_verified} cropShape="circle" onUploaded={(image) => setAvatarId(image.id)} /> : <p className="text-sm text-muted-foreground">Loading image uploader…</p>}
           </section>
 
           <section>
@@ -140,7 +141,8 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
               <h3 className="font-semibold text-primary">Profile banner</h3>
               {bannerId && <button type="button" onClick={() => setBannerId(null)} className="text-sm font-semibold text-primary underline">Remove</button>}
             </div>
-            {policy ? <ImageUploader policy={policy} canUpload={profile.email_verified} onUploaded={(image) => setBannerId(image.id)} /> : <p className="text-sm text-muted-foreground">Loading image uploader…</p>}
+            <p className="mb-2 text-sm text-muted-foreground">Your current banner stays visible until its replacement passes screening.</p>
+            {policy ? <ImageUploader purpose="banner" policy={policy} canUpload={profile.email_verified} onUploaded={(image) => setBannerId(image.id)} /> : <p className="text-sm text-muted-foreground">Loading image uploader…</p>}
           </section>
         </div>
 

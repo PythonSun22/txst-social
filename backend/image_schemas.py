@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 MAX_IMAGE_BYTES = 10_000_000
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 IMAGE_BUCKET = "post-images"
+ImagePurpose = Literal["post", "avatar", "banner"]
+VariantName = Literal["preview", "expanded", "avatar_small", "avatar_large", "banner"]
 
 
 class ImageUploadCreate(BaseModel):
@@ -19,6 +21,16 @@ class ImageUploadCreate(BaseModel):
     size_bytes: int = Field(gt=0, le=MAX_IMAGE_BYTES, strict=True)
     width: int = Field(gt=0, le=2_147_483_647, strict=True)
     height: int = Field(gt=0, le=2_147_483_647, strict=True)
+    purpose: ImagePurpose = "post"
+
+
+class ImageVariantResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    name: VariantName
+    width: int
+    height: int
+    size_bytes: int
+    content_type: str
 
 
 class ImageUploadResponse(ImageUploadCreate):
@@ -29,6 +41,9 @@ class ImageUploadResponse(ImageUploadCreate):
     object_key: str
     created_at: datetime
     uploaded_at: datetime | None
+    processing_status: Literal["pending", "processing", "ready", "blocked", "failed"] = "pending"
+    variants: list[ImageVariantResponse] = Field(default_factory=list)
+    original_deleted_at: datetime | None = None
 
 
 class ImageUploadTicket(BaseModel):

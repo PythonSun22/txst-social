@@ -12,6 +12,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
+os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 os.environ["MODERATION_ENABLED"] = "false"
 
 from fastapi import HTTPException, Response
@@ -19,7 +20,7 @@ from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
-from models import ImageUpload, ModerationCheck, Post, PostMedia, Profile, Space
+from models import ImageUpload, ImageVariant, ModerationCheck, Post, PostMedia, Profile, Space
 from moderation import ModerationError
 from moderation_context import ContextAssessment
 from moderation_worker import Settings, claim_work, finish_work, run_once
@@ -28,7 +29,7 @@ from test_moderation_worker import verdict
 
 
 @unittest.skipUnless(os.getenv("MODERATION_TEST_DATABASE_URL"), "Set a disposable local moderation test database")
-class ModerationDatabaseTests(unittest.TestCase):
+class ImageDatabaseFixture(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         url = make_url(os.environ["MODERATION_TEST_DATABASE_URL"])
@@ -96,11 +97,16 @@ class ModerationDatabaseTests(unittest.TestCase):
                 self.uploads.append(uid)
                 key = f"{self.owner}/{uid}.png"
                 db.add(ImageUpload(id=uid, owner_id=self.owner, object_key=key, original_name="image.png",
-                       content_type="image/png", size_bytes=100, width=10, height=10, uploaded_at=self.now))
+                       content_type="image/png", size_bytes=100, width=10, height=10, uploaded_at=self.now,
+                       purpose="post", processing_status="ready"))
                 db.flush()
+                db.add(ImageVariant(image_upload_id=uid, name="expanded", object_key=f"{self.owner}/variants/{uid}/expanded.webp",
+                                    width=10, height=10, size_bytes=50, content_type="image/webp"))
                 db.add(PostMedia(post_id=identity, position=position, image_upload_id=uid, object_key=key, width=10, height=10))
         return identity
 
+
+class ModerationDatabaseTests(ImageDatabaseFixture):
     def test_oldest_first_approval_audit_and_public_visibility(self):
         newer = self.post()
         older = self.post(age=5)
@@ -117,7 +123,7 @@ class ModerationDatabaseTests(unittest.TestCase):
 
     def test_category_flag_blocks_all_images_and_stays_private(self):
         identity = self.post(images=2)
-        with (patch("moderation_worker.sign_moderation_image", side_effect=lambda key: f"https://private/{key}") as sign,
+        with (patch("moderation_worker.moderation_image_input", side_effect=lambda key: f"https://private/{key}") as sign,
               patch("moderation_worker.moderate_content", return_value=verdict(True, "illicit", overall=False)) as screen):
             run_once(self.sessions)
         self.assertEqual(sign.call_count, 2)
@@ -245,7 +251,7 @@ class ModerationDatabaseTests(unittest.TestCase):
 
     def test_storage_failure_cannot_approve_from_text_alone(self):
         identity = self.post(images=1)
-        with (patch("moderation_worker.sign_moderation_image", side_effect=ModerationError("unavailable")),
+        with (patch("moderation_worker.moderation_image_input", side_effect=ModerationError("unavailable")),
               patch("moderation_worker.moderate_content") as screen):
             run_once(self.sessions)
         screen.assert_not_called()

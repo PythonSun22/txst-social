@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, Mock, patch
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
+os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 os.environ["MODERATION_ENABLED"] = "false"
 
 import httpx
@@ -51,7 +52,7 @@ class WorkerUnitTests(unittest.TestCase):
 
         image = Work(work.post_id, work.claim, work.content_hash, work.text, ("key",), "image")
         with (patch("moderation_worker.claim_work", return_value=image),
-              patch("moderation_worker.sign_moderation_image", return_value="https://private/image"),
+              patch("moderation_worker.moderation_image_input", return_value="https://private/image"),
               patch("moderation_worker.moderate_content", return_value=first),
               patch("moderation_worker.moderate_context") as recheck,
               patch("moderation_worker.finish_work")):
@@ -148,7 +149,7 @@ class WorkerUnitTests(unittest.TestCase):
                 with (patch.dict(os.environ, {"OPENAI_API_KEY": "test"}),
                       patch("moderation_worker.claim_work", return_value=work),
                       patch("moderation_worker.content_snapshot", return_value=(work.content_hash, work.images)),
-                      patch("moderation_worker.sign_moderation_image",
+                      patch("moderation_worker.moderation_image_input",
                             side_effect=lambda key: f"https://private/{key}?token=secret")):
                     self.assertTrue(run_once(sessions, Settings()))
                 self.assertEqual(len(requests), 2)

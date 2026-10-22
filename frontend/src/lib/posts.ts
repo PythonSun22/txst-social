@@ -2,6 +2,7 @@ import { apiRequest } from "./api";
 export interface FeedPost {
   id: string; author: string; title: string; body: string | null; url: string | null;
   can_delete: boolean;
+  author_avatar_upload_id?: string | null;
   type: "text" | "image" | "link";
   status: "pending" | "approved" | "blocked" | "removed";
   moderation_failed: boolean;
@@ -22,5 +23,5 @@ export const setPostLike = (id: string, liked: boolean) => apiRequest<{ liked: b
   `/posts/${id}/like`, { method: liked ? "PUT" : "DELETE" },
 );
 export const getPostImage = (id: string, position: number, signal?: AbortSignal) =>
-  apiRequest<{ url: string }>(`/posts/${id}/media/${position}/preview`, { signal }, true);
+  apiRequest<{ url: string }>(`/posts/${id}/media/${position}/preview?variant=preview`, { signal }, true);
 export const deletePost = (id: string) => apiRequest<void>(`/posts/${id}`, { method: "DELETE" });
