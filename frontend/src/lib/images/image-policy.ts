@@ -2,6 +2,9 @@
 export interface ImagePolicy {
   max_bytes: number;
   allowed_types: string[];
+  max_images_per_post: number;
+  uploads_per_minute: number;
+  uploads_per_hour: number;
 }
 
 export function formatBytes(bytes: number): string {

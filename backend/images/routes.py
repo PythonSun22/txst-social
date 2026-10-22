@@ -16,6 +16,7 @@ from images.schemas import (
     ImageVariantResponse, VariantName,
 )
 from images import storage as image_storage
+from images.limits import reserve_upload_slot
 from models import ImageUpload, ImageVariant, Profile
 
 router = APIRouter(prefix="/images", tags=["images"])
@@ -54,9 +55,10 @@ def create_upload(
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> ImageUploadTicket:
+    created_at = reserve_upload_slot(db, profile.id)
     upload_id = uuid4()
     upload = ImageUpload(
-        id=upload_id, owner_id=profile.id, bucket_id=IMAGE_BUCKET,
+        id=upload_id, owner_id=profile.id, bucket_id=IMAGE_BUCKET, created_at=created_at,
         object_key=f"{profile.id}/{upload_id}.{IMAGE_TYPES[payload.content_type]}",
         **payload.model_dump(),
     )

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Float, Computed, DateTime, ForeignKey, Integer, Text, func, SmallInteger, Double
+from sqlalchemy import Boolean, Float, Computed, DateTime, ForeignKey, Index, Integer, Text, func, SmallInteger, Double
 from sqlalchemy.dialects.postgresql import CITEXT, ENUM, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
@@ -172,6 +172,7 @@ class PostMedia(Base):
     __tablename__ = "post_media"
     __table_args__ = {"schema": "public"}
     post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.posts.id", ondelete="CASCADE"), primary_key=True)
+    # Migration trigger limits new/repositioned attachments to 0..3; legacy rows remain readable/updatable.
     position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="RESTRICT"), nullable=True)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
@@ -183,7 +184,10 @@ class ImageUpload(Base):
     """FR-32: private Storage object metadata; uploaded does not mean approved."""
 
     __tablename__ = "image_uploads"
-    __table_args__ = {"schema": "public"}
+    __table_args__ = (
+        Index("image_uploads_owner_rate_idx", "owner_id", "created_at"),
+        {"schema": "public"},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="CASCADE"), nullable=False)

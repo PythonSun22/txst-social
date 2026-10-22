@@ -66,7 +66,7 @@ PostgreSQL. `backend/models.py` mirrors these migrations by hand.
 | `PUT /posts/{id}/like` | Sets the authenticated verified student's like. Repeated requests do not add extra likes. |
 | `DELETE /posts/{id}/like` | Removes that student's like; retries do not reduce the count again. |
 
-Limits: title 1–300 characters, optional body up to 20,000 characters, up to 10
+Limits: title 1–300 characters, optional body up to 20,000 characters, up to 4
 images. Blank text is treated as absent; at least text or one image is required.
 Each image is JPEG, PNG or WebP, at most 10,000,000 bytes. Browser editing remains
 optional; feed images use their natural ratio with `object-contain`. No permanent

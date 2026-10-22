@@ -319,7 +319,7 @@ moderation worker needs backend-only elevated Storage access. See
 `docs/image-uploads.md` for setup, limitations and the post integration seam.
 
 Implemented slice: persistent General/ForAll posts with required titles,
-text only, images only, or text plus up to ten ordered images. `post_media`
+text only, images only, or text plus up to four ordered images. `post_media`
 replaces `posts.image_key`. Existing links remain readable. The main feed has
 no mock posts and uses cursor pagination, most recent first. Verified signed-in
 students can like/unlike through FastAPI; counters, karma and hot rank change
@@ -331,6 +331,20 @@ Verified authors can soft-delete their own posts from the feed (FR-34), with
 confirmation, through `DELETE /posts/{id}`. The API returns viewer-specific
 `can_delete`; deletion decrements the space count in the same transaction.
 Media references and reusable private uploads are retained.
+
+Image reservations share a per-account rolling limit of **10 per minute and 40
+per hour** across posts, avatars and banners (FR-32). A reservation counts even
+if signing, transfer or moderation fails, or it is soft-deleted. Generated
+variants and repeated completion calls do not count again. The API locks the
+account's profile row until the reservation commits, so requests across API
+processes cannot spend the same final slot. HTTP 429 includes `Retry-After` and
+a wait message. `GET /images/policy` exposes these limits and the four-image post
+cap; backend constants live in `images/schemas.py`. New attachments are also
+bounded by a database trigger; existing posts with more images remain intact.
+Apply `20261022094443_image_upload_limits.sql` before running this checkout.
+Storage budgets, broader abandoned-file cleanup and hard deletion remain future
+work. Future hard deletion must preserve at least one hour of reservation history
+(or introduce a separate rate ledger) so it cannot reset these limits.
 
 Keep the upload/editor modules independent of posts. `ImageUploader` supports
 selection-only mode for the composer and standalone transfer mode for the lab;

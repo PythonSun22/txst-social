@@ -170,6 +170,42 @@ first slice. Before broad use, add retention cleanup through Storage's delete AP
 object bytes. A signed upload capability can remain valid for two hours, so cleanup
 must account for outstanding tokens before removing reservations/objects.
 
+## Shared account upload limits (FR-32)
+
+A post accepts up to **four** images. `GET /images/policy` supplies the composer
+with `max_images_per_post`, `uploads_per_minute` and `uploads_per_hour` in addition
+to the existing byte/type policy. New database media positions are restricted to
+0–3; existing posts with more attachments are preserved, including worker updates
+to their object keys.
+
+`POST /images` allows **10 reservations per rolling minute and 40 per rolling
+hour per account**, shared across `post`, `avatar` and `banner` purposes. Four
+original images consume four slots, even when processing produces eight variants.
+The API locks the account's profile row, reads reservation timestamps using the
+database clock, and commits the reservation before releasing the lock and signing
+the upload. This coordinates concurrent requests across API processes and survives
+restarts. No Storage/provider network request holds this account lock.
+
+Incomplete, blocked, failed and soft-deleted reservations all count. A signing
+failure also counts because the reservation is already committed. Completion
+retries, previews and generated variants consume no additional slots. A rejection
+returns HTTP 429, `Retry-After` in seconds, and a wait message displayed by the
+existing upload interfaces. The longer wait applies when both windows are full.
+Exactly expired timestamps release capacity; limits do not reset on clock minutes
+or on the hour.
+
+Change the rate constants in `backend/images/schemas.py` and restart the backend.
+The post cap also has a database trigger bound: changing it requires a new
+migration as well as the backend constant. Apply
+`20261022094443_image_upload_limits.sql` locally before testing; coordinate shared
+deployment through the normal review/migration workflow.
+
+There is no per-account storage-byte budget in this change. Broader orphan
+cleanup and hard deletion are separate work. Such cleanup must retain at least
+one hour of reservation history, or move rate history to a separate ledger before
+hard-deleting upload rows. Rate limiting reduces bursts but does not cap lifetime
+storage use or post frequency.
+
 ## Verification
 
 ```sh

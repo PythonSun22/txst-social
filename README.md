@@ -290,7 +290,9 @@ checks, limits, cleanup considerations and reusable modules.
 
 ### Posts and likes (FR-30/31/32/50/51/60/90)
 
-`/submit` saves a title with text, up to ten ordered images, or both. The same
+`/submit` saves a title with text, up to four ordered images, or both. Image uploads
+share an account limit of 10 per rolling minute and 40 per rolling hour across
+posts, profile photos and banners; see [upload limits](docs/image-uploads.md#shared-account-upload-limits-fr-32). The same
 browser image editor used by `/upload-test` is embedded in the form. The ForAll
 feed reads saved posts newest first with cursor pagination; mock posts are removed.
 Signed-in verified students can like a post and click again to remove the like.

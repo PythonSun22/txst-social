@@ -35,6 +35,7 @@ export default function PostComposer() {
   }, []);
 
   const valid = !!title.trim() && (body.trim().length > 0 || attachments.length > 0)
+    && (!attachments.length || (!!policy && attachments.length <= policy.max_images_per_post))
     && attachments.every((item) => item.image && !item.image.errors.length);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -87,7 +88,8 @@ export default function PostComposer() {
         <textarea maxLength={20000} value={body} onChange={(event) => setBody(event.target.value)}
           className="mt-1 block min-h-40 w-full rounded-card border border-border bg-secondary p-2 font-normal" />
       </label>
-      <p className="text-xs text-muted-foreground">Add text, images, or both. Up to 10 images, shown in the order below.</p>
+      <p className="text-xs text-muted-foreground">Add text, images, or both.{policy && ` Up to ${policy.max_images_per_post} images, shown in the order below.`}</p>
+      {policy && <p className="text-xs text-muted-foreground">Image uploads share an account limit of {policy.uploads_per_minute} per minute and {policy.uploads_per_hour} per hour, including profile photos and banners.</p>}
       {policyError && <p role="alert" className="text-sm">{policyError}</p>}
       {attachments.map((attachment, index) => <section key={attachment.key} aria-label={`Attachment ${index + 1}`} className="space-y-2">
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -99,8 +101,9 @@ export default function PostComposer() {
         {policy && <ImageUploader policy={policy} canUpload={false} selectOnly disabled={busy}
           onSelected={(image) => setAttachments((items) => items.map((item) => item.key === attachment.key ? { ...item, image } : item))} />}
       </section>)}
-      <button type="button" disabled={!policy || attachments.length >= 10}
-        onClick={() => setAttachments((items) => [...items, { key: crypto.randomUUID(), image: null }])}
+      <button type="button" disabled={!policy || attachments.length >= policy.max_images_per_post}
+        onClick={() => setAttachments((items) => policy && items.length < policy.max_images_per_post
+          ? [...items, { key: crypto.randomUUID(), image: null }] : items)}
         className="rounded-full border border-primary px-4 py-2 text-sm font-bold text-primary disabled:opacity-40">Add image</button>
     </fieldset>
     <p className="text-xs text-muted-foreground">Your post will be screened automatically and visible only to you until approved.</p>

@@ -7,6 +7,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_IMAGE_BYTES = 10_000_000
+MAX_POST_IMAGES = 4
+UPLOADS_PER_MINUTE = 10
+UPLOADS_PER_HOUR = 40
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 IMAGE_BUCKET = "post-images"
 ImagePurpose = Literal["post", "avatar", "banner"]
@@ -54,6 +57,9 @@ class ImageUploadTicket(BaseModel):
 class ImageUploadPolicy(BaseModel):
     max_bytes: int = MAX_IMAGE_BYTES
     allowed_types: list[str] = list(IMAGE_TYPES)
+    max_images_per_post: int = MAX_POST_IMAGES
+    uploads_per_minute: int = UPLOADS_PER_MINUTE
+    uploads_per_hour: int = UPLOADS_PER_HOUR
 
 
 class ImagePreviewResponse(BaseModel):

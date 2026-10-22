@@ -29,12 +29,13 @@ class PostTests(unittest.TestCase):
         self.addCleanup(app.dependency_overrides.clear)
 
     def test_validation(self):
-        for fields in ({'title':' '},{'body':' '},{'author_id':str(uuid4())},{'status':'approved'},{'body':'x'*20001},{'image_ids':[uuid4() for _ in range(11)]}):
+        for fields in ({'title':' '},{'body':' '},{'author_id':str(uuid4())},{'status':'approved'},{'body':'x'*20001},{'image_ids':[uuid4() for _ in range(5)]}):
             with self.subTest(fields=fields),self.assertRaises(ValidationError):
                 PostCreate(submission_id=uuid4(),**{'title':'Title','body':'Body',**fields})
         uid=uuid4()
         with self.assertRaises(ValidationError): PostCreate(submission_id=uuid4(),title='T',image_ids=[uid,uid])
         self.assertIsNone(PostCreate(submission_id=uuid4(),title='T',image_ids=[uid]).body)
+        self.assertEqual(len(PostCreate(submission_id=uuid4(), title='T', image_ids=[uuid4() for _ in range(4)]).image_ids), 4)
 
     def test_anonymous_feed_visibility_and_order(self):
         self.assertEqual(list_posts(Response(),cursor=None,limit=20,viewer=None,db=self.db).items,[])
