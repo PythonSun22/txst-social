@@ -1,6 +1,6 @@
 """FR-02/FR-32/FR-90: reserve, upload directly to Storage, then confirm metadata."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Query
@@ -14,10 +14,12 @@ from images.schemas import (
     IMAGE_BUCKET, IMAGE_TYPES, ImagePreviewResponse, ImageUploadCreate,
     ImageUploadPolicy, ImageUploadResponse, ImageUploadTicket,
     ImageVariantResponse, VariantName,
+    ImageUploadBatch, ImageStorageBudget, PROCESSING_HEADROOM, SOURCE_GRACE_SECONDS,
 )
 from images import storage as image_storage
 from images.limits import reserve_upload_slot
-from models import ImageUpload, ImageVariant, Profile
+from images.budget import check_capacity, expire_unfinished, storage_budget
+from models import ImageStorageObject, ImageUpload, ImageVariant, Profile
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -55,20 +57,59 @@ def create_upload(
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> ImageUploadTicket:
-    created_at = reserve_upload_slot(db, profile.id)
-    upload_id = uuid4()
-    upload = ImageUpload(
-        id=upload_id, owner_id=profile.id, bucket_id=IMAGE_BUCKET, created_at=created_at,
-        object_key=f"{profile.id}/{upload_id}.{IMAGE_TYPES[payload.content_type]}",
-        **payload.model_dump(),
-    )
-    db.add(upload)
+    return reserve_images([payload], response, profile, credentials, db)[0]
+
+
+def reserve_images(images, response, profile, credentials, db):
+    created_at = reserve_upload_slot(db, profile.id, len(images))
+    expire_unfinished(db, created_at, profile.id)
+    check_capacity(db, profile.id, images)
+    uploads = []
+    for payload in images:
+        upload_id = uuid4()
+        upload = ImageUpload(id=upload_id, owner_id=profile.id, bucket_id=IMAGE_BUCKET, created_at=created_at,
+            object_key=f"{profile.id}/{upload_id}.{IMAGE_TYPES[payload.content_type]}",
+            processing_reserved_bytes=PROCESSING_HEADROOM[payload.purpose], **payload.model_dump())
+        db.add(upload)
+        uploads.append(upload)
     # Storage's RLS must see the reservation through a separate connection.
     db.commit()
-    db.refresh(upload)
-    token = image_storage.sign_upload(upload.object_key, credentials.credentials)
     response.headers["Cache-Control"] = "no-store"
-    return ImageUploadTicket(upload=upload_response(db, upload), token=token)
+    tickets = []
+    for upload in uploads:
+        db.refresh(upload)
+        token = sign_reserved_upload(db, upload.id, credentials.credentials)
+        db.refresh(upload)
+        tickets.append(ImageUploadTicket(upload=upload_response(db, upload), token=token))
+    return tickets
+
+
+def sign_reserved_upload(db, upload_id, credentials):
+    # Serialize minting with expiry/deletion. A delayed signing call must extend
+    # the cleanup horizon BEFORE returning its token to the browser.
+    upload = db.scalar(select(ImageUpload).where(ImageUpload.id == upload_id).with_for_update()
+        .execution_options(populate_existing=True))
+    now = datetime.now(timezone.utc)
+    if (upload is None or upload.original_deleted_at is not None or upload.processing_status == "failed"
+            or upload.original_cleanup_after <= now):
+        raise HTTPException(410, "This image reservation expired. Select the image again.")
+    token = image_storage.sign_upload(upload.object_key, credentials)
+    upload.original_cleanup_after = datetime.now(timezone.utc) + timedelta(seconds=SOURCE_GRACE_SECONDS)
+    db.commit()
+    return token
+
+
+@router.post("/batch", response_model=list[ImageUploadTicket], status_code=201)
+def create_upload_batch(payload: ImageUploadBatch, response: Response,
+    profile: Profile = Depends(require_verified_profile),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer), db: Session = Depends(get_db)):
+    return reserve_images(payload.images, response, profile, credentials, db)
+
+
+@router.get("/budget", response_model=ImageStorageBudget)
+def get_storage_budget(response: Response, profile: Profile = Depends(get_current_profile), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return storage_budget(db, profile.id)
 
 
 @router.post("/{upload_id}/complete", response_model=ImageUploadResponse)
@@ -82,11 +123,19 @@ def complete_upload(
     response.headers["Cache-Control"] = "no-store"
     if upload.uploaded_at is not None:
         return upload_response(db, upload)  # Safe after an uncertain transfer.
+    if (upload.original_deleted_at is not None or upload.processing_status == "failed"
+            or (upload.original_cleanup_after or upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS)) <= datetime.now(timezone.utc)):
+        raise HTTPException(410, "This upload reservation expired. Select the image again.")
     info = image_storage.object_info(upload.object_key, credentials.credentials)
     # Check Storage's actual object metadata, not a client "success" flag.
     if info.get("size") != upload.size_bytes or info.get("content_type") != upload.content_type:
         raise HTTPException(409, "Stored file size or type differs from the selected image. Select it again.")
     upload.uploaded_at = datetime.now(timezone.utc)
+    original = db.scalar(select(ImageStorageObject).where(ImageStorageObject.object_key == upload.object_key).with_for_update())
+    if original is None or original.deleted_at is not None:
+        raise HTTPException(409, "Image storage reservation is unavailable.")
+    original.size_bytes = info["size"]
+    original.confirmed_at = upload.uploaded_at
     db.commit()
     db.refresh(upload)
     return upload_response(db, upload)

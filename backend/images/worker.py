@@ -1,7 +1,7 @@
 """Durable, single-job-at-a-time image processing and asset screening (FR-32/90).
 
 Multiple API processes coordinate using database leases. Processing transactions
-never span Storage/provider calls. General asset hard deletion/quotas are separate.
+never span provider calls. Bounded object writes/deletes lock their accounting rows.
 """
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -17,6 +17,9 @@ from sqlalchemy import or_, select, update
 from database import SessionLocal
 from images.processing import Output, process_image
 from images.worker_storage import image_data_url, read_image, remove_images, write_image
+from images.schemas import SOURCE_GRACE_SECONDS
+from images.budget import (cleanup_attempt, cleanup_staged_once, delete_recorded,
+                           expire_unfinished, release_processing, stage_outputs, write_reserved)
 from models import ImageProcessingCheck, ImageUpload, ImageVariant, PostMedia, Profile
 from moderation.client import ModerationError, moderate_content
 
@@ -24,7 +27,6 @@ logger = logging.getLogger(__name__)
 LEASE_SECONDS = 600
 # Supabase signed upload tokens last two hours. Wait for expiry before deleting
 # the source, otherwise an outstanding token could recreate it after cleanup.
-SOURCE_GRACE_SECONDS = 7500
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,8 @@ def claim_work(sessions, settings: Settings, now: datetime) -> Work | None:
             upload.processing_status = "failed"
             upload.processing_error = "attempt_limit"
             upload.processing_claim = upload.processing_lease_until = None
+            release_processing(db, upload)
+            upload.original_cleanup_after = max(now, upload.original_cleanup_after or now, upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
             db.commit()
             return None
         token = uuid4()
@@ -122,7 +126,7 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
             largest, largest_key = outputs[-1]
             upload.processing_status = "blocked" if result.blocked else "ready"
             upload.processing_error = None
-            upload.original_cleanup_after = max(now, upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
+            upload.original_cleanup_after = max(now, upload.original_cleanup_after or now, upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
             db.add(ImageProcessingCheck(
                 image_upload_id=upload.id, attempt=upload.processing_attempts,
                 decision="block" if result.blocked else "allow", model=result.model,
@@ -135,6 +139,9 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
             db.flush()
             if not result.blocked:
                 activate_profile(db, upload)
+        if upload.processing_status in {"ready", "blocked", "failed"}:
+            release_processing(db, upload)
+            upload.original_cleanup_after = max(now, upload.original_cleanup_after or now, upload.created_at + timedelta(seconds=SOURCE_GRACE_SECONDS))
         upload.processing_claim = upload.processing_lease_until = None
         db.commit()
         return failure is None
@@ -153,10 +160,10 @@ def run_once(sessions=SessionLocal, settings: Settings | None = None) -> bool:
         outputs = process_image(data, work.purpose, work.content_type)
         # Screen all pixels of the display master (no signed/loopback fetch needed).
         result = moderate_content("Student image upload", (image_data_url(outputs[-1].data),))
-        for output in outputs:
-            key = f"{work.owner}/variants/{work.id}/{work.claim}/{output.name}.webp"
-            stored.append((output, key))  # Include an uncertain write in cleanup.
-            write_image(key, output.data)
+        stored = [(output, f"{work.owner}/variants/{work.id}/{work.claim}/{output.name}.webp") for output in outputs]
+        stage_outputs(sessions, work, stored)
+        for output, key in stored:
+            write_reserved(sessions, work, key, output.data, write_image)
         committed = finish_work(sessions, settings, work, stored, result, None)
         if committed:
             return True
@@ -169,28 +176,30 @@ def run_once(sessions=SessionLocal, settings: Settings | None = None) -> bool:
         logger.error("Image processing interrupted; lease recovery will retry safely.")
         return True
     try:
-        remove_images([key for _, key in stored])
+        cleanup_attempt(sessions, [key for _, key in stored], remove_images)
     except ModerationError:
         logger.error("Unable to remove incomplete image versions.")
     return True
 
 
 def cleanup_original_once(sessions=SessionLocal) -> bool:
-    """Delete ONLY completed source inputs; general asset cleanup is deferred.
+    """Remove terminal/expired source inputs after their upload capabilities expire.
 
     Repeated deletes are safe. Retain the short row lock to serialize this one
-    bounded Storage delete; processing/moderation never hold network transactions.
+    bounded Storage delete; provider screening never holds a database transaction.
     """
     now = datetime.now(timezone.utc)
     with sessions() as db:
+        expire_unfinished(db, now)
+        db.commit()
         upload = db.scalar(select(ImageUpload).where(
-            ImageUpload.processing_status.in_(["ready", "blocked"]),
+            ImageUpload.processing_status.in_(["ready", "blocked", "failed"]),
             ImageUpload.original_deleted_at.is_(None), ImageUpload.original_cleanup_after <= now,
         ).order_by(ImageUpload.original_cleanup_after).limit(1).with_for_update(skip_locked=True))
         if upload is None:
             return False
         try:
-            remove_images([upload.object_key])
+            delete_recorded(db, [upload.object_key], remove_images)
             upload.original_deleted_at = now
             upload.original_cleanup_error = None
         except ModerationError as error:
@@ -204,6 +213,7 @@ def run_worker(stop: Event, settings: Settings):
     last_error = None
     while not stop.is_set():
         try:
+            staged = cleanup_staged_once(SessionLocal, remove_images)
             worked = run_once(settings=settings)
             cleaned = cleanup_original_once()
             last_error = None
@@ -214,5 +224,5 @@ def run_worker(stop: Event, settings: Settings):
                 last_error = signature
             stop.wait(30)
             continue
-        if not worked and not cleaned:
+        if not worked and not cleaned and not staged:
             stop.wait(settings.poll_seconds)

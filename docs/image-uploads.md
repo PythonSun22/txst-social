@@ -200,11 +200,72 @@ migration as well as the backend constant. Apply
 `20261022094443_image_upload_limits.sql` locally before testing; coordinate shared
 deployment through the normal review/migration workflow.
 
-There is no per-account storage-byte budget in this change. Broader orphan
-cleanup and hard deletion are separate work. Such cleanup must retain at least
-one hour of reservation history, or move rate history to a separate ledger before
-hard-deleting upload rows. Rate limiting reduces bursts but does not cap lifetime
-storage use or post frequency.
+## Account storage budget and unfinished uploads (FR-32)
+
+The shared account budget is **50 MB = 50,000,000 bytes**. At most **10 uploads or
+processing jobs** may be unfinished. Completed, blocked, or terminally failed jobs
+release their unfinished slot; all retained files still consume capacity.
+
+`image_storage_objects` is a backend-only, RLS-protected ledger keyed by object
+key. It counts each physical asset once regardless of references. Deleted-object
+ledger rows and historical upload sizes do not consume capacity. Unknown transfers
+reserve **10 MB per original**, because a signed upload capability permits the
+bucket's full limit regardless of the browser's declared size. Successful
+completion reconciles that source reservation to Storage's confirmed actual size.
+
+Additional processing headroom per original is **2 MB for posts, 250 KB for
+avatars, and 1 MB for banners**. Per-version byte caps are enforced by the encoder:
+preview 250 KB, expanded 1.75 MB, small avatar 50 KB, large avatar 200 KB, banner
+1 MB. Normal preset quality/dimensions apply first; unusually large encodings
+reduce quality to 50 and then dimensions until they fit. This makes the reserved
+space a real upper bound rather than an estimate.
+
+Thus four maximum-size post images initially need **48 MB**. An account already
+using more than 2 MB cannot reserve that batch. Even smaller selected files need
+the full initial capability reservation until completion confirms their size.
+The composer calls `POST /images/batch` (1–4 assets) before ANY new transfer;
+quota or slot rejection creates no reservations and issues no tokens for that
+batch. Single avatar/banner uploads use the same checked reservation path.
+`GET /images/budget` exposes stored, reserved, total used, available bytes and
+unfinished slots. The composer displays these values and explains headroom.
+
+Rate, slot and capacity checks and reservation inserts hold the same account row
+lock. Budget totals use one database snapshot. Upload URLs are signed after
+commit. Signing failures retain capacity until token expiry and confirmed cleanup.
+
+The worker persists every planned variant key before attempting its write. Actual
+or uncertain writes are covered by the asset's held headroom, including interrupted
+attempts. Aggregate staged writes cannot exceed that held capacity. Terminal
+results exchange headroom for actual retained object charges atomically. Retries
+reuse the remaining held capacity, and incomplete attempts are cleaned up through
+Storage. Bounded writes and deletion serialize on object rows, so a stale worker
+cannot recreate an object after its charge has been released. Failed deletion
+never releases capacity. Provider calls never hold database locks.
+
+An abandoned, unconfirmed reservation expires after its token-safe cleanup horizon
+(initially 7,500 seconds, extended after signing a token). Signing and cleanup
+serialize on the upload row, including delayed token minting. Expiry releases
+its unfinished slot and unused processing headroom, while its possible original
+stays charged until Storage confirms deletion. Terminally failed job originals
+also receive this cleanup. Keep the image worker enabled for automatic deletion.
+The original upload row remains for rate history, audits and historical metadata.
+
+Apply `20261022095634_image_storage_budget.sql` before starting this backend.
+Stop old image workers during deployment; restart all API instances afterward.
+Backfill charges current Storage inventory and live upload capabilities, including
+old owner-scoped orphan objects. Historical variant rows without Storage objects
+are not charged. Existing accounts above 50 MB keep their content but cannot add
+uploads until usage falls below the budget. No shared database migration is
+applied automatically by this change.
+
+Limits live in `backend/images/schemas.py`; new reservations persist their checked
+headroom. If changing output caps/headroom, account for already queued jobs with
+older reservations. Reducing image dimensions/quality alone needs no schema change.
+Broader reference-aware hard deletion of replaced/deleted assets remains future
+work. Delete bytes through Storage before retiring ledger rows; foreign keys
+prevent silently discarding accounting while retained files still exist. Preserve
+at least one hour of reservation history (or introduce a rate ledger) when later
+hard-deleting upload rows.
 
 ## Verification
 

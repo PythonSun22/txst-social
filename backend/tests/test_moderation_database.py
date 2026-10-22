@@ -20,7 +20,7 @@ from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
-from models import ImageUpload, ImageVariant, ModerationCheck, Post, PostMedia, Profile, Space
+from models import ImageStorageObject, ImageUpload, ImageVariant, ModerationCheck, Post, PostMedia, Profile, Space
 from moderation.client import ModerationError
 from moderation.context import ContextAssessment
 from moderation.worker import Settings, claim_work, finish_work, run_once
@@ -51,7 +51,7 @@ class ImageDatabaseFixture(unittest.TestCase):
                         $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
                     create table storage.buckets (id text primary key, name text, public boolean,
                         file_size_limit bigint, allowed_mime_types text[]);
-                    create table storage.objects (id uuid primary key, bucket_id text, name text);
+                    create table storage.objects (id uuid primary key, bucket_id text, name text, metadata jsonb);
                     alter table storage.objects enable row level security;
                     grant usage on schema public, auth, storage to anon, authenticated;
                     alter default privileges in schema public grant select, insert, update, delete on tables to anon, authenticated;
@@ -79,6 +79,7 @@ class ImageDatabaseFixture(unittest.TestCase):
     def tearDown(self):
         with self.sessions.begin() as db:
             db.execute(delete(Post).where(Post.id.in_(self.ids)))
+            db.execute(delete(ImageStorageObject).where(ImageStorageObject.owner_id == self.owner))
             db.execute(delete(ImageUpload).where(ImageUpload.id.in_(self.uploads)))
             db.execute(text("delete from auth.users where id=:id"), {"id": self.owner})
 

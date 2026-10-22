@@ -18,6 +18,10 @@ Edit **`backend/images/processing.py`, `PRESETS`** and restart the backend:
 | Avatar | `avatar_large` | 384 × 384 | 85 |
 | Banner | `banner` | 1600 × 1600 | 82 |
 
+Byte caps in `backend/images/schemas.py`, `VARIANT_MAX_BYTES`, constrain generated
+files to their reserved headroom. Oversized encodings reduce quality, then
+dimensions; the table above describes normal maximum settings.
+
 Bounds are a containing rectangle, not a stretch or forced crop. Post and banner
 ratios are preserved; avatars get a centered square crop after browser edits.
 Small inputs are never enlarged. Width and height in each variant record are
@@ -87,7 +91,7 @@ minutes; removing a reference does not revoke a URL already issued.
 
 After all versions are stored and screening has a final verdict, the worker
 schedules deletion of the temporary original via the Storage API. It waits at
-least **7,500 seconds after reservation** (two hours plus five minutes) because
+least **7,500 seconds after issuing an upload token** (two hours plus five minutes) because
 issued Supabase signed upload tokens can remain valid for two hours. Otherwise
 a late transfer could recreate an already deleted original. Existing old inputs
 whose grace window has elapsed can be deleted on the next cleanup tick.
@@ -97,18 +101,23 @@ minutes. Deletion of the original never deletes the ready variants. `size_bytes`
 still describes the original even after its bytes are removed; inspect
 `image_variants.size_bytes` for retained sizes. `/upload-test` shows both.
 
-Per-account quotas/rate limits, abandoned/failed-job cleanup, files left by a
-process crash during variant writes, and hard deletion of replaced/deleted assets
-are explicitly deferred. Post deletion remains soft deletion. Original input
-cleanup above is the only permanent-deletion lifecycle added in this release.
-Processing and source cleanup run only while the API/image worker is running.
+The shared account budget is now 50 MB with 10 unfinished slots. The storage
+ledger holds capacity before transfer, counts uncertain variant writes, and
+reconciles actual bytes atomically at terminal processing. Expired abandoned and
+failed-job originals are cleaned after the same token grace; interrupted variant
+writes are cleaned after their attempt ends. Failed deletion retains the charge.
+See [storage accounting](image-uploads.md#account-storage-budget-and-unfinished-uploads-fr-32).
+Reference-aware hard deletion of replaced/deleted published assets remains future
+work; post deletion remains soft deletion. Processing and cleanup require the
+image worker to be running.
 
 ## Local setup and verification
 
 1. Keep `DATABASE_URL` and both Supabase URLs pointed at the same **local** instance.
 2. Apply all pending migrations with `supabase migration up --local`, including
    `20260926000000_automatic_post_moderation.sql` and
-   `20261022072231_image_variants.sql`. Do not deploy shared migrations before review.
+   `20261022072231_image_variants.sql`, `20261022094443_image_upload_limits.sql`, and
+   `20261022095634_image_storage_budget.sql`. Do not deploy shared migrations before review.
 3. From `backend`, run `uv sync` (Pillow is now a dependency).
 4. Configure backend-only `SUPABASE_SECRET_KEY` (or legacy service role) and
    `OPENAI_API_KEY`. Set `IMAGE_PROCESSING_ENABLED=true` and

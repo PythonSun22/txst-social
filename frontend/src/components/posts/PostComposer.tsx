@@ -5,7 +5,9 @@ import Link from "next/link";
 import ImageUploader from "@/components/images/ImageUploader";
 import type { SelectedImage } from "@/lib/images/image-file";
 import type { ImagePolicy } from "@/lib/images/image-policy";
-import { completeImage, getImagePolicy, ImageTransferError, uploadImage } from "@/lib/images/image-api";
+import { completeImage, getImagePolicy, getStorageBudget, ImageTransferError, reserveImages, uploadReservedImage,
+  type UploadTicket, type StorageBudget } from "@/lib/images/image-api";
+import { formatBytes } from "@/lib/images/image-policy";
 import { createPost } from "@/lib/posts";
 
 interface Attachment { key: string; image: SelectedImage | null }
@@ -18,6 +20,7 @@ export default function PostComposer() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [policy, setPolicy] = useState<ImagePolicy | null>(null);
   const [policyError, setPolicyError] = useState("");
+  const [budget, setBudget] = useState<StorageBudget | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,12 +28,14 @@ export default function PostComposer() {
   const submissionId = useRef<string | null>(null);
   // Unchanged images are not transferred again after a failed post request.
   const transfers = useRef(new Map<File, { id: string; complete: boolean }>());
+  const tickets = useRef(new Map<File, UploadTicket>());
 
   useEffect(() => {
     const controller = new AbortController();
     getImagePolicy(controller.signal).then(setPolicy).catch(() => {
       if (!controller.signal.aborted) setPolicyError("Image uploads are unavailable. Reload to try again; text posts still work.");
     });
+    getStorageBudget(controller.signal).then(setBudget).catch(() => {});
     return () => controller.abort();
   }, []);
 
@@ -45,13 +50,21 @@ export default function PostComposer() {
     submissionId.current ??= crypto.randomUUID();
     try {
       const ids: string[] = [];
+      const unreserved = attachments.map((attachment) => attachment.image!)
+        .filter((image) => !transfers.current.has(image.file) && !tickets.current.has(image.file));
+      if (unreserved.length) {
+        setNotice("Reserving space for all selected images…");
+        const reserved = await reserveImages(unreserved);
+        unreserved.forEach((image, index) => tickets.current.set(image.file, reserved[index]));
+      }
       for (const [index, attachment] of attachments.entries()) {
         const image = attachment.image!;
         const cached = transfers.current.get(image.file);
         if (cached?.complete) { ids.push(cached.id); continue; }
         setNotice(`Saving image ${index + 1} of ${attachments.length}…`);
         try {
-          const saved = cached ? await completeImage(cached.id) : await uploadImage(image, setNotice);
+          const saved = cached ? await completeImage(cached.id)
+            : await uploadReservedImage(image, tickets.current.get(image.file)!, setNotice);
           transfers.current.set(image.file, { id: saved.id, complete: true });
           ids.push(saved.id);
         } catch (cause) {
@@ -65,6 +78,7 @@ export default function PostComposer() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save your post.");
       setNotice(""); setBusy(false); sending.current = false;
+      getStorageBudget().then(setBudget).catch(() => {});
     }
   }
 
@@ -90,6 +104,9 @@ export default function PostComposer() {
       </label>
       <p className="text-xs text-muted-foreground">Add text, images, or both.{policy && ` Up to ${policy.max_images_per_post} images, shown in the order below.`}</p>
       {policy && <p className="text-xs text-muted-foreground">Image uploads share an account limit of {policy.uploads_per_minute} per minute and {policy.uploads_per_hour} per hour, including profile photos and banners.</p>}
+      {policy && <p className="text-xs text-muted-foreground">Your {formatBytes(policy.account_storage_bytes)} storage budget includes temporary originals and processing space.
+        {budget && ` ${formatBytes(budget.available_bytes)} is currently available; ${budget.unfinished_uploads}/${budget.max_unfinished_uploads} uploads are unfinished.`}
+        {` Each new post image initially reserves ${formatBytes(policy.original_reservation_bytes + policy.processing_headroom.post)}; four need ${formatBytes(4 * (policy.original_reservation_bytes + policy.processing_headroom.post))}. Space for the whole selection is checked before transfer.`}</p>}
       {policyError && <p role="alert" className="text-sm">{policyError}</p>}
       {attachments.map((attachment, index) => <section key={attachment.key} aria-label={`Attachment ${index + 1}`} className="space-y-2">
         <div className="flex flex-wrap items-center gap-3 text-sm">

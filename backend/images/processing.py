@@ -9,7 +9,7 @@ import warnings
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from images.schemas import MAX_IMAGE_BYTES
+from images.schemas import MAX_IMAGE_BYTES, VARIANT_MAX_BYTES
 
 MAX_SOURCE_PIXELS = 25_000_000
 Image.MAX_IMAGE_PIXELS = MAX_SOURCE_PIXELS
@@ -68,11 +68,21 @@ def process_image(data: bytes, purpose: str, content_type: str) -> list[Output]:
                 for preset in PRESETS[purpose]:
                     image = clean.copy()
                     image.thumbnail((preset.width, preset.height), Image.Resampling.LANCZOS)
-                    buffer = BytesIO()
-                    image.save(buffer, format="WEBP", quality=preset.quality, method=6)
-                    encoded = buffer.getvalue()
-                    if len(encoded) > MAX_IMAGE_BYTES:
-                        raise ValueError("Processed image exceeds the storage limit.")
+                    # Enforce the byte headroom promised before transfer. Preserve
+                    # preset quality first; reduce quality, then dimensions if needed.
+                    quality = preset.quality
+                    for _ in range(20):
+                        buffer = BytesIO()
+                        image.save(buffer, format="WEBP", quality=quality, method=6)
+                        encoded = buffer.getvalue()
+                        if len(encoded) <= VARIANT_MAX_BYTES[preset.name]:
+                            break
+                        if quality > 50:
+                            quality = max(50, quality - 10)
+                        else:
+                            image.thumbnail((max(1, int(image.width * .8)), max(1, int(image.height * .8))), Image.Resampling.LANCZOS)
+                    else:
+                        raise ValueError("Processed image exceeds reserved capacity.")
                     outputs.append(Output(preset.name, encoded, image.width, image.height))
                 return outputs
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning):

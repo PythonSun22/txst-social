@@ -22,6 +22,25 @@ export interface SavedImage {
   original_deleted_at: string | null;
 }
 
+export interface UploadTicket { upload: SavedImage; token: string }
+export interface StorageBudget {
+  limit_bytes: number; stored_bytes: number; reserved_bytes: number;
+  used_bytes: number; available_bytes: number;
+  unfinished_uploads: number; max_unfinished_uploads: number;
+}
+export const getStorageBudget = (signal?: AbortSignal) => apiRequest<StorageBudget>("/images/budget", { signal });
+
+function uploadPayload(image: SelectedImage, purpose: ImagePurpose) {
+  if (image.errors.length || !image.width || !image.height) throw new Error("Choose a valid image first.");
+  return { original_name: image.file.name.trim(), content_type: image.file.type,
+    size_bytes: image.file.size, width: image.width, height: image.height, purpose };
+}
+
+/** Reserve the complete selection atomically before any file bytes are transferred. */
+export const reserveImages = (images: SelectedImage[], purpose: ImagePurpose = "post") =>
+  apiRequest<UploadTicket[]>("/images/batch", { method: "POST",
+    body: JSON.stringify({ images: images.map((image) => uploadPayload(image, purpose)) }) });
+
 export async function getImagePolicy(signal?: AbortSignal): Promise<ImagePolicy> {
   const base = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
   const response = await fetch(`${base.replace(/\/$/, "")}/images/policy`, { signal, cache: "no-store" });
@@ -45,16 +64,15 @@ export class ImageTransferError extends Error {
 
 /** Transfers an inspected original or edited File without coupling the asset to a post. */
 export async function uploadImage(image: SelectedImage, onStage: (stage: string) => void, purpose: ImagePurpose = "post"): Promise<SavedImage> {
-  if (image.errors.length || !image.width || !image.height) throw new Error("Choose a valid image first.");
   onStage("Preparing upload…");
-  const ticket = await apiRequest<{ upload: SavedImage; token: string }>("/images", {
+  const ticket = await apiRequest<UploadTicket>("/images", {
     method: "POST",
-    body: JSON.stringify({
-      original_name: image.file.name.trim(), content_type: image.file.type,
-      size_bytes: image.file.size, width: image.width, height: image.height,
-      purpose,
-    }),
+    body: JSON.stringify(uploadPayload(image, purpose)),
   });
+  return uploadReservedImage(image, ticket, onStage);
+}
+
+export async function uploadReservedImage(image: SelectedImage, ticket: UploadTicket, onStage: (stage: string) => void): Promise<SavedImage> {
   try {
     onStage("Uploading image…");
     const { error } = await getSupabase().storage.from(ticket.upload.bucket_id)

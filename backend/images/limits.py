@@ -12,7 +12,7 @@ from images.schemas import UPLOADS_PER_MINUTE, UPLOADS_PER_HOUR
 from models import ImageUpload, Profile
 
 
-def reserve_upload_slot(db: Session, owner_id: UUID) -> datetime:
+def reserve_upload_slot(db: Session, owner_id: UUID, count: int = 1) -> datetime:
     """Hold the account lock through insertion/commit in the calling transaction.
 
     Count all reservations, including incomplete, blocked and soft-deleted ones.
@@ -29,8 +29,8 @@ def reserve_upload_slot(db: Session, owner_id: UUID) -> datetime:
     waits = []
     for seconds, maximum in ((60, UPLOADS_PER_MINUTE), (3600, UPLOADS_PER_HOUR)):
         window = [created for created in recent if created > now - timedelta(seconds=seconds)]
-        if len(window) >= maximum:
-            waits.append(ceil((window[-maximum] + timedelta(seconds=seconds) - now).total_seconds()))
+        if len(window) + count > maximum:
+            waits.append(ceil((window[-(maximum - count + 1)] + timedelta(seconds=seconds) - now).total_seconds()))
     if waits:
         retry_after = max(1, *waits)
         raise HTTPException(429,

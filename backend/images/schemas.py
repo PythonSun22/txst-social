@@ -10,6 +10,13 @@ MAX_IMAGE_BYTES = 10_000_000
 MAX_POST_IMAGES = 4
 UPLOADS_PER_MINUTE = 10
 UPLOADS_PER_HOUR = 40
+ACCOUNT_STORAGE_BYTES = 50_000_000
+MAX_UNFINISHED_UPLOADS = 10
+# Enforced by the encoder as well as the accounting reservation.
+VARIANT_MAX_BYTES = {"preview": 250_000, "expanded": 1_750_000,
+                     "avatar_small": 50_000, "avatar_large": 200_000, "banner": 1_000_000}
+PROCESSING_HEADROOM = {"post": 2_000_000, "avatar": 250_000, "banner": 1_000_000}
+SOURCE_GRACE_SECONDS = 7500
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 IMAGE_BUCKET = "post-images"
 ImagePurpose = Literal["post", "avatar", "banner"]
@@ -54,12 +61,31 @@ class ImageUploadTicket(BaseModel):
     token: str
 
 
+class ImageUploadBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    images: list[ImageUploadCreate] = Field(min_length=1, max_length=MAX_POST_IMAGES)
+
+
+class ImageStorageBudget(BaseModel):
+    limit_bytes: int = ACCOUNT_STORAGE_BYTES
+    stored_bytes: int
+    reserved_bytes: int
+    used_bytes: int
+    available_bytes: int
+    unfinished_uploads: int
+    max_unfinished_uploads: int = MAX_UNFINISHED_UPLOADS
+
+
 class ImageUploadPolicy(BaseModel):
     max_bytes: int = MAX_IMAGE_BYTES
     allowed_types: list[str] = list(IMAGE_TYPES)
     max_images_per_post: int = MAX_POST_IMAGES
     uploads_per_minute: int = UPLOADS_PER_MINUTE
     uploads_per_hour: int = UPLOADS_PER_HOUR
+    account_storage_bytes: int = ACCOUNT_STORAGE_BYTES
+    max_unfinished_uploads: int = MAX_UNFINISHED_UPLOADS
+    original_reservation_bytes: int = MAX_IMAGE_BYTES
+    processing_headroom: dict[str, int] = PROCESSING_HEADROOM
 
 
 class ImagePreviewResponse(BaseModel):

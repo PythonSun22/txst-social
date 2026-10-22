@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Float, Computed, DateTime, ForeignKey, Index, Integer, Text, func, SmallInteger, Double
+from sqlalchemy import BigInteger, Boolean, Float, Computed, DateTime, ForeignKey, Index, Integer, Text, func, text, SmallInteger, Double
 from sqlalchemy.dialects.postgresql import CITEXT, ENUM, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
@@ -211,6 +211,27 @@ class ImageUpload(Base):
     original_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     original_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     original_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_reserved_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+
+
+class ImageStorageObject(Base):
+    """Physical object or held write capacity; deletion must be Storage-confirmed."""
+    __tablename__ = "image_storage_objects"
+    __table_args__ = (
+        Index("image_storage_owner_idx", "owner_id", postgresql_where=text("deleted_at is null")),
+        Index("image_storage_upload_idx", "image_upload_id"),
+        {"schema": "public"},
+    )
+    object_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="RESTRICT"), nullable=False)
+    image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="RESTRICT"), nullable=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    covered_by_reservation: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    attempt_claim: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class ImageVariant(Base):

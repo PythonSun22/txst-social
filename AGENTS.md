@@ -127,7 +127,7 @@ full provider audits; it has not been applied to the shared database.
 
 ## 4. The data model
 
-Seventeen tables of ours, plus Supabase's `auth.users` which we do not own.
+Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, bio, a
@@ -342,8 +342,27 @@ a wait message. `GET /images/policy` exposes these limits and the four-image pos
 cap; backend constants live in `images/schemas.py`. New attachments are also
 bounded by a database trigger; existing posts with more images remain intact.
 Apply `20261022094443_image_upload_limits.sql` before running this checkout.
-Storage budgets, broader abandoned-file cleanup and hard deletion remain future
-work. Future hard deletion must preserve at least one hour of reservation history
+Account image storage is capped at **50,000,000 bytes**, shared across all image
+purposes, with at most **10 unfinished uploads/jobs**. `image_storage_objects`
+tracks physical object keys, confirmed sizes, pending writes and confirmed deletion;
+`image_uploads.processing_reserved_bytes` holds processing headroom. Assets count
+once regardless of post references, and source-size metadata after confirmed
+removal costs nothing. Unknown source transfers reserve the full bucket limit
+(10 MB), then reconcile to confirmed size; processing reserves 2 MB for posts,
+250 KB for avatars and 1 MB for banners. The encoder enforces per-variant byte caps.
+The composer uses atomic `POST /images/batch` before transferring a multi-image
+selection. `GET /images/budget` returns stored/reserved/available bytes and slots.
+Terminal jobs release their unfinished slot and reconcile headroom to retained
+files; failed/uncertain writes remain charged until deletion is confirmed. Source
+cleanup also handles expired abandoned uploads and terminal failures after the
+7,500-second grace after token issuance (extended atomically if signing is delayed).
+Staged-write cleanup handles interrupted worker files.
+Apply `20261022095634_image_storage_budget.sql`; its backfill uses Storage inventory
+for historical files. Accounts already over budget are blocked from new uploads;
+existing published content is preserved. Stop image workers during deployment
+and restart them after all migrations; older worker code does not maintain the ledger.
+Broader reference-aware cleanup and hard deletion of replaced/deleted published
+assets remain future work. Future hard deletion must preserve at least one hour of reservation history
 (or introduce a separate rate ledger) so it cannot reset these limits.
 
 Keep the upload/editor modules independent of posts. `ImageUploader` supports

@@ -12,6 +12,7 @@ from sqlalchemy import select, text
 
 from images.processing import process_image
 from images.worker import Settings, claim_work, finish_work, cleanup_original_once
+from images.budget import stage_outputs, write_reserved
 from models import ImageUpload, ImageVariant, ImageProcessingCheck, Profile
 from profiles.routes import update_current_profile
 from profiles.schemas import ProfileUpdate
@@ -31,6 +32,9 @@ class ImageProcessingDatabaseTests(ImageDatabaseFixture):
 
     def finish(self, work, blocked=False):
         outputs = [(o, f"{self.owner}/variants/{work.id}/{o.name}.webp") for o in process_image(source(), work.purpose, "image/png")]
+        stage_outputs(self.sessions, work, outputs)
+        for output, key in outputs:
+            write_reserved(self.sessions, work, key, output.data, lambda key, data: None)
         return finish_work(self.sessions, Settings(), work, outputs, verdict(blocked), None)
 
     def test_pending_profile_activation_is_atomic_with_variants_and_audit(self):

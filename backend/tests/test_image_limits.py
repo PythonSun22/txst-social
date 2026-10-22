@@ -39,6 +39,12 @@ class ImageLimitTests(unittest.TestCase):
                 self.check(ages)
             self.assertEqual(caught.exception.headers["Retry-After"], "3480")
 
+    def test_batch_counts_each_original_and_waits_for_enough_slots(self):
+        self.db.scalars.return_value.all.return_value = [self.now - timedelta(seconds=s) for s in (59, 50, 40, 30, 20, 10, 5, 1)]
+        with self.assertRaises(HTTPException) as caught:
+            reserve_upload_slot(self.db, self.owner, count=4)
+        self.assertEqual(caught.exception.headers["Retry-After"], "10")
+
     def test_expired_slots_are_available_at_exact_boundary(self):
         self.assertEqual(self.check([60] * 10), self.now)
         self.assertEqual(self.check([3600] * 40), self.now)

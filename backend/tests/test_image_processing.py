@@ -6,6 +6,7 @@ os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import unittest
+import random
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -62,6 +63,17 @@ class CodecTests(unittest.TestCase):
         self.assertEqual((output.width, output.height), (80, 120))
         with Image.open(BytesIO(output.data)) as decoded:
             self.assertFalse(decoded.getexif())
+
+    def test_byte_caps_hold_for_difficult_transparent_images(self):
+        image = Image.frombytes("RGBA", (128, 128), random.Random(1).randbytes(128 * 128 * 4))
+        buffer = BytesIO()
+        image.save(buffer, "PNG")
+        with patch.dict("images.processing.VARIANT_MAX_BYTES", {"preview": 500, "expanded": 500}):
+            outputs = process_image(buffer.getvalue(), "post", "image/png")
+        for output in outputs:
+            self.assertLessEqual(len(output.data), 500)
+            with Image.open(BytesIO(output.data)) as decoded:
+                self.assertEqual(decoded.size, (output.width, output.height))
 
     def test_invalid_type_corruption_animation_and_pixel_limit(self):
         for data, mime in [(b"not an image", "image/png"), (source(), "image/jpeg")]:
@@ -135,8 +147,11 @@ class ProcessingWorkerTests(unittest.TestCase):
         with (patch("images.worker.claim_work", return_value=work),
               patch("images.worker.read_image", return_value=data),
               patch("images.worker.moderate_content", return_value=verdict()),
+              patch("images.worker.stage_outputs"),
+              patch("images.worker.write_reserved", side_effect=lambda sessions, work, key, data, write: write(key, data)),
               patch("images.worker.write_image", side_effect=[None, ModerationError("failed", code="storage_write")]),
               patch("images.worker.finish_work") as finish,
+              patch("images.worker.cleanup_attempt", side_effect=lambda sessions, keys, remove: remove(keys)),
               patch("images.worker.remove_images") as remove):
             run_once(settings=Settings())
             self.assertEqual(finish.call_args.args[5], "storage_write")

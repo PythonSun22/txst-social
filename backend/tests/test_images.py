@@ -14,9 +14,10 @@ import httpx
 from fastapi.testclient import TestClient
 
 from database import get_db
-from images.schemas import MAX_IMAGE_BYTES
+from images import storage as image_storage
+from images.schemas import MAX_IMAGE_BYTES, ImageStorageBudget
 from main import app
-from models import ImageUpload, ImageVariant, Profile
+from models import ImageStorageObject, ImageUpload, ImageVariant, Profile
 
 USER_ID = UUID("11111111-1111-4111-8111-111111111111")
 HEADERS = {"Authorization": "Bearer test-token"}
@@ -38,6 +39,16 @@ class ImageTests(unittest.TestCase):
         )
         self.db = Mock()
         self.db.scalar.return_value = datetime.now(timezone.utc)
+        self.original = ImageStorageObject(object_key=self.upload.object_key, owner_id=USER_ID, kind="original", size_bytes=MAX_IMAGE_BYTES)
+        self.db.scalar.side_effect = lambda query: self.original if query.column_descriptions[0].get("entity") is ImageStorageObject else self.db.scalar.return_value
+        for target, kwargs in (
+            ("images.budget.storage_budget", {"return_value": ImageStorageBudget(stored_bytes=0, reserved_bytes=0, used_bytes=0, available_bytes=50_000_000, unfinished_uploads=0)}),
+            ("images.routes.expire_unfinished", {}),
+            ("images.routes.sign_reserved_upload", {"side_effect": lambda db, upload_id, credentials: image_storage.sign_upload(f"{USER_ID}/{upload_id}.png", credentials)}),
+        ):
+            mocked = patch(target, **kwargs)
+            mocked.start()
+            self.addCleanup(mocked.stop)
         self.variant = ImageVariant(image_upload_id=self.upload.id, name="expanded", object_key=f"{USER_ID}/variants/expanded.webp", width=600, height=400, size_bytes=123, content_type="image/webp")
         self.db.get.side_effect = lambda model, key: self.profile if model is Profile else self.variant if model is ImageVariant else self.upload
         self.db.refresh.side_effect = lambda row: setattr(row, "created_at", datetime.now(timezone.utc))
@@ -108,6 +119,21 @@ class ImageTests(unittest.TestCase):
         self.db.add.assert_not_called()
         self.db.commit.assert_not_called()
         self.storage.assert_not_called()
+
+    def test_batch_reserves_all_images_and_rejects_over_budget_before_signing(self):
+        with patch("images.budget.storage_budget", return_value=ImageStorageBudget(
+                stored_bytes=3_000_000, reserved_bytes=0, used_bytes=3_000_000,
+                available_bytes=47_000_000, unfinished_uploads=0)):
+            response = self.client.post("/images/batch", json={"images": [PAYLOAD] * 4}, headers=HEADERS)
+        self.assertEqual(response.status_code, 413)
+        self.assertIn("48.00 MB", response.json()["detail"])
+        self.storage.assert_not_called()
+        self.db.add.assert_not_called()
+        response = self.client.post("/images/batch", json={"images": [PAYLOAD] * 4}, headers=HEADERS)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.json()), 4)
+        self.assertEqual(self.db.add.call_count, 4)
+        self.assertEqual(self.storage.call_count, 4)
 
     def test_completion_retry_does_not_consume_another_slot(self):
         self.upload.uploaded_at = datetime.now(timezone.utc)
