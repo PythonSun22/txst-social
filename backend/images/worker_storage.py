@@ -5,8 +5,8 @@ from urllib.parse import quote
 
 import httpx
 
-from image_schemas import IMAGE_BUCKET, MAX_IMAGE_BYTES
-from moderation import ModerationError
+from images.schemas import IMAGE_BUCKET, MAX_IMAGE_BYTES
+from moderation.client import ModerationError
 
 
 def settings():

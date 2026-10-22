@@ -2,11 +2,11 @@
 /* eslint-disable @next/next/no-img-element -- Expiring, authorized Storage URLs are fetched directly. */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import PawIcon from "./PawIcon";
-import ImageViewer from "./ImageViewer";
+import PawIcon from "@/components/ui/PawIcon";
+import ImageViewer from "@/components/images/ImageViewer";
 import { apiRequest } from "@/lib/api";
 import { fetchPost, deletePost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
-import type { CurrentProfile } from "@/lib/api";
+import type { CurrentProfile } from "@/lib/profiles";
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
 

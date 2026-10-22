@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import PawIcon from "@/components/PawIcon";
+import PawIcon from "@/components/ui/PawIcon";
 import { getSupabase } from "@/lib/supabase";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 
 const links = [
   { href: "/", label: "ForAll" },

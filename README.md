@@ -46,23 +46,35 @@ test accounts, migrations, and the team's two-approval merge workflow.
 
 ```text
 txst-social/
-├── frontend/              # Next.js application
-├── backend/               # FastAPI application
-│   ├── main.py            # FastAPI assembly, middleware, health checks
-│   ├── database.py        # PostgreSQL connection and DB sessions
-│   ├── models.py          # SQLAlchemy database models
-│   ├── profile_routes.py  # Profile reads, options, and edits
-│   ├── profile_schemas.py # Profile request/response schemas
-│   ├── posts.py           # Post routes, including /posts/me
-│   ├── schemas.py         # Health response schemas
-│   ├── .env.example       # Environment variable template
+├── frontend/
+│   └── src/
+│       ├── app/                   # Next.js pages and layouts
+│       ├── components/            # auth, comments, communities, images,
+│       │                         # layout, posts, profiles, ui
+│       └── lib/                   # api.ts (shared HTTP), profiles.ts,
+│                                 # posts.ts, comments.ts, images/
+├── backend/
+│   ├── main.py                    # FastAPI assembly and worker startup
+│   ├── auth.py                    # Shared authentication dependencies
+│   ├── database.py                # Engine and database sessions
+│   ├── models.py                  # SQLAlchemy models mirror migrations
+│   ├── health_schemas.py          # Health response contracts
+│   ├── comments/                  # routes.py, schemas.py
+│   ├── profiles/                  # routes.py, schemas.py
+│   ├── posts/                     # routes.py, schemas.py
+│   ├── images/                    # routes.py, schemas.py, processing.py,
+│   │                             # worker.py, storage.py, worker_storage.py
+│   ├── moderation/                # client.py, context.py, worker.py, evaluate.py
+│   ├── tests/
+│   ├── scripts/
+│   ├── evals/
+│   ├── .env.example
 │   ├── pyproject.toml
 │   └── uv.lock
 ├── supabase/
 │   ├── config.toml
-│   └── migrations/        # Version-controlled SQL migrations
-├── .gitignore
-└── README.md
+│   └── migrations/                # Version-controlled SQL migrations
+└── docs/
 ```
 
 ## Prerequisites
@@ -245,7 +257,7 @@ The current image pipeline generates compressed WebP versions: post preview +
 expanded, avatar small + large, and one banner. Profile replacements require
 screening before activation. Read [image processing and compression settings](docs/image-processing.md)
 for migration/setup steps, original cleanup, current limitations and browser checks.
-`backend/image_processing.py` contains all version dimensions and quality settings.
+`backend/images/processing.py` contains all version dimensions and quality settings.
 Apply `20261022072231_image_variants.sql`, run `uv sync`, and enable both
 `IMAGE_PROCESSING_ENABLED=true` and `MODERATION_ENABLED=true` with backend Storage
 and OpenAI credentials before testing the full workflow. Shared deployment remains
@@ -501,7 +513,7 @@ Current model:
 Profile ↔ public.profiles
 ```
 
-### `profile_schemas.py`
+### `profiles/schemas.py`
 
 Contains Pydantic models that define the profile JSON FastAPI accepts and returns.
 
@@ -515,8 +527,10 @@ ProfileResponse
 ### `main.py`
 
 Assembles the FastAPI application, middleware and feature routers. Profile routes
-live in `profile_routes.py`; image routes live in `images.py`; post routes live
-in `posts.py`.
+live in `profiles/routes.py`; image routes live in `images/routes.py`; post routes
+live in `posts/routes.py`. Each feature keeps its request/response contracts in
+its own `schemas.py`. The frontend shares HTTP/session handling in `lib/api.ts`
+and keeps profile contracts and requests in `lib/profiles.ts`.
 
 ## Current Development Pipeline
 

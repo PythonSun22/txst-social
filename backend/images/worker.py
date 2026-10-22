@@ -15,10 +15,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import or_, select, update
 
 from database import SessionLocal
-from image_processing import Output, process_image
-from image_worker_storage import image_data_url, read_image, remove_images, write_image
+from images.processing import Output, process_image
+from images.worker_storage import image_data_url, read_image, remove_images, write_image
 from models import ImageProcessingCheck, ImageUpload, ImageVariant, PostMedia, Profile
-from moderation import ModerationError, moderate_content
+from moderation.client import ModerationError, moderate_content
 
 logger = logging.getLogger(__name__)
 LEASE_SECONDS = 600

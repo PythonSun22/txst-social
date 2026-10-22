@@ -2,16 +2,16 @@
 
 /* eslint-disable @next/next/no-img-element -- Signed private image URLs are generated at runtime. */
 
-import PostCard from "@/components/PostCard";
-import PawIcon from "@/components/PawIcon";
-import JoinedCommunitiesCard from "@/components/JoinedCommunitiesCard";
-import EditProfileModal from "@/components/EditProfileModal";
-import ImageViewer from "@/components/ImageViewer";
-import SortBar, { type SortOrder } from "@/components/SortBar";
+import PostCard from "@/components/posts/PostCard";
+import PawIcon from "@/components/ui/PawIcon";
+import JoinedCommunitiesCard from "@/components/communities/JoinedCommunitiesCard";
+import EditProfileModal from "@/components/profiles/EditProfileModal";
+import ImageViewer from "@/components/images/ImageViewer";
+import SortBar, { type SortOrder } from "@/components/posts/SortBar";
 import {
   getCurrentProfile,
   type CurrentProfile,
-} from "@/lib/api";
+} from "@/lib/profiles";
 import { getMyPosts, type FeedPost } from "@/lib/posts";
 import { previewImage } from "@/lib/images/image-api";
 import { getSupabase } from "@/lib/supabase";

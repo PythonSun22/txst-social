@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from auth import get_current_profile, require_verified_profile
 from database import get_db
 from models import College, Follow, ImageUpload, Major, Profile, Space
-from profile_schemas import (
+from profiles.schemas import (
     STUDENT_LEVELS,
     CurrentProfileResponse,
     HomeCollegeResponse,

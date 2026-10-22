@@ -69,26 +69,26 @@ UI must support at least 8 levels), FR-43 (soft delete), FR-45/FR-50/FR-51
 
 **Moderation stance:** comments are **not screened**. They are created
 `approved` and are visible to everyone immediately. The ForAll worker screens
-posts only (FR-90–92). Comments use the same read rule as `posts.py`'s
+posts only (FR-90–92). Comments use the same read rule as `posts/routes.py`'s
 `visible_to()` — `approved` or the caller's own — so a comment later set to
 `blocked`/`removed` (FR-93) is hidden from others.
 
 ### Steps
 
-1. **`backend/comment_schemas.py`** — `CommentCreate` (`body`, optional
+1. **`backend/comments/schemas.py`** — `CommentCreate` (`body`, optional
    `parent_id`), `CommentResponse`, `CommentThreadResponse`. Mirror
-   `post_schemas.py`'s style (`ConfigDict(extra="forbid")`, etc.).
-2. **`backend/comments.py`** — new router:
+   `posts/schemas.py`'s style (`ConfigDict(extra="forbid")`, etc.).
+2. **`backend/comments/routes.py`** — new router:
    - `GET /posts/{post_id}/comments` — full thread, ordered by `path`
      (one query, no recursion, per `[D-3]`). Same `approved`-or-own
      read rule as posts; `deleted_at` tombstones excluded.
    - `POST /posts/{post_id}/comments` — `require_verified_profile`, ban
-     check (reuse `check_ban` from `posts.py`), compute the new row's
+     check (reuse `check_ban` from `posts/routes.py`), compute the new row's
      `path`/`depth` from the parent (top-level if `parent_id` is `None`),
      enforce the depth constraint, bump `posts.comment_count` atomically in
      the same transaction.
    - `PUT`/`DELETE /posts/{post_id}/comments/{comment_id}/like` — mirrors
-     `set_like` in `posts.py`; updates `comment_karma`, not `post_karma`.
+     `set_like` in `posts/routes.py`; updates `comment_karma`, not `post_karma`.
    - `DELETE /posts/{post_id}/comments/{comment_id}` — soft-delete own
      comment, mirroring `delete_own_post` (FR-43).
 3. **`GET /posts/{post_id}`** — doesn't exist yet; needed for a post detail
@@ -110,7 +110,7 @@ posts only (FR-90–92). Comments use the same read rule as `posts.py`'s
 - No reports on comments (FR-97–99 — already deferred project-wide).
 - No thread collapsing, lazy-loading, or virtualization for huge threads —
   render the full thread per load; fine at this project's scale.
-- No changes to post likes/posts.py beyond adding `GET /posts/{post_id}` and
+- No changes to post likes/posts/routes.py beyond adding `GET /posts/{post_id}` and
   exporting `check_ban`/`load_visible_post` if needed for reuse.
 
 ---

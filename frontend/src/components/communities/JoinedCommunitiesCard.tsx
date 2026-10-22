@@ -1,4 +1,4 @@
-import PawIcon from "./PawIcon";
+import PawIcon from "@/components/ui/PawIcon";
 
 export interface JoinedCommunity {
   id: string;

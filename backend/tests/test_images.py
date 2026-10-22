@@ -14,7 +14,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from database import get_db
-from image_schemas import MAX_IMAGE_BYTES
+from images.schemas import MAX_IMAGE_BYTES
 from main import app
 from models import ImageUpload, ImageVariant, Profile
 
@@ -48,7 +48,7 @@ class ImageTests(unittest.TestCase):
         }))
         self.auth_patch.start()
         self.addCleanup(self.auth_patch.stop)
-        self.storage_patch = patch("image_storage.httpx.request")
+        self.storage_patch = patch("images.storage.httpx.request")
         self.storage = self.storage_patch.start()
         self.addCleanup(self.storage_patch.stop)
         self.storage.return_value = httpx.Response(200, json={"url": "/object/upload/sign/post-images/file?token=upload-token"})

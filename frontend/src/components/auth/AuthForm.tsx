@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AuthError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 
 type Mode = "signin" | "signup" | "confirm";
 

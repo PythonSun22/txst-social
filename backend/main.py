@@ -9,14 +9,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from comments import router as comments_router
+from comments.routes import router as comments_router
 from database import engine
-from images import router as images_router
-from posts import router as posts_router
-from profile_routes import router as profile_router
-from moderation_worker import Settings, run_worker
-from image_processing_worker import Settings as ImageSettings, run_worker as run_image_worker
-from schemas import DatabaseHealthResponse, HealthResponse
+from images.routes import router as images_router
+from posts.routes import router as posts_router
+from profiles.routes import router as profile_router
+from moderation.worker import Settings, run_worker
+from images.worker import Settings as ImageSettings, run_worker as run_image_worker
+from health_schemas import DatabaseHealthResponse, HealthResponse
 
 
 @asynccontextmanager

@@ -15,11 +15,11 @@ from dotenv import load_dotenv
 from openai import APIError, OpenAI
 from pydantic import BaseModel, ValidationError
 
-from moderation import ModerationError, moderate_text
-from moderation_context import VIOLENCE_CEILING, ContextAssessment, candidate_blocks, context_check
+from moderation.client import ModerationError, moderate_text
+from moderation.context import VIOLENCE_CEILING, ContextAssessment, candidate_blocks, context_check
 
 
-CASES_PATH = Path(__file__).resolve().parent / "evals" / "context_cases.jsonl"
+CASES_PATH = Path(__file__).resolve().parents[1] / "evals" / "context_cases.jsonl"
 class Case(BaseModel):
     id: str
     expected: Literal["allow", "block"]
@@ -58,7 +58,7 @@ def main() -> int:
     if not args.live:
         return 0
 
-    load_dotenv(Path(__file__).resolve().with_name(".env"))
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         parser.error("Set OPENAI_API_KEY in backend/.env for live evaluation")

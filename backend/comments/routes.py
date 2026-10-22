@@ -7,10 +7,10 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from auth import get_optional_profile, require_verified_profile
-from comment_schemas import CommentCreate, CommentResponse, CommentThreadResponse, LikeResponse
+from comments.schemas import CommentCreate, CommentResponse, CommentThreadResponse, LikeResponse
 from database import get_db
 from models import Comment, CommentLike, Post, Profile
-from posts import check_ban, load_visible_post
+from posts.routes import check_ban, load_visible_post
 
 router = APIRouter(tags=["comments"])
 

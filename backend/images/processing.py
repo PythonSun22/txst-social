@@ -9,7 +9,7 @@ import warnings
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from image_schemas import MAX_IMAGE_BYTES
+from images.schemas import MAX_IMAGE_BYTES
 
 MAX_SOURCE_PIXELS = 25_000_000
 Image.MAX_IMAGE_PIXELS = MAX_SOURCE_PIXELS

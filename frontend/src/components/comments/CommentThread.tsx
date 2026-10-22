@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
-import type { CurrentProfile } from "@/lib/api";
+import type { CurrentProfile } from "@/lib/profiles";
 import { createComment, deleteComment, fetchComments, setCommentLike, type Comment } from "@/lib/comments";
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });

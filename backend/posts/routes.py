@@ -17,10 +17,10 @@ from auth import (
     require_verified_profile,
 )
 from database import get_db
-from image_schemas import ImagePreviewResponse
-import image_storage
+from images.schemas import ImagePreviewResponse
+from images import storage as image_storage
 from models import Ban, ImageUpload, ImageVariant, Post, PostLike, PostMedia, Profile, Space
-from post_schemas import FeedResponse, LikeResponse, PostCreate, PostMediaResponse, PostResponse
+from posts.schemas import FeedResponse, LikeResponse, PostCreate, PostMediaResponse, PostResponse
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 

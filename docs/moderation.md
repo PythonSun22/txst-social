@@ -8,10 +8,10 @@ Post jobs wait for asset processing without using their retry budget; image-only
 asset screening does not replace title/body-plus-image post screening. Both use
 inline image bytes, so loopback signed URLs are no longer a blocker.
 
-`backend/moderation.py` calls the official OpenAI moderation endpoint with
+`backend/moderation/client.py` calls the official OpenAI moderation endpoint with
 `omni-moderation-latest` for text and images. The standalone text CLI still works
 without FastAPI or a database connection. The API now starts
-`backend/moderation_worker.py` in a background thread (FR-90–92).
+`backend/moderation/worker.py` in a background thread (FR-90–92).
 
 `POST /posts` currently saves General/ForAll posts as author-visible `pending`.
 The committed post row is its durable queue entry. The worker screens eligible
@@ -123,7 +123,7 @@ exhaustion.
 
 ### Contextual check experiment — local opt-in
 
-`backend/moderation_context_eval.py` compares the current any-flag policy with
+`backend/moderation/evaluate.py` compares the current any-flag policy with
 an experimental second check. The first call uses `omni-moderation-latest`.
 The separate `gpt-4o-mini` call receives an explicit forum policy and returns
 a structured `allow`, `block`, or `uncertain` decision. The local trial can
@@ -137,7 +137,7 @@ second check leaves the post pending for the existing bounded retries; it never
 approves a post. The worker uses this rule only when the backend-only
 `MODERATION_CONTEXT_RECHECK_ENABLED=true` setting is explicitly enabled, and
 only for text posts. Images and links keep their existing behavior. The default
-remains the any-flag rule. `backend/moderation_context.py` contains the shared
+remains the any-flag rule. `backend/moderation/context.py` contains the shared
 rule used by the worker and evaluator. The audit records the first result, the
 second decision and reason code, and policy version
 `forall-context-recheck-v3` for the current rule. The ceilings were
@@ -198,9 +198,9 @@ From `backend`, validate a corpus without network calls, or explicitly run a
 live comparison using the backend-only `OPENAI_API_KEY`:
 
 ```powershell
-.\.venv\Scripts\python.exe moderation_context_eval.py
-.\.venv\Scripts\python.exe moderation_context_eval.py --live
-.\.venv\Scripts\python.exe moderation_context_eval.py --live --cases evals/context_holdout_cases.jsonl
+.\.venv\Scripts\python.exe -m moderation.evaluate
+.\.venv\Scripts\python.exe -m moderation.evaluate --live
+.\.venv\Scripts\python.exe -m moderation.evaluate --live --cases evals/context_holdout_cases.jsonl
 ```
 
 The evaluator prints IDs and decisions but not the post text or API key. It
@@ -292,7 +292,7 @@ The module loads `backend/.env` explicitly and preserves existing environment
 variables. The database password is unrelated to this credential.
 
 The Storage secret is required for pending images because the worker has no user
-session. `backend/image_worker_storage.py` reads persisted optimized attachment
+session. `backend/images/worker_storage.py` reads persisted optimized attachment
 keys and sends inline bytes, including with local loopback Storage. A legacy `SUPABASE_SERVICE_ROLE_KEY` also works if the new secret
 is absent. Never place either key in frontend variables. Public image/upload
 routes still use the caller's JWT and do not use this elevated adapter.
@@ -315,13 +315,13 @@ From `backend`, using the project's existing environment:
 
 ```powershell
 uv sync
-uv run python moderation.py "Anyone studying at Alkek tonight?"
+uv run python -m moderation.client "Anyone studying at Alkek tonight?"
 ```
 
 If `uv` is not on your PATH but dependencies are installed, on Windows use:
 
 ```powershell
-.\.venv\Scripts\python.exe moderation.py "Anyone studying at Alkek tonight?"
+.\.venv\Scripts\python.exe -m moderation.client "Anyone studying at Alkek tonight?"
 ```
 
 This sends the supplied text to OpenAI. Output contains `flagged`, `categories`,

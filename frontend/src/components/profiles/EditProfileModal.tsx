@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {getProfileOptions, updateCurrentProfile, type CurrentProfile, type ProfileOptions, type StudentLevel,} from "@/lib/api";
+import {getProfileOptions, updateCurrentProfile, type CurrentProfile, type ProfileOptions, type StudentLevel,} from "@/lib/profiles";
 import { getImagePolicy } from "@/lib/images/image-api";
 import type { ImagePolicy } from "@/lib/images/image-policy";
-import ImageUploader from "./ImageUploader";
+import ImageUploader from "@/components/images/ImageUploader";
 
 interface EditProfileModalProps {
   profile: CurrentProfile;

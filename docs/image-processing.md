@@ -8,7 +8,7 @@ background processing/moderation workers now transfer bounded image bytes.
 
 ## Outputs and compression controls
 
-Edit **`backend/image_processing.py`, `PRESETS`** and restart the backend:
+Edit **`backend/images/processing.py`, `PRESETS`** and restart the backend:
 
 | Purpose | Version | Maximum bounds | WebP quality |
 |---|---|---|---|
@@ -162,14 +162,14 @@ Browser checklist:
 
 ### New files
 
-- `backend/image_processing.py`
-- `backend/image_processing_worker.py`
-- `backend/image_worker_storage.py`
+- `backend/images/processing.py`
+- `backend/images/worker.py`
+- `backend/images/worker_storage.py`
 - `backend/tests/test_image_processing.py`
 - `backend/tests/test_image_processing_database.py`
 - `backend/tests/test_image_worker_storage.py`
 - `docs/image-processing.md`
-- `frontend/src/components/ImageViewer.tsx`
+- `frontend/src/components/images/ImageViewer.tsx`
 - `supabase/migrations/20261022072231_image_variants.sql`
 
 ### Updated files
@@ -177,15 +177,15 @@ Browser checklist:
 - `AGENTS.md`
 - `README.md`
 - `backend/.env.example`
-- `backend/image_schemas.py`
-- `backend/images.py`
+- `backend/images/schemas.py`
+- `backend/images/routes.py`
 - `backend/main.py`
 - `backend/models.py`
-- `backend/moderation_worker.py`
-- `backend/post_schemas.py`
-- `backend/posts.py`
-- `backend/profile_routes.py`
-- `backend/profile_schemas.py`
+- `backend/moderation/worker.py`
+- `backend/posts/schemas.py`
+- `backend/posts/routes.py`
+- `backend/profiles/routes.py`
+- `backend/profiles/schemas.py`
 - `backend/pyproject.toml`
 - `backend/tests/test_auth.py`
 - `backend/tests/test_images.py`
@@ -199,11 +199,11 @@ Browser checklist:
 - `docs/moderation.md`
 - `docs/posts-and-media.md`
 - `frontend/src/app/profile/page.tsx`
-- `frontend/src/components/EditProfileModal.tsx`
-- `frontend/src/components/ImageUploadLab.tsx`
-- `frontend/src/components/ImageUploader.tsx`
-- `frontend/src/components/PostCard.tsx`
-- `frontend/src/lib/api.ts`
+- `frontend/src/components/profiles/EditProfileModal.tsx`
+- `frontend/src/components/images/ImageUploadLab.tsx`
+- `frontend/src/components/images/ImageUploader.tsx`
+- `frontend/src/components/posts/PostCard.tsx`
+- `frontend/src/lib/profiles.ts`
 - `frontend/src/lib/images/image-api.ts`
 - `frontend/src/lib/posts.ts`
 

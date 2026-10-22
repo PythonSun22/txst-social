@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { inspectImage, type SelectedImage } from "@/lib/images/image-file";
 import { aspectRatio, formatBytes, type ImagePolicy } from "@/lib/images/image-policy";
 import { completeImage, ImageTransferError, uploadImage, type SavedImage, type ImagePurpose } from "@/lib/images/image-api";
-import ImageEditor from "./ImageEditor";
+import ImageEditor from "@/components/images/ImageEditor";
 
 interface ImageUploaderProps {
   policy: ImagePolicy;

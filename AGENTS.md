@@ -89,10 +89,14 @@ txst-social/
 │   ├── main.py                # FastAPI assembly, middleware, health endpoints
 │   ├── database.py            # engine, sessions, get_db()
 │   ├── models.py              # SQLAlchemy models — mirrors the migrations BY HAND
-│   ├── profile_routes.py      # profile reads, options and current-user edits
-│   ├── profile_schemas.py     # profile request/response contracts
-│   ├── posts.py               # post routes, including /posts/me
-│   └── schemas.py             # small application/health response contracts
+│   ├── auth.py                # shared authentication dependencies
+│   ├── health_schemas.py      # small application/health response contracts
+│   ├── profiles/              # routes.py and schemas.py
+│   ├── posts/                 # routes.py and schemas.py
+│   ├── comments/              # routes.py and schemas.py
+│   ├── images/                # routes, schemas, processing, worker,
+│   │                          # caller Storage signing and worker byte transfers
+│   └── moderation/            # client, context, worker and offline evaluation
 ├── supabase/migrations/
 │   ├── 20260901212005_initial_schema.sql   # profiles, RLS enabled
 │   └── 20260910200000_lynx_core.sql        # everything else — READ THIS ONE
@@ -102,6 +106,14 @@ txst-social/
     ├── Two_Week_Sprint_Timeline.md
     └── txst-lynx-proposal.html
 ```
+
+Feature folders own their routes and schemas; shared auth, database setup and
+SQLAlchemy models stay at the backend root. Frontend components are grouped under
+`src/components/{auth,comments,communities,images,layout,posts,profiles,ui}`.
+`frontend/src/lib/api.ts` owns the shared HTTP/session helper; profile contracts
+and API calls live in `frontend/src/lib/profiles.ts`. Image API helpers remain
+in `frontend/src/lib/images/`. Run moderation CLIs from `backend/` with
+`uv run python -m moderation.client` or `uv run python -m moderation.evaluate`.
 
 **`supabase/migrations/20260910200000_lynx_core.sql` and subsequent migrations
 are the source of truth for the data model.** Read the core migration first;
@@ -267,7 +279,7 @@ Enable `IMAGE_PROCESSING_ENABLED` separately from `MODERATION_ENABLED`. The imag
 worker decodes still images (25 million pixel cap), strips metadata, generates
 WebP versions and screens the largest version before marking an asset ready.
 Post assets produce preview + expanded versions; avatars produce small + large;
-banners produce one. Presets/quality live in `backend/image_processing.py`.
+banners produce one. Presets/quality live in `backend/images/processing.py`.
 Posts wait for image processing without consuming post-screening attempts, then
 retain title/body-plus-image screening. Both workers send bounded inline image
 bytes, so local loopback Storage no longer needs to be fetchable by OpenAI.

@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session
 
 from auth import bearer, get_current_profile, require_verified_profile
 from database import get_db
-from image_schemas import (
+from images.schemas import (
     IMAGE_BUCKET, IMAGE_TYPES, ImagePreviewResponse, ImageUploadCreate,
     ImageUploadPolicy, ImageUploadResponse, ImageUploadTicket,
     ImageVariantResponse, VariantName,
 )
-import image_storage
+from images import storage as image_storage
 from models import ImageUpload, ImageVariant, Profile
 
 router = APIRouter(prefix="/images", tags=["images"])

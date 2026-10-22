@@ -21,10 +21,10 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 from models import ImageUpload, ImageVariant, ModerationCheck, Post, PostMedia, Profile, Space
-from moderation import ModerationError
-from moderation_context import ContextAssessment
-from moderation_worker import Settings, claim_work, finish_work, run_once
-from posts import get_post
+from moderation.client import ModerationError
+from moderation.context import ContextAssessment
+from moderation.worker import Settings, claim_work, finish_work, run_once
+from posts.routes import get_post
 from test_moderation_worker import verdict
 
 
@@ -112,7 +112,7 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
         older = self.post(age=5)
         with self.sessions() as db:
             with self.assertRaises(HTTPException): get_post(older, Response(), None, db)
-        with patch("moderation_worker.moderate_content", return_value=verdict()):
+        with patch("moderation.worker.moderate_content", return_value=verdict()):
             self.assertTrue(run_once(self.sessions))
         with self.sessions() as db:
             self.assertEqual(db.get(Post, newer).status, "pending")
@@ -123,8 +123,8 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
 
     def test_category_flag_blocks_all_images_and_stays_private(self):
         identity = self.post(images=2)
-        with (patch("moderation_worker.moderation_image_input", side_effect=lambda key: f"https://private/{key}") as sign,
-              patch("moderation_worker.moderate_content", return_value=verdict(True, "illicit", overall=False)) as screen):
+        with (patch("moderation.worker.moderation_image_input", side_effect=lambda key: f"https://private/{key}") as sign,
+              patch("moderation.worker.moderate_content", return_value=verdict(True, "illicit", overall=False)) as screen):
             run_once(self.sessions)
         self.assertEqual(sign.call_count, 2)
         self.assertEqual(len(screen.call_args.args[1]), 2)
@@ -140,8 +140,8 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
         first = verdict(True)
         first.category_scores["violence"] = 0.42
         context = ContextAssessment(decision="allow", reason_code="media_reference")
-        with (patch("moderation_worker.moderate_content", return_value=first),
-              patch("moderation_worker.moderate_context", return_value=context)):
+        with (patch("moderation.worker.moderate_content", return_value=first),
+              patch("moderation.worker.moderate_context", return_value=context)):
             run_once(self.sessions, Settings(context_recheck_enabled=True))
         with self.sessions() as db:
             self.assertEqual(db.get(Post, identity).status, "approved")
@@ -157,8 +157,8 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
         first.categories["harassment"] = True
         first.category_scores.update(violence=0.426, harassment=0.568)
         context = ContextAssessment(decision="allow", reason_code="past_incident")
-        with (patch("moderation_worker.moderate_content", return_value=first),
-              patch("moderation_worker.moderate_context", return_value=context)):
+        with (patch("moderation.worker.moderate_content", return_value=first),
+              patch("moderation.worker.moderate_context", return_value=context)):
             run_once(self.sessions, Settings(context_recheck_enabled=True))
         with self.sessions() as db:
             self.assertEqual(db.get(Post, identity).status, "approved")
@@ -170,8 +170,8 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
         identity = self.post()
         first = verdict(True)
         first.category_scores["violence"] = 0.42
-        with (patch("moderation_worker.moderate_content", return_value=first),
-              patch("moderation_worker.moderate_context",
+        with (patch("moderation.worker.moderate_content", return_value=first),
+              patch("moderation.worker.moderate_context",
                     side_effect=ModerationError("Unavailable", code="context_provider"))):
             run_once(self.sessions, Settings(context_recheck_enabled=True))
         with self.sessions() as db:
@@ -182,9 +182,9 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
 
     def test_failure_retry_does_not_block_newer_post_and_exhausts(self):
         older, newer = self.post(age=5), self.post()
-        with patch("moderation_worker.moderate_content", side_effect=ModerationError("failure")):
+        with patch("moderation.worker.moderate_content", side_effect=ModerationError("failure")):
             run_once(self.sessions)
-        with patch("moderation_worker.moderate_content", return_value=verdict()):
+        with patch("moderation.worker.moderate_content", return_value=verdict()):
             run_once(self.sessions)
         with self.sessions() as db:
             self.assertEqual(db.get(Post, newer).status, "approved")
@@ -192,7 +192,7 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
         for _ in range(2):
             with self.sessions.begin() as db:
                 db.get(Post, older).moderation_next_attempt_at = self.now - timedelta(seconds=1)
-            with patch("moderation_worker.moderate_content", side_effect=ModerationError("failure")):
+            with patch("moderation.worker.moderate_content", side_effect=ModerationError("failure")):
                 run_once(self.sessions)
         with self.sessions() as db:
             post = db.get(Post, older)
@@ -251,8 +251,8 @@ class ModerationDatabaseTests(ImageDatabaseFixture):
 
     def test_storage_failure_cannot_approve_from_text_alone(self):
         identity = self.post(images=1)
-        with (patch("moderation_worker.moderation_image_input", side_effect=ModerationError("unavailable")),
-              patch("moderation_worker.moderate_content") as screen):
+        with (patch("moderation.worker.moderation_image_input", side_effect=ModerationError("unavailable")),
+              patch("moderation.worker.moderate_content") as screen):
             run_once(self.sessions)
         screen.assert_not_called()
         with self.sessions() as db:

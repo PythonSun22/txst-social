@@ -3,8 +3,8 @@
 /* eslint-disable @next/next/no-img-element -- Private, expiring Storage URLs are fetched directly by the owner. */
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import ImageUploader from "./ImageUploader";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import ImageUploader from "@/components/images/ImageUploader";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 import { getImagePolicy, listImages, previewImage, type SavedImage } from "@/lib/images/image-api";
 import { aspectRatio, formatBytes, type ImagePolicy } from "@/lib/images/image-policy";
 

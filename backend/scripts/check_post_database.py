@@ -21,8 +21,8 @@ load_dotenv(ROOT / ".env")
 
 from database import engine  # noqa: E402
 from models import ImageUpload, Post, PostMedia, Profile, Space  # noqa: E402
-from post_schemas import PostCreate  # noqa: E402
-from posts import create_post, list_posts, set_like  # noqa: E402
+from posts.schemas import PostCreate  # noqa: E402
+from posts.routes import create_post, list_posts, set_like  # noqa: E402
 
 
 def check():

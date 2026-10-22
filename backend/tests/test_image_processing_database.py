@@ -10,11 +10,11 @@ from uuid import uuid4
 from fastapi import Response
 from sqlalchemy import select, text
 
-from image_processing import process_image
-from image_processing_worker import Settings, claim_work, finish_work, cleanup_original_once
+from images.processing import process_image
+from images.worker import Settings, claim_work, finish_work, cleanup_original_once
 from models import ImageUpload, ImageVariant, ImageProcessingCheck, Profile
-from profile_routes import update_current_profile
-from profile_schemas import ProfileUpdate
+from profiles.routes import update_current_profile
+from profiles.schemas import ProfileUpdate
 from test_image_processing import source, verdict
 from test_moderation_database import ImageDatabaseFixture
 
@@ -85,7 +85,7 @@ class ImageProcessingDatabaseTests(ImageDatabaseFixture):
     def test_cleanup_waits_for_upload_token_expiry_and_preserves_variants(self):
         uid = self.upload()
         self.finish(claim_work(self.sessions, Settings(), datetime.now(timezone.utc)))
-        with patch("image_processing_worker.remove_images") as remove:
+        with patch("images.worker.remove_images") as remove:
             self.assertFalse(cleanup_original_once(self.sessions))
             remove.assert_not_called()
             with self.sessions.begin() as db:

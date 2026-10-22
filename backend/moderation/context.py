@@ -8,7 +8,7 @@ from openai import APIError, OpenAI
 from pydantic import BaseModel, ValidationError
 from typing import Literal
 
-from moderation import ModerationError, TextModerationResult
+from moderation.client import ModerationError, TextModerationResult
 
 
 CONTEXT_MODEL = "gpt-4o-mini"
@@ -100,7 +100,7 @@ def context_check(client: OpenAI, model: str, post_text: str) -> ContextAssessme
 
 def moderate_context(post_text: str) -> ContextAssessment:
     """A missing or invalid second verdict is a retryable screening failure."""
-    load_dotenv(Path(__file__).resolve().with_name(".env"))
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise ModerationError("Context screening is not configured.", code="context_configuration")

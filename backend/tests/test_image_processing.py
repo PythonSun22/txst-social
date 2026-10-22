@@ -11,11 +11,11 @@ from uuid import uuid4
 
 from PIL import Image
 
-from image_processing import process_image
-from image_processing_worker import Work, Settings, SOURCE_GRACE_SECONDS, claim_work, finish_work, run_once, cleanup_original_once
-from image_worker_storage import image_data_url
+from images.processing import process_image
+from images.worker import Work, Settings, SOURCE_GRACE_SECONDS, claim_work, finish_work, run_once, cleanup_original_once
+from images.worker_storage import image_data_url
 from models import ImageUpload, ImageVariant, Profile
-from moderation import ModerationError, TextModerationResult
+from moderation.client import ModerationError, TextModerationResult
 
 
 def source(size=(1200, 800), mode="RGB", format="PNG"):
@@ -67,7 +67,7 @@ class CodecTests(unittest.TestCase):
         for data, mime in [(b"not an image", "image/png"), (source(), "image/jpeg")]:
             with self.assertRaises(ValueError):
                 process_image(data, "post", mime)
-        with patch("image_processing.MAX_SOURCE_PIXELS", 10), self.assertRaises(ValueError):
+        with patch("images.processing.MAX_SOURCE_PIXELS", 10), self.assertRaises(ValueError):
             process_image(source((20, 20)), "post", "image/png")
         buffer = BytesIO()
         Image.new("RGB", (10, 10), "red").save(buffer, "WEBP", save_all=True,
@@ -132,18 +132,18 @@ class ProcessingWorkerTests(unittest.TestCase):
     def test_failed_or_partial_storage_does_not_publish(self):
         data = source()
         work = Work(self.work.id, self.work.owner, self.work.claim, self.work.key, "post", "image/png", len(data))
-        with (patch("image_processing_worker.claim_work", return_value=work),
-              patch("image_processing_worker.read_image", return_value=data),
-              patch("image_processing_worker.moderate_content", return_value=verdict()),
-              patch("image_processing_worker.write_image", side_effect=[None, ModerationError("failed", code="storage_write")]),
-              patch("image_processing_worker.finish_work") as finish,
-              patch("image_processing_worker.remove_images") as remove):
+        with (patch("images.worker.claim_work", return_value=work),
+              patch("images.worker.read_image", return_value=data),
+              patch("images.worker.moderate_content", return_value=verdict()),
+              patch("images.worker.write_image", side_effect=[None, ModerationError("failed", code="storage_write")]),
+              patch("images.worker.finish_work") as finish,
+              patch("images.worker.remove_images") as remove):
             run_once(settings=Settings())
             self.assertEqual(finish.call_args.args[5], "storage_write")
             self.assertEqual(len(remove.call_args.args[0]), 2)
 
     def test_source_cleanup_uses_storage_api_and_retries(self):
-        with patch("image_processing_worker.remove_images") as remove:
+        with patch("images.worker.remove_images") as remove:
             self.assertTrue(cleanup_original_once(self.sessions))
             remove.assert_called_once_with([self.upload.object_key])
             self.assertIsNotNone(self.upload.original_deleted_at)
@@ -151,7 +151,7 @@ class ProcessingWorkerTests(unittest.TestCase):
             self.assertIn("original_cleanup_after <=", query)
             self.assertIn("processing_status IN", query)
         self.upload.original_deleted_at = None
-        with patch("image_processing_worker.remove_images", side_effect=ModerationError("offline", code="storage_delete")):
+        with patch("images.worker.remove_images", side_effect=ModerationError("offline", code="storage_delete")):
             cleanup_original_once(self.sessions)
         self.assertIsNone(self.upload.original_deleted_at)
         self.assertEqual(self.upload.original_cleanup_error, "storage_delete")

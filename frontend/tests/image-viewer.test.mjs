@@ -6,7 +6,7 @@ import ts from "typescript";
 test("expanded viewer survives a queued close event from Strict Mode effect replay", async () => {
   // Exercise the component's effects and handlers without network or DOM deps.
   // Native dialog.close() queues its close event; React can reopen it first.
-  const source = (await readFile(new URL("../src/components/ImageViewer.tsx", import.meta.url), "utf8"))
+  const source = (await readFile(new URL("../src/components/images/ImageViewer.tsx", import.meta.url), "utf8"))
     .replace('import { useEffect, useRef, useState } from "react";', `
       const effects = [];
       const queued = [];

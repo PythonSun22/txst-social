@@ -133,7 +133,7 @@ def _moderate_request(text: str, image_url: str | None = None) -> TextModeration
         {"type": "image_url", "image_url": {"url": image_url}},
     ]
 
-    load_dotenv(Path(__file__).resolve().with_name(".env"))
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise ModerationError("Set OPENAI_API_KEY in backend/.env before screening.", code="configuration")

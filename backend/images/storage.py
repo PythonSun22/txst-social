@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 from fastapi import HTTPException
 
-from image_schemas import IMAGE_BUCKET
+from images.schemas import IMAGE_BUCKET
 
 
 def storage_request(method: str, path: str, token: str | None, body: dict | None = None) -> dict:

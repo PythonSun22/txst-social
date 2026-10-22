@@ -49,13 +49,13 @@ without an author session; see [moderation](moderation.md).
 | `frontend/src/lib/images/image-policy.ts` | Pure file limits, format signatures, byte and ratio formatting |
 | `frontend/src/lib/images/image-file.ts` | Browser decode and object URL for preview |
 | `frontend/src/lib/images/image-edit.ts` | Crop geometry, proportional sizing and canvas export |
-| `frontend/src/components/ImageEditor.tsx` | Modal crop/resize session with Save and Discard |
+| `frontend/src/components/images/ImageEditor.tsx` | Modal crop/resize session with Save and Discard |
 | `frontend/src/lib/images/image-api.ts` | Reserve → transfer → complete; retry completion after an uncertain response |
-| `frontend/src/components/ImageUploader.tsx` | Drop/browse/edit UI; standalone `onUploaded(SavedImage)` or `selectOnly` with `onSelected(SelectedImage \| null)` |
-| `frontend/src/components/ImageUploadLab.tsx` | Account state, recent records and saved-file preview for testing |
-| `backend/images.py` | Owner checks, reservations, completion and listing |
-| `backend/image_storage.py` | Storage REST adapter; no image bytes pass through FastAPI |
-| `backend/image_schemas.py` | Limits and upload API contracts |
+| `frontend/src/components/images/ImageUploader.tsx` | Drop/browse/edit UI; standalone `onUploaded(SavedImage)` or `selectOnly` with `onSelected(SelectedImage \| null)` |
+| `frontend/src/components/images/ImageUploadLab.tsx` | Account state, recent records and saved-file preview for testing |
+| `backend/images/routes.py` | Owner checks, reservations, completion and listing |
+| `backend/images/storage.py` | Storage REST adapter; no image bytes pass through FastAPI |
+| `backend/images/schemas.py` | Limits and upload API contracts |
 
 ## Schema and deployment
 
@@ -77,7 +77,7 @@ signing because Storage checks policies through a separate database connection.
 The migration creates the `post-images` bucket with a 10,000,000-byte limit and
 the three allowed MIME types. The global Storage upload limit must also allow
 10 MB; a lower project-wide limit will still reject uploads. Keep the migration
-constraints, bucket limits and `backend/image_schemas.py` in step when limits
+constraints, bucket limits and `backend/images/schemas.py` in step when limits
 change. The frontend fetches its policy from FastAPI.
 
 Apply through the repository's normal migration workflow:

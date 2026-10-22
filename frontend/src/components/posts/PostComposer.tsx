@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import ImageUploader from "./ImageUploader";
+import ImageUploader from "@/components/images/ImageUploader";
 import type { SelectedImage } from "@/lib/images/image-file";
 import type { ImagePolicy } from "@/lib/images/image-policy";
 import { completeImage, getImagePolicy, ImageTransferError, uploadImage } from "@/lib/images/image-api";

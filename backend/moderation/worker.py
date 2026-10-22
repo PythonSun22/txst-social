@@ -16,10 +16,10 @@ from sqlalchemy import or_, select
 
 from database import SessionLocal
 from models import ImageUpload, ImageVariant, ModerationCheck, Post, PostMedia, Space
-from moderation import ModerationError, TextModerationResult, moderate_content
-from moderation_context import (CONTEXT_MODEL, ContextAssessment, candidate_blocks,
+from moderation.client import ModerationError, TextModerationResult, moderate_content
+from moderation.context import (CONTEXT_MODEL, ContextAssessment, candidate_blocks,
                                 moderate_context, should_recheck)
-from image_worker_storage import image_data_url, read_image
+from images.worker_storage import image_data_url, read_image
 
 logger = logging.getLogger(__name__)
 POLICY_VERSION = "forall-any-flag-v1"

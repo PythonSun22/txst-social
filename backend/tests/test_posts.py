@@ -16,8 +16,8 @@ from auth import get_authenticated_user_id
 from database import get_db
 from main import app
 from models import Ban, ImageUpload, Post, PostLike, Profile, Space
-from post_schemas import PostCreate
-from posts import create_post, decode_cursor, delete_own_post, encode_cursor, list_posts, serialize_posts, set_like
+from posts.schemas import PostCreate
+from posts.routes import create_post, decode_cursor, delete_own_post, encode_cursor, list_posts, serialize_posts, set_like
 
 class PostTests(unittest.TestCase):
     def setUp(self):
@@ -151,14 +151,14 @@ class PostTests(unittest.TestCase):
     def test_attachment_order_and_pending(self):
         uploads=[ImageUpload(id=uuid4(),owner_id=self.user.id,object_key=f'{n}.png',width=100,height=50) for n in range(2)]
         self.db.scalar.side_effect=[None,self.space]; self.db.scalars.return_value.all.return_value=uploads
-        with patch('posts.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='T',body='B',image_ids=[uploads[1].id,uploads[0].id]),Response(),self.user,self.db)
+        with patch('posts.routes.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='T',body='B',image_ids=[uploads[1].id,uploads[0].id]),Response(),self.user,self.db)
         added=[c.args[0] for c in self.db.add.call_args_list]
         self.assertEqual((added[0].status,added[0].author_id,added[0].type),('pending',self.user.id,'image'))
         self.assertEqual([(a.position,a.image_upload_id) for a in added[1:]],[(0,uploads[1].id),(1,uploads[0].id)])
         self.db.commit.assert_called_once()
 
     def test_submission_retry(self):
-        with patch('posts.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='Test',body='Body'),Response(),self.user,self.db)
+        with patch('posts.routes.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='Test',body='Body'),Response(),self.user,self.db)
         self.db.add.assert_not_called(); self.db.commit.assert_not_called()
         with self.assertRaises(HTTPException) as error: create_post(PostCreate(submission_id=uuid4(),title='Changed',body='Body'),Response(),self.user,self.db)
         self.assertEqual(error.exception.status_code,409)

@@ -17,13 +17,13 @@ in [moderation](moderation.md).
 | Layer | Files | Contract |
 |---|---|---|
 | Image validation | `frontend/src/lib/images/image-policy.ts`, `image-file.ts` | Inspect a `File`; return `SelectedImage` with dimensions, errors and a local preview URL. Policy comes from FastAPI. |
-| Browser editing | `image-edit.ts`, `components/ImageEditor.tsx` | Work on a local selection. Save exports and revalidates a new `File`; Discard preserves the selection. No network or post knowledge. |
-| Selection UI | `components/ImageUploader.tsx` | Default mode transfers one image and calls `onUploaded(SavedImage)`. `selectOnly` mode calls `onSelected(SelectedImage \| null)` and leaves transfers to its caller. |
+| Browser editing | `image-edit.ts`, `components/images/ImageEditor.tsx` | Work on a local selection. Save exports and revalidates a new `File`; Discard preserves the selection. No network or post knowledge. |
+| Selection UI | `components/images/ImageUploader.tsx` | Default mode transfers one image and calls `onUploaded(SavedImage)`. `selectOnly` mode calls `onSelected(SelectedImage \| null)` and leaves transfers to its caller. |
 | Image transfer | `lib/images/image-api.ts` | `uploadImage` reserves metadata, transfers directly to private Storage, then confirms completion. Returns `SavedImage`; never creates a post. |
-| Post orchestration | `components/PostComposer.tsx`, `lib/posts.ts` | Own title, body, attachment order and submission retry ID. Upload selected files, then send completed image IDs to `/posts`. |
-| Image API | `backend/images.py`, `image_storage.py`, `image_schemas.py` | Own upload policy, authorization, reservations, completion and Storage signing. |
-| Post API | `backend/posts.py`, `post_schemas.py` | Validate content, derive author from Auth, check bans and attachment ownership/completion, save post and ordered references atomically. |
-| Feed presentation | `app/page.tsx`, `components/PostCard.tsx` | Fetch chronological pages, authorized image previews and persistent likes. No mock post data. |
+| Post orchestration | `components/posts/PostComposer.tsx`, `lib/posts.ts` | Own title, body, attachment order and submission retry ID. Upload selected files, then send completed image IDs to `/posts`. |
+| Image API | `backend/images/routes.py`, `backend/images/storage.py`, `backend/images/schemas.py` | Own upload policy, authorization, reservations, completion and Storage signing. |
+| Post API | `backend/posts/routes.py`, `backend/posts/schemas.py` | Validate content, derive author from Auth, check bans and attachment ownership/completion, save post and ordered references atomically. |
+| Feed presentation | `app/page.tsx`, `components/posts/PostCard.tsx` | Fetch chronological pages, authorized image previews and persistent likes. No mock post data. |
 
 For another image use case (for example a community cover), reuse the selector,
 editor and transfer functions. Add that feature's own association and permission
