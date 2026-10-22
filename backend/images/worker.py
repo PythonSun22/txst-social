@@ -20,6 +20,7 @@ from images.worker_storage import image_data_url, read_image, remove_images, wri
 from images.schemas import SOURCE_GRACE_SECONDS
 from images.budget import (cleanup_attempt, cleanup_staged_once, delete_recorded,
                            expire_unfinished, release_processing, stage_outputs, write_reserved)
+from images.cleanup import cleanup_orphan_once, delete_retired_once, retire_unused_once
 from models import ImageProcessingCheck, ImageUpload, ImageVariant, PostMedia, Profile
 from moderation.client import ModerationError, moderate_content
 
@@ -103,6 +104,8 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
                 result, failure: str | None, retry_after: float = 0) -> bool:
     now = datetime.now(timezone.utc)
     with sessions() as db:
+        # Match profile edits, attachment creation and retirement lock order.
+        db.execute(select(Profile.id).where(Profile.id == work.owner).with_for_update())
         upload = db.scalar(select(ImageUpload).where(ImageUpload.id == work.id).with_for_update())
         if (upload is None or upload.deleted_at is not None or upload.processing_claim != work.claim
                 or upload.processing_lease_until is None or upload.processing_lease_until <= now):
@@ -216,6 +219,9 @@ def run_worker(stop: Event, settings: Settings):
             staged = cleanup_staged_once(SessionLocal, remove_images)
             worked = run_once(settings=settings)
             cleaned = cleanup_original_once()
+            retired = retire_unused_once()
+            deleted = delete_retired_once()
+            orphan = cleanup_orphan_once()
             last_error = None
         except Exception as error:
             signature = type(error).__name__
@@ -224,5 +230,5 @@ def run_worker(stop: Event, settings: Settings):
                 last_error = signature
             stop.wait(30)
             continue
-        if not worked and not cleaned and not staged:
+        if not any((worked, cleaned, staged, retired, deleted, orphan)):
             stop.wait(settings.poll_seconds)

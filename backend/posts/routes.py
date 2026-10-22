@@ -257,6 +257,9 @@ def delete_own_post(
     db: Session = Depends(get_db),
 ) -> Response:
     """Mark the caller's post deleted while retaining its database row (FR-34)."""
+    # Reference-removal triggers lock uploads. Match creation/profile/cleanup
+    # order so multi-image deletion cannot deadlock with profile replacement.
+    db.execute(select(Profile.id).where(Profile.id == profile.id).with_for_update())
     post = db.scalar(select(Post).where(
         Post.id == post_id,
         Post.author_id == profile.id,

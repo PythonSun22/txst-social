@@ -186,6 +186,8 @@ class ImageUpload(Base):
     __tablename__ = "image_uploads"
     __table_args__ = (
         Index("image_uploads_owner_rate_idx", "owner_id", "created_at"),
+        Index("image_asset_cleanup_idx", "asset_cleanup_after", "id",
+              postgresql_where=text("files_deleted_at is null and asset_cleanup_after is not null")),
         {"schema": "public"},
     )
 
@@ -212,6 +214,10 @@ class ImageUpload(Base):
     original_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     original_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     processing_reserved_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    asset_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, server_default=text("now()+interval '24 hours'"))
+    asset_cleanup_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    asset_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    files_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ImageStorageObject(Base):
@@ -220,6 +226,7 @@ class ImageStorageObject(Base):
     __table_args__ = (
         Index("image_storage_owner_idx", "owner_id", postgresql_where=text("deleted_at is null")),
         Index("image_storage_upload_idx", "image_upload_id"),
+        Index("image_orphan_cleanup_idx", "cleanup_after", postgresql_where=text("deleted_at is null and image_upload_id is null")),
         {"schema": "public"},
     )
     object_key: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -232,6 +239,9 @@ class ImageStorageObject(Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    cleanup_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()+interval '24 hours'"))
+    cleanup_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ImageVariant(Base):

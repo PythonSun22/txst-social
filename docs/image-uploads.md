@@ -164,11 +164,11 @@ Optional browser editing is not trusted validation. See [processing](image-proce
 Interrupted transfers or failed signing can leave unused reservations; transfers
 whose confirmation fails can leave private objects. Retry confirmation uses the
 same upload ID and is idempotent. Selecting the file again starts a new reservation.
-Automated orphan cleanup and an end-user delete action are not implemented in this
-first slice. Before broad use, add retention cleanup through Storage's delete API
-(not SQL deletion of `storage.objects`); account-row deletion alone does not remove
-object bytes. A signed upload capability can remain valid for two hours, so cleanup
-must account for outstanding tokens before removing reservations/objects.
+Automatic reference-aware cleanup is implemented below. Post deletion and profile
+replacement queue unused assets for Storage deletion. A standalone manual upload
+delete endpoint is not part of this feature. Signed upload capabilities may remain
+valid for two hours, so originals continue to reserve capacity until their safe
+deletion horizon. Never delete rows from `storage.objects` directly.
 
 ## Shared account upload limits (FR-32)
 
@@ -261,11 +261,73 @@ applied automatically by this change.
 Limits live in `backend/images/schemas.py`; new reservations persist their checked
 headroom. If changing output caps/headroom, account for already queued jobs with
 older reservations. Reducing image dimensions/quality alone needs no schema change.
-Broader reference-aware hard deletion of replaced/deleted assets remains future
-work. Delete bytes through Storage before retiring ledger rows; foreign keys
-prevent silently discarding accounting while retained files still exist. Preserve
-at least one hour of reservation history (or introduce a rate ledger) when later
-hard-deleting upload rows.
+Reference-aware hard deletion of unused file bytes is implemented below. Upload
+and audit rows remain, retaining rate history. Foreign keys prevent silently
+discarding ledger accounting while retained files still exist.
+
+## Unused-file cleanup and hard deletion (FR-32/34)
+
+Apply `20261022102230_image_asset_cleanup.sql`, then restart every backend/image
+worker instance. Stop older workers before migration; mixed worker versions are
+not supported. The existing `IMAGE_PROCESSING_ENABLED=true` worker performs cleanup
+using backend-only Storage credentials. Cleanup does not call OpenAI.
+
+| Case | Eligibility |
+|---|---|
+| A post is deleted | Queue its assets for five minutes later; other live references still protect them. |
+| Avatar/banner replaced | Queue the old image only after the replacement becomes active. Pending or rejected replacements keep the current image. |
+| Selection removed/cancelled | Queue the detached selection for five minutes later. |
+| Never attached upload | Keep a 24-hour grace so composing, editing and retries can finish. |
+| Blocked/terminally failed upload | Queue after five minutes; any undeleted post reference still protects it. |
+| Original input | Always respect its token-safe cleanup horizon, even if variants can go sooner. |
+| Unlinked inventory orphan | Wait 24 hours and check legacy file-key references and source capabilities before deleting. |
+
+These durations are persisted by database defaults/triggers in the migration;
+changing them requires a new migration. Python retry backoff is in
+`backend/images/cleanup.py` (60 seconds doubling, capped at one hour).
+
+A live reference is **any undeleted post**, including pending, blocked, removed or
+exhausted posts that the author can inspect; a current image on an undeleted
+profile; or a pending selection whose asset is not blocked/failed. Suspended
+profiles retain images for restoration. Failed pending selections are cleared
+when retired without clearing the old approved image. Deleted-profile references
+can be cleared. Legacy key-only post attachments also protect their file keys.
+
+Reference-removal triggers queue cleanup. The worker locks the owner account,
+then the upload, rechecks references, and either cancels cleanup or retires the
+upload. A live processing lease defers retirement. Post creation/deletion, profile
+editing and worker activation use the same account-first lock order. Database
+triggers serialize new references with upload/object retirement and reject
+references to removed files. No claim or saved old selection can revive an upload
+after it is retired. One shared asset is kept until its last live reference goes.
+
+Retirement sets `image_uploads.deleted_at` and releases unused processing headroom.
+A separate durable deletion phase removes all known variants and incomplete writes
+via the Storage API. It removes originals only after their safe horizon; until
+then they remain charged. Files that may still exist remain charged on network or
+Storage errors. An idempotent retry is safe even if Storage deletion succeeded but
+the database commit failed. `asset_cleanup_after`, `asset_cleanup_attempts` and
+`asset_cleanup_error` expose retry state; `files_deleted_at` marks full completion.
+
+**Retained metadata is intentional.** Post and upload tombstones, ordered media,
+variant dimensions/sizes, screening audits and deleted ledger rows remain in
+PostgreSQL. Their historical byte-size fields consume no account file budget.
+Actual image bytes are permanently removed from Storage. Preserving rows also
+keeps per-account rate history intact. No new general post/account hard-delete API
+is introduced.
+
+Manual local acceptance checks (in addition to automated integration tests):
+
+1. Publish images, delete the post, and wait five minutes. Its unused variants
+   should disappear; an original younger than its token horizon remains charged.
+2. Replace an avatar/banner. The old image stays while the new one is pending.
+   After approval, the replacement stays and the old unused variants are reclaimed.
+3. Try a rejected replacement: the approved current image must remain.
+4. Observe `GET /images/budget`: quota falls after successful deletion, not when
+   the post is merely marked deleted. Failed deletion retains charges and retries.
+5. Refresh/restart the backend: queued cleanup persists. Keep the image worker
+   enabled for automatic cleanup. Shared-reference and race cases are covered by
+   `backend/tests/test_image_cleanup_database.py`.
 
 ## Verification
 
@@ -282,11 +344,19 @@ npm test
 npm run build
 ```
 
-Backend tests mock Auth, Storage and the SQL session. They cover ownership,
-verification, invalid/oversized inputs, object metadata mismatch, private preview,
-retrying completion, and POST CORS. Frontend tests cover the byte boundary,
-unsupported files, signatures and ratio calculations. Neither replaces a live
-Storage/RLS smoke test after migration.
+Unit tests mock Auth, Storage and SQL access. Optional integration tests use a
+fresh disposable loopback PostgreSQL database named `moderation_test*`, configured
+through `MODERATION_TEST_DATABASE_URL`; they apply every migration using minimal
+Auth/Storage schema stand-ins. Never point them at the shared database. HTTP
+provider/Storage requests remain mocked in those tests.
+
+Coverage includes authorization, size/type boundaries, batch reservations,
+account quota/slot races, RLS, worker leases, profile activation, deletion retries,
+shared and legacy references, attachment/retirement races, delayed token minting,
+and retained audits/rate metadata. Frontend tests cover upload validation, editing,
+API failures and the expanded viewer. A separate live local Storage smoke check
+verified real generated-file writes, reads, deletion and repeated deletion for
+new random test keys. Manual browser acceptance still uses the checklist below.
 
 Manual checks with both apps running:
 

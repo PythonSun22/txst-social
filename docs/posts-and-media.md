@@ -1,6 +1,6 @@
 > Current image lifecycle: [optimized image assets](image-processing.md) covers
 > trusted WebP processing, preview/expanded delivery, profile moderation and
-> temporary-original cleanup. General asset hard deletion is deferred.
+> temporary-original cleanup and reference-aware hard deletion of unused file bytes.
 
 # Persistent posts and reusable images
 
@@ -102,7 +102,7 @@ feed before starting a different post.
 
 Post creation, ordered references and the space counter are atomic. File transfers
 precede that transaction, so a cancelled/failed post can leave private unattached
-assets. Automated cleanup is not implemented; see the image pipeline retention
+assets. Unused file bytes are reclaimed by reference-aware cleanup; see the image pipeline retention
 notes. Do not delete Storage object rows directly with SQL.
 
 ## Verification

@@ -90,7 +90,8 @@ def sign_reserved_upload(db, upload_id, credentials):
     upload = db.scalar(select(ImageUpload).where(ImageUpload.id == upload_id).with_for_update()
         .execution_options(populate_existing=True))
     now = datetime.now(timezone.utc)
-    if (upload is None or upload.original_deleted_at is not None or upload.processing_status == "failed"
+    if (upload is None or upload.deleted_at is not None or upload.files_deleted_at is not None
+            or upload.original_deleted_at is not None or upload.processing_status == "failed"
             or upload.original_cleanup_after <= now):
         raise HTTPException(410, "This image reservation expired. Select the image again.")
     token = image_storage.sign_upload(upload.object_key, credentials)

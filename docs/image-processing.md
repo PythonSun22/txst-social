@@ -87,7 +87,7 @@ or referenced by active profiles. Originals never acquire public post access.
 Private audit tables have no browser read/write policy. Signed URLs last five
 minutes; removing a reference does not revoke a URL already issued.
 
-## Original deletion and deferred cleanup
+## Original deletion and unused-asset cleanup
 
 After all versions are stored and screening has a final verdict, the worker
 schedules deletion of the temporary original via the Storage API. It waits at
@@ -107,17 +107,23 @@ reconciles actual bytes atomically at terminal processing. Expired abandoned and
 failed-job originals are cleaned after the same token grace; interrupted variant
 writes are cleaned after their attempt ends. Failed deletion retains the charge.
 See [storage accounting](image-uploads.md#account-storage-budget-and-unfinished-uploads-fr-32).
-Reference-aware hard deletion of replaced/deleted published assets remains future
-work; post deletion remains soft deletion. Processing and cleanup require the
-image worker to be running.
+Reference-aware cleanup now permanently removes unused image files. Post deletion
+still retains a post tombstone and media/audit metadata. A deleted post queues its
+images, and profile activation queues the previous image only after its replacement
+is approved. Cleanup rechecks all live references before retiring an asset, then
+deletes variants after a five-minute grace and originals after token expiry.
+Never-attached uploads have a 24-hour grace. See
+[cleanup details](image-uploads.md#unused-file-cleanup-and-hard-deletion-fr-3234).
+Processing and cleanup require the image worker to be running.
 
 ## Local setup and verification
 
 1. Keep `DATABASE_URL` and both Supabase URLs pointed at the same **local** instance.
 2. Apply all pending migrations with `supabase migration up --local`, including
    `20260926000000_automatic_post_moderation.sql` and
-   `20261022072231_image_variants.sql`, `20261022094443_image_upload_limits.sql`, and
-   `20261022095634_image_storage_budget.sql`. Do not deploy shared migrations before review.
+   `20261022072231_image_variants.sql`, `20261022094443_image_upload_limits.sql`,
+   `20261022095634_image_storage_budget.sql`, and
+   `20261022102230_image_asset_cleanup.sql`. Do not deploy shared migrations before review.
 3. From `backend`, run `uv sync` (Pillow is now a dependency).
 4. Configure backend-only `SUPABASE_SECRET_KEY` (or legacy service role) and
    `OPENAI_API_KEY`. Set `IMAGE_PROCESSING_ENABLED=true` and

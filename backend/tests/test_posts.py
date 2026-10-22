@@ -89,7 +89,8 @@ class PostTests(unittest.TestCase):
                 query = self.db.scalar.call_args.args[0].compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True})
                 for clause in (str(self.user.id), 'posts.author_id =', 'posts.deleted_at IS NULL', 'FOR UPDATE'):
                     self.assertIn(clause, str(query))
-                self.db.execute.assert_called_once()
+                self.assertEqual(self.db.execute.call_count, 2)
+                self.assertIn('FOR UPDATE', str(self.db.execute.call_args_list[0].args[0]))
                 self.db.commit.assert_called_once()
                 self.db.delete.assert_not_called()
 
@@ -98,7 +99,7 @@ class PostTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as error:
             delete_own_post(self.post.id, self.user, self.db)
         self.assertEqual(error.exception.status_code, 404)
-        self.db.execute.assert_not_called()
+        self.db.execute.assert_called_once()  # Account lock; no counters are changed.
         self.db.commit.assert_not_called()
 
     def test_anonymous_writes(self):
@@ -139,7 +140,8 @@ class PostTests(unittest.TestCase):
                         else:
                             self.assertEqual(response.status_code, 404)
                             self.assertIsNone(self.post.deleted_at)
-                            self.db.execute.assert_not_called()
+                            self.db.execute.assert_called_once()  # Only the caller's account lock.
+                            self.assertIn('FOR UPDATE', str(self.db.execute.call_args.args[0]))
                             self.db.commit.assert_not_called()
 
     def test_invalid_attachment(self):

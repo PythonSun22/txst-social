@@ -170,7 +170,11 @@ Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 - `image_variants` — immutable optimized versions per upload: post preview/expanded,
   avatar small/large, or one banner; measured size and dimensions, private object keys.
 - `image_processing_checks` — asset-level screening audit, separate from post audits.
-  Uploads carry durable processing claims, retries and original cleanup state.
+  Uploads carry durable processing claims, retries, original cleanup state and
+  reference-aware asset retirement/deletion state.
+- `image_storage_objects` — owner-scoped file/capacity ledger. Object rows retain
+  confirmed deletion timestamps and orphan retry state; historical metadata costs
+  no image storage.
 
 **Engagement**
 - `post_likes`, `comment_likes` — composite PK `(user_id, target_id)`. Unliking
@@ -291,12 +295,11 @@ Avatars and banners now require asset-level screening. Pending profile selection
 are separate from active references: old approved assets stay visible until a
 replacement passes; rejection/failure preserves them. Active approved profile
 assets support signed public previews, including small avatars beside posts.
-Original input files are deleted through Storage only after all versions and a
-final screening verdict persist, and after signed upload tokens expire (7,500
-seconds after reservation). This is temporary-input cleanup only. Per-account
-quotas/rate limits and general hard deletion of abandoned/replaced/deleted assets
-are deferred. Changing presets affects future processing; ready assets are not
-regenerated. Existing uploads queue for processing; old profile assets are hidden
+Original input files are deleted through Storage after terminal processing and
+a token-safe grace (at least 7,500 seconds after token issuance). Expired abandoned
+uploads and failed jobs receive the same safe cleanup. Account rates, storage
+budgets and reference-aware hard deletion are implemented below. Changing presets
+affects future processing; ready assets are not regenerated. Existing uploads queue for processing; old profile assets are hidden
 until approved. Previously approved image posts return to pending for processing
 and screening. Legacy sources shared across purposes may require re-upload.
 
@@ -330,7 +333,8 @@ complete unflagged screening result. Failed screening never approves a post.
 Verified authors can soft-delete their own posts from the feed (FR-34), with
 confirmation, through `DELETE /posts/{id}`. The API returns viewer-specific
 `can_delete`; deletion decrements the space count in the same transaction.
-Media references and reusable private uploads are retained.
+Media/audit metadata is retained; unused image bytes are queued for reference-aware
+hard deletion through the Storage API (FR-32/34).
 
 Image reservations share a per-account rolling limit of **10 per minute and 40
 per hour** across posts, avatars and banners (FR-32). A reservation counts even
@@ -361,9 +365,25 @@ Apply `20261022095634_image_storage_budget.sql`; its backfill uses Storage inven
 for historical files. Accounts already over budget are blocked from new uploads;
 existing published content is preserved. Stop image workers during deployment
 and restart them after all migrations; older worker code does not maintain the ledger.
-Broader reference-aware cleanup and hard deletion of replaced/deleted published
-assets remain future work. Future hard deletion must preserve at least one hour of reservation history
-(or introduce a separate rate ledger) so it cannot reset these limits.
+Reference-aware hard deletion runs in the image worker (`images/cleanup.py`).
+Unattached uploads get 24 hours; deleting a post, detaching/replacing a profile
+asset, or a terminal asset failure queues cleanup after five minutes. Every
+undeleted post (including blocked/private/exhausted posts), current profile asset,
+and valid pending selection protects its files. Failed pending selections may be
+cleared while the old approved image is preserved. Suspended profiles retain
+images; soft-deleted profiles do not protect them. Shared assets are retired only
+after their final live reference disappears. Database reference guards and a
+consistent account-before-upload lock order prevent reattachment/deletion races.
+Retirement sets an upload tombstone and fences workers; unused variants are
+removed through Storage, while originals still wait for token expiry. Confirmed
+file deletion releases quota; failures persist error codes and retry with capped
+backoff. `files_deleted_at` records completion. Uploads, media/variant metadata,
+moderation audits and ledger tombstones remain, preserving rate history. This is
+hard deletion of image bytes, not wholesale removal of content/audit rows.
+Unlinked inventory orphans also get reference checks and delayed cleanup. Apply
+`20261022102230_image_asset_cleanup.sql` before starting this checkout. All cleanup
+requires the image worker and backend Storage credentials; no OpenAI request is
+made by cleanup. No additional account/post hard-delete API is introduced.
 
 Keep the upload/editor modules independent of posts. `ImageUploader` supports
 selection-only mode for the composer and standalone transfer mode for the lab;
