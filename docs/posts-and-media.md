@@ -1,3 +1,7 @@
+> Current image lifecycle: [optimized image assets](image-processing.md) covers
+> trusted WebP processing, preview/expanded delivery, profile moderation and
+> temporary-original cleanup and reference-aware hard deletion of unused file bytes.
+
 # Persistent posts and reusable images
 
 The General/ForAll feed now reads database posts, newest first. `/submit` saves
@@ -13,13 +17,13 @@ in [moderation](moderation.md).
 | Layer | Files | Contract |
 |---|---|---|
 | Image validation | `frontend/src/lib/images/image-policy.ts`, `image-file.ts` | Inspect a `File`; return `SelectedImage` with dimensions, errors and a local preview URL. Policy comes from FastAPI. |
-| Browser editing | `image-edit.ts`, `components/ImageEditor.tsx` | Work on a local selection. Save exports and revalidates a new `File`; Discard preserves the selection. No network or post knowledge. |
-| Selection UI | `components/ImageUploader.tsx` | Default mode transfers one image and calls `onUploaded(SavedImage)`. `selectOnly` mode calls `onSelected(SelectedImage \| null)` and leaves transfers to its caller. |
+| Browser editing | `image-edit.ts`, `components/images/ImageEditor.tsx` | Work on a local selection. Save exports and revalidates a new `File`; Discard preserves the selection. No network or post knowledge. |
+| Selection UI | `components/images/ImageUploader.tsx` | Default mode transfers one image and calls `onUploaded(SavedImage)`. `selectOnly` mode calls `onSelected(SelectedImage \| null)` and leaves transfers to its caller. |
 | Image transfer | `lib/images/image-api.ts` | `uploadImage` reserves metadata, transfers directly to private Storage, then confirms completion. Returns `SavedImage`; never creates a post. |
-| Post orchestration | `components/PostComposer.tsx`, `lib/posts.ts` | Own title, body, attachment order and submission retry ID. Upload selected files, then send completed image IDs to `/posts`. |
-| Image API | `backend/images.py`, `image_storage.py`, `image_schemas.py` | Own upload policy, authorization, reservations, completion and Storage signing. |
-| Post API | `backend/posts.py`, `post_schemas.py` | Validate content, derive author from Auth, check bans and attachment ownership/completion, save post and ordered references atomically. |
-| Feed presentation | `app/page.tsx`, `components/PostCard.tsx` | Fetch chronological pages, authorized image previews and persistent likes. No mock post data. |
+| Post orchestration | `components/posts/PostComposer.tsx`, `lib/posts.ts` | Own title, body, attachment order and submission retry ID. Upload selected files, then send completed image IDs to `/posts`. |
+| Image API | `backend/images/routes.py`, `backend/images/storage.py`, `backend/images/schemas.py` | Own upload policy, authorization, reservations, completion and Storage signing. |
+| Post API | `backend/posts/routes.py`, `backend/posts/schemas.py` | Validate content, derive author from Auth, check bans and attachment ownership/completion, save post and ordered references atomically. |
+| Feed presentation | `app/page.tsx`, `components/posts/PostCard.tsx` | Fetch chronological pages, authorized image previews and persistent likes. No mock post data. |
 
 For another image use case (for example a community cover), reuse the selector,
 editor and transfer functions. Add that feature's own association and permission
@@ -40,7 +44,9 @@ during submission. `/upload-test` continues exercising standalone upload mode.
 Migration `20260924205639_persistent_posts_and_likes.sql` replaces
 `posts.image_key` with `post_media`. Its primary key is `(post_id, position)`;
 each attachment stores an upload reference, object key and dimensions. New posts
-reference owned, completed, nondeleted `image_uploads`. An upload can be reused
+reference owned, completed, nondeleted post-purpose `image_uploads`.
+Processing/screening must finish before publication; feed URLs resolve `preview`,
+and the expanded viewer requests `expanded` only on click. An upload can be reused
 across posts, but cannot appear twice in one post. Legacy image keys are backfilled
 with nullable upload references/dimensions instead of invented metadata.
 
@@ -60,9 +66,10 @@ PostgreSQL. `backend/models.py` mirrors these migrations by hand.
 | `PUT /posts/{id}/like` | Sets the authenticated verified student's like. Repeated requests do not add extra likes. |
 | `DELETE /posts/{id}/like` | Removes that student's like; retries do not reduce the count again. |
 
-Limits: title 1–300 characters, optional body up to 20,000 characters, up to 10
+Limits: title 1–300 characters, optional body up to 20,000 characters, up to 4
 images. Blank text is treated as absent; at least text or one image is required.
-Each image is JPEG, PNG or WebP, at most 10,000,000 bytes. Browser editing remains
+Selections accept JPEG, PNG or WebP up to 10,000,000 bytes; browser preparation
+produces an upload of at most 2,000,000 bytes before reserving space. Browser editing remains
 optional; feed images use their natural ratio with `object-contain`. No permanent
 crop is imposed by rendering. See [image details](image-uploads.md) for editing,
 format and trusted-validation limitations.
@@ -74,7 +81,8 @@ karma and stored hot ranking change in one transaction under a post row lock
 policies on `post_likes` are removed: all post like writes must use FastAPI.
 
 Private Storage retains owner access. A separate SELECT policy permits reading
-objects attached to approved, nondeleted posts in nondeleted spaces. Pending
+ready variants attached to approved, nondeleted posts in nondeleted spaces,
+and active approved profile variants. Original upload keys remain owner-only. Pending
 attachments remain owner-only. Signed preview URLs expire after five minutes;
 previously issued URLs remain bearer capabilities until expiry.
 
@@ -95,7 +103,7 @@ feed before starting a different post.
 
 Post creation, ordered references and the space counter are atomic. File transfers
 precede that transaction, so a cancelled/failed post can leave private unattached
-assets. Automated cleanup is not implemented; see the image pipeline retention
+assets. Unused file bytes are reclaimed by reference-aware cleanup; see the image pipeline retention
 notes. Do not delete Storage object rows directly with SQL.
 
 ## Verification

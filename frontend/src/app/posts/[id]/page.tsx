@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import CommentThread from "@/components/CommentThread";
-import PostCard from "@/components/PostCard";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import CommentThread from "@/components/comments/CommentThread";
+import PostCard from "@/components/posts/PostCard";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 import { getSupabase } from "@/lib/supabase";
 import { fetchPost, type FeedPost } from "@/lib/posts";
 

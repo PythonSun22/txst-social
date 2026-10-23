@@ -5,17 +5,20 @@ import asyncio
 from contextlib import asynccontextmanager
 from threading import Event, Thread
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from comments import router as comments_router
+from comments.routes import router as comments_router
 from database import engine
-from images import router as images_router
-from posts import router as posts_router
-from profile_routes import router as profile_router
-from moderation_worker import Settings, run_worker
-from schemas import DatabaseHealthResponse, HealthResponse
+from images.routes import router as images_router
+from posts.routes import router as posts_router
+from profiles.routes import router as profile_router
+from moderation.worker import Settings, run_worker
+from images.worker import Settings as ImageSettings, run_worker as run_image_worker
+from health_schemas import DatabaseHealthResponse, HealthResponse
+from auth import get_current_profile
+from worker_control import control
 
 
 @asynccontextmanager
@@ -23,8 +26,13 @@ async def lifespan(app: FastAPI):
     """Screen committed ForAll posts while the API runs (FR-90–92)."""
     stop = Event()
     worker = None
+    image_worker = None
+    if os.getenv("IMAGE_PROCESSING_ENABLED", "false").lower() in {"true", "1", "yes"}:
+        image_worker = Thread(target=run_image_worker, args=(stop, ImageSettings.from_env(), control), daemon=True,
+                              name="image-processing")
+        image_worker.start()
     if os.getenv("MODERATION_ENABLED", "false").lower() in {"true", "1", "yes"}:
-        worker = Thread(target=run_worker, args=(stop, Settings.from_env()), daemon=True,
+        worker = Thread(target=run_worker, args=(stop, Settings.from_env(), control), daemon=True,
                         name="post-moderation")
         worker.start()
     try:
@@ -34,9 +42,23 @@ async def lifespan(app: FastAPI):
         if worker:
             # Interrupted work is recoverable through its persisted lease and attempt count.
             await asyncio.to_thread(worker.join, 5)
+        if image_worker:
+            await asyncio.to_thread(image_worker.join, 5)
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/workers/status", dependencies=[Depends(get_current_profile)])
+def worker_status(response: Response):
+    """This API process only, not a claim about other hosts sharing the queue."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"worker_id": control.worker_id, "paused": control.paused.is_set(),
+            "reason": control.reason,
+            "images_enabled": os.getenv("IMAGE_PROCESSING_ENABLED", "false").lower() in {"true", "1", "yes"},
+            "moderation_enabled": os.getenv("MODERATION_ENABLED", "false").lower() in {"true", "1", "yes"}}
+
+
 app.include_router(images_router)
 app.include_router(posts_router)
 app.include_router(profile_router)

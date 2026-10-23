@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import PostComposer from "@/components/PostComposer";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import PostComposer from "@/components/posts/PostComposer";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 
 /**
  * Create-post page, reached from the "Create Post" button on the feed.

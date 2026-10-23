@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Float, Computed, DateTime, ForeignKey, Integer, Text, func, SmallInteger, Double
+from sqlalchemy import BigInteger, Boolean, Float, Computed, DateTime, ForeignKey, Index, Integer, Text, func, text, SmallInteger, Double
 from sqlalchemy.dialects.postgresql import CITEXT, ENUM, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
@@ -58,6 +58,8 @@ class Profile(Base):
         ForeignKey("public.image_uploads.id", ondelete="SET NULL"),
         nullable=True,
     )
+    pending_profile_image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="SET NULL"), nullable=True)
+    pending_banner_image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="SET NULL"), nullable=True)
 
     # Mirrored from auth.users by trigger. Never write these from here.
     email: Mapped[str | None] = mapped_column(CITEXT, unique=True, nullable=True)
@@ -170,6 +172,7 @@ class PostMedia(Base):
     __tablename__ = "post_media"
     __table_args__ = {"schema": "public"}
     post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.posts.id", ondelete="CASCADE"), primary_key=True)
+    # Migration trigger limits new/repositioned attachments to 0..3; legacy rows remain readable/updatable.
     position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="RESTRICT"), nullable=True)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
@@ -181,7 +184,12 @@ class ImageUpload(Base):
     """FR-32: private Storage object metadata; uploaded does not mean approved."""
 
     __tablename__ = "image_uploads"
-    __table_args__ = {"schema": "public"}
+    __table_args__ = (
+        Index("image_uploads_owner_rate_idx", "owner_id", "created_at"),
+        Index("image_asset_cleanup_idx", "asset_cleanup_after", "id",
+              postgresql_where=text("files_deleted_at is null and asset_cleanup_after is not null")),
+        {"schema": "public"},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="CASCADE"), nullable=False)
@@ -195,6 +203,74 @@ class ImageUpload(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, server_default="post")
+    processing_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    processing_next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    processing_claim: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    processing_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recovery_required: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    original_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    original_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    original_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_reserved_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    upload_method: Mapped[str] = mapped_column(Text, nullable=False, server_default="authenticated")
+    upload_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    asset_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, server_default=text("now()+interval '24 hours'"))
+    asset_cleanup_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    asset_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    files_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ImageStorageObject(Base):
+    """Physical object or held write capacity; deletion must be Storage-confirmed."""
+    __tablename__ = "image_storage_objects"
+    __table_args__ = (
+        Index("image_storage_owner_idx", "owner_id", postgresql_where=text("deleted_at is null")),
+        Index("image_storage_upload_idx", "image_upload_id"),
+        Index("image_orphan_cleanup_idx", "cleanup_after", postgresql_where=text("deleted_at is null and image_upload_id is null")),
+        {"schema": "public"},
+    )
+    object_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="RESTRICT"), nullable=False)
+    image_upload_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="RESTRICT"), nullable=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    covered_by_reservation: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    attempt_claim: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    cleanup_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()+interval '24 hours'"))
+    cleanup_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ImageVariant(Base):
+    __tablename__ = "image_variants"
+    __table_args__ = {"schema": "public"}
+    image_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="CASCADE"), primary_key=True)
+    name: Mapped[str] = mapped_column(Text, primary_key=True)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="image/webp")
+
+
+class ImageProcessingCheck(Base):
+    __tablename__ = "image_processing_checks"
+    __table_args__ = {"schema": "public"}
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    image_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="CASCADE"), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    decision: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    policy_version: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_result: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class Follow(Base):
