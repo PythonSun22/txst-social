@@ -14,7 +14,7 @@ from images.budget import expire_unfinished, storage_budget
 from images.routes import complete_upload, reserve_images
 from images.schemas import ImageUploadCreate
 from images.worker import cleanup_original_once
-from models import ImageStorageObject, ImageUpload, Profile
+from models import ImageStorageObject, ImageUpload, ImageVariant, Profile
 from test_moderation_database import ImageDatabaseFixture
 
 
@@ -35,6 +35,7 @@ class AuthenticatedImageDatabaseTests(ImageDatabaseFixture):
 
     def tearDown(self):
         with self.sessions.begin() as db:
+            db.execute(text("update public.image_uploads set deleted_at=now() where owner_id=:owner"), {"owner":self.owner})
             db.execute(text("delete from storage.objects where name like :prefix"), {'prefix': f'{self.owner}/%'})
         super().tearDown()
 
@@ -65,6 +66,12 @@ class AuthenticatedImageDatabaseTests(ImageDatabaseFixture):
         with self.sessions.begin() as db:
             db.get(ImageUpload, ticket.upload.id).processing_status = 'ready'
             db.get(ImageUpload, ticket.upload.id).processing_reserved_bytes = 0
+            for name in ('preview','expanded'):
+                key=f'{self.owner}/variants/{ticket.upload.id}/{name}.webp'
+                db.add(ImageVariant(image_upload_id=ticket.upload.id,name=name,object_key=key,
+                    width=20,height=20,size_bytes=50,content_type='image/webp'))
+                db.add(ImageStorageObject(object_key=key,owner_id=self.owner,image_upload_id=ticket.upload.id,
+                    kind='variant',size_bytes=50,confirmed_at=self.now))
         with patch('images.worker.remove_images') as remove:
             self.assertTrue(cleanup_original_once(self.sessions))
             remove.assert_called_once_with([ticket.upload.object_key])
@@ -75,7 +82,7 @@ class AuthenticatedImageDatabaseTests(ImageDatabaseFixture):
         with self.assertRaises(DBAPIError), self.sessions.begin() as db:
             self.insert_object(db, ticket)
         with self.sessions() as db:
-            self.assertEqual(storage_budget(db, self.owner).used_bytes, 0)
+            self.assertEqual(storage_budget(db, self.owner).used_bytes, 100)
 
     def test_expiry_closes_upload_and_allows_early_abandoned_cleanup(self):
         ticket = self.reserve()

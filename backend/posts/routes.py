@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.orm import Session
+from images.recovery import retry_image
+from worker_control import control
 
 from auth import (
     bearer,
@@ -67,11 +69,29 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
     for post in posts:
         author = authors.get(post.author_id)
         name = (author.display_name or author.username) if author and author.deleted_at is None else "Former student"
+        state = post.status
+        retry = False
+        if post.status == "pending":
+            state = "waiting_moderation"
+            assets = list(db.scalars(select(ImageUpload).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id)
+                .where(PostMedia.post_id == post.id)).all()) if post.type == "image" else []
+            if assets and any(u.processing_status == "blocked" for u in assets):
+                state = "image_rejected"
+            elif assets and any(u.processing_status == "failed" and not u.recovery_required for u in assets):
+                state = "failed"
+            elif (control.paused.is_set() or post.moderation_error is not None
+                  or any(u.processing_error or (u.recovery_required and u.processing_status == "failed") for u in assets)):
+                state = "service_unavailable"
+            elif assets and any(u.processing_status != "ready" for u in assets):
+                state = "waiting_images"
+            retry = bool(state not in {"image_rejected", "failed"} and viewer and viewer.id == post.author_id and
+                (post.id in exhausted_ids or any(u.recovery_required and u.processing_status == "failed" for u in assets)))
         result.append(PostResponse(
             id=post.id, author=name, title=post.title, body=post.body, url=post.url,
             can_delete=bool(viewer and viewer.id == post.author_id and viewer.email_verified_at),
             type=post.type, status=post.status, created_at=post.created_at,
             moderation_failed=post.id in exhausted_ids,
+            processing_state=state, can_retry=retry,
             like_count=post.like_count, comment_count=post.comment_count,
             liked=post.id in liked, media=attachments[post.id],
             author_avatar_upload_id=author.profile_image_upload_id if author and author.deleted_at is None and author.suspended_at is None else None,
@@ -273,3 +293,40 @@ def delete_own_post(
     db.execute(update(Space).where(Space.id == post.space_id).values(post_count=Space.post_count - 1))
     db.commit()
     return Response(status_code=204)
+
+
+@router.post('/{post_id}/retry-screening', response_model=PostResponse)
+def retry_screening(post_id: UUID, response: Response,
+    profile: Profile = Depends(require_verified_profile), db: Session = Depends(get_db)):
+    """Retry owned, private content; every image and post must still pass screening."""
+    if control.paused.is_set():
+        raise HTTPException(503, 'Screening is temporarily unavailable. Your post remains private; try again when service is restored.')
+    db.execute(select(Profile.id).where(Profile.id == profile.id).with_for_update())
+    post = db.scalar(select(Post).where(Post.id == post_id, Post.author_id == profile.id,
+        Post.deleted_at.is_(None)).with_for_update())
+    if post is None:
+        raise HTTPException(404, 'Post not found.')
+    if post.status != 'pending':
+        raise HTTPException(409, 'Only pending posts can retry screening; rejected posts cannot bypass moderation.')
+    assets = list(db.scalars(select(ImageUpload).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id)
+        .where(PostMedia.post_id == post.id).order_by(ImageUpload.id).with_for_update(of=ImageUpload)).all())
+    for upload in assets:
+        if upload.owner_id != profile.id or upload.deleted_at is not None:
+            raise HTTPException(409, 'A post image is unavailable.')
+        if upload.processing_status == 'blocked':
+            raise HTTPException(409, 'An image was rejected by screening. Select another image.')
+        retry_image(db, upload)
+    now = datetime.now(timezone.utc)
+    if post.moderation_lease_until and post.moderation_lease_until > now:
+        raise HTTPException(409, 'Screening is already running.')
+    if post.moderation_exhausted_at is not None:
+        if post.moderation_next_attempt_at > now:
+            raise HTTPException(429, 'Wait before retrying screening.')
+        post.moderation_attempts = 0
+        post.moderation_exhausted_at = None
+        post.moderation_error = None
+        post.moderation_claim = post.moderation_lease_until = None
+        post.moderation_next_attempt_at = now
+    db.commit()
+    response.headers['Cache-Control'] = 'no-store'
+    return serialize_posts(db, [post], profile)[0]

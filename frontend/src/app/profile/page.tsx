@@ -7,6 +7,7 @@ import PawIcon from "@/components/ui/PawIcon";
 import JoinedCommunitiesCard from "@/components/communities/JoinedCommunitiesCard";
 import EditProfileModal from "@/components/profiles/EditProfileModal";
 import ImageViewer from "@/components/images/ImageViewer";
+import ImageProcessingNotice from "@/components/images/ImageProcessingNotice";
 import SortBar, { type SortOrder } from "@/components/posts/SortBar";
 import {
   getCurrentProfile,
@@ -282,8 +283,8 @@ export default function Profile() {
       </article>
 
       {(pendingAvatar || pendingBanner) && <div role="status" className="rounded-card border border-border bg-card p-3 text-sm">
-        {pendingAvatar && <p>Profile photo: {avatarStatus === "blocked" ? "Rejected by screening. Choose another image." : avatarStatus === "failed" ? "Processing could not finish. Choose another image." : "Processing and screening. Your previous photo stays visible."}</p>}
-        {pendingBanner && <p>Banner: {bannerStatus === "blocked" ? "Rejected by screening. Choose another image." : bannerStatus === "failed" ? "Processing could not finish. Choose another image." : "Processing and screening. Your previous banner stays visible."}</p>}
+        {pendingAvatar && <ImageProcessingNotice id={pendingAvatar} label="Profile photo" />}
+        {pendingBanner && <ImageProcessingNotice id={pendingBanner} label="Banner" />}
       </div>}
       {viewAvatar && profile.profile_image_upload_id && <ImageViewer
         resource={`/images/${profile.profile_image_upload_id}/preview?variant=avatar_large`}

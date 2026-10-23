@@ -40,6 +40,8 @@ class PostResponse(BaseModel):
     type: Literal["text", "image", "link"]
     status: Literal["pending", "approved", "blocked", "removed"]
     moderation_failed: bool = False
+    processing_state: str = "waiting_moderation"
+    can_retry: bool = False
     created_at: datetime
     like_count: int
     comment_count: int

@@ -232,7 +232,7 @@ pick one** — if a question depends on an open decision, say so.
 | `[D-1]` | Who owns authentication? | **Closed** — Supabase Auth. |
 | `[D-2]` | One `spaces` table or three? | **Closed** — one, with a `kind`. |
 | `[D-3]` | Comment tree as a materialised `ltree` path | Implemented, not yet reviewed by the team. |
-| `[D-4]` | What happens when the classifier does not answer? | **Resolved for new ForAll posts:** remain pending; default 3 total background attempts, with 30s/120s retry delays. Exhausted posts remain private and show a failure notice. Settings are configurable; editing and recovery after exhaustion remain future work. See `docs/moderation.md`. |
+| `[D-4]` | What happens when the classifier does not answer? | **Resolved for new ForAll posts:** remain pending; default 3 total background attempts, with 30s/120s retry delays. Exhausted posts remain private and show a failure notice. Settings are configurable; editing remains future work; owner-requested screening retries are implemented below. See `docs/moderation.md`. |
 | `[D-5]` | Colleges or departments? | **Open.** The seed holds the ten real colleges, so computer science shares a bucket with biology and maths. Per-department would be ~40–50 spaces. One `INSERT` to change; large effect on how the product feels. |
 
 ---
@@ -297,7 +297,8 @@ replacement passes; rejection/failure preserves them. Active approved profile
 assets support signed public previews, including small avatars beside posts.
 Original input files are deleted through Storage after terminal processing and
 safe reservation closure. Legacy signed inputs retain at least 7,500 seconds after token issuance. Expired abandoned
-uploads and failed jobs receive the same safe cleanup. Account rates, storage
+transfers and invalid images receive safe cleanup; infrastructure failures retain
+their completed inputs for recovery. Account rates, storage
 budgets and reference-aware hard deletion are implemented below. Changing presets
 affects future processing; ready assets are not regenerated. Existing uploads queue for processing; old profile assets are hidden
 until approved. Previously approved image posts return to pending for processing
@@ -376,7 +377,8 @@ existing published content is preserved. Stop image workers during deployment
 and restart them after all migrations; older worker code does not maintain the ledger.
 Reference-aware hard deletion runs in the image worker (`images/cleanup.py`).
 Unattached uploads get 24 hours; deleting a post, detaching/replacing a profile
-asset, or a terminal asset failure queues cleanup after five minutes. Every
+asset, or an invalid/rejected asset queues cleanup after five minutes.
+Recoverable service failures are protected from automatic retirement. Every
 undeleted post (including blocked/private/exhausted posts), current profile asset,
 and valid pending selection protects its files. Failed pending selections may be
 cleared while the old approved image is preserved. Suspended profiles retain
@@ -486,3 +488,37 @@ rule. Auth and authenticated Storage transfers remain intentional browser integr
 - If the answer depends on `[D-4]` or `[D-5]`, say so instead of assuming.
 - Prefer the boring solution. This is a semester project run by five people who
   are learning most of this stack as they go, and the deadline is fixed.
+
+## Image failure protection (FR-32/90–92)
+
+Apply `20261023010000_preserve_recoverable_images.sql` locally before running this
+checkout; shared deployment remains subject to review. Stop all old API/workers
+before migration and restart afterward. Do not test destructive changes against
+shared data before review without an explicit coordinated exception.
+
+`image_uploads.recovery_required` protects completed inputs after infrastructure
+failures, including retries exhausted or interrupted. They remain charged once
+until confirmed deletion. They are excluded from automatic unused-asset retirement
+and original cleanup; pending profile references remain available for recovery.
+Storage has a BEFORE DELETE guard for originals, including service-role requests:
+only complete confirmed variant sets, invalid/expired inputs, or explicitly
+retired/abandoned assets may lose the source. Bounded retries remain; recovery
+retention has no automatic expiry. Owners can deliberately discard unused assets
+with `DELETE /images/{id}` after active references are removed.
+
+A credential failure pauses BOTH workers in that backend process. It preserves
+the current input and refunds its credential-failed attempt, then claims no more
+jobs or cleanup. Fix configuration and restart to resume; other machines are not
+controlled by this process. `GET /workers/status` requires sign-in and reports
+that process's worker ID, enabled flags and pause reason. Use one designated
+backend for shared testing. Logs contain worker/job IDs and safe error codes,
+never image data, provider bodies or credentials.
+
+Owners can use `POST /images/{id}/retry` and `POST /posts/{id}/retry-screening`
+(or the profile/feed/upload-test controls). Retries reuse the same asset and input,
+check source accounting, unfinished slots and available processing headroom under
+the account lock, and cannot approve/retry rejected content. Concurrent retries
+are idempotent; no new original reservation or upload-rate charge is created.
+Preserved inputs and uncertain files continue to consume storage. A missing or
+already-deleted source requires re-upload. There is no way to recover removed
+Storage bytes merely by resetting database metadata.

@@ -61,6 +61,10 @@ class ImageUploadResponse(ImageMetadata):
     processing_status: Literal["pending", "processing", "ready", "blocked", "failed"] = "pending"
     variants: list[ImageVariantResponse] = Field(default_factory=list)
     original_deleted_at: datetime | None = None
+    recovery_required: bool = False
+    processing_state: str = "waiting"
+    processing_message: str = "Waiting for image processing and moderation."
+    can_retry: bool = False
 
 
 class ImageUploadTicket(BaseModel):

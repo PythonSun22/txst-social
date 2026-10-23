@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from images.budget import stage_outputs, storage_budget, write_reserved
 from images.cleanup import cleanup_orphan_once, delete_retired_once, retire_unused_once
 from images.processing import process_image
+from images.routes import abandon_upload
 from images.worker import Settings, claim_work, finish_work
 from models import ImageProcessingCheck, ImageStorageObject, ImageUpload, ImageVariant, Post, PostMedia, Profile
 from moderation.client import ModerationError
@@ -227,7 +228,7 @@ class ImageCleanupDatabaseTests(ImageDatabaseFixture):
             self.assertIsNone(db.get(ImageUpload, replacement).deleted_at)
             self.assertEqual(db.scalar(select(func.count()).select_from(ImageProcessingCheck).where(ImageProcessingCheck.image_upload_id == replacement)), 1)
 
-    def test_failed_pending_selection_is_removed_without_removing_current_banner(self):
+    def test_failed_pending_selection_is_preserved_without_removing_current_banner(self):
         old, replacement = self.asset('banner'), self.asset('banner', 'pending')
         for identity in (old, replacement):
             with self.sessions() as db:
@@ -238,7 +239,8 @@ class ImageCleanupDatabaseTests(ImageDatabaseFixture):
         avatar = self.asset('avatar')
         with self.sessions() as db:
             update_current_profile(ProfileUpdate(profile_image_upload_id=avatar), Response(), db.get(Profile, self.owner), db)
-            self.assertIsNotNone(db.get(ImageUpload, replacement).asset_cleanup_after)
+            self.assertIsNone(db.get(ImageUpload, replacement).asset_cleanup_after)
+            self.assertTrue(db.get(ImageUpload, replacement).recovery_required)
         self.force_due(replacement)
         retire_unused_once(self.sessions)
         with patch('images.cleanup.remove_images'):
@@ -246,7 +248,8 @@ class ImageCleanupDatabaseTests(ImageDatabaseFixture):
         with self.sessions() as db:
             profile = db.get(Profile, self.owner)
             self.assertEqual(profile.banner_image_upload_id, old)
-            self.assertIsNone(profile.pending_banner_image_upload_id)
+            self.assertEqual(profile.pending_banner_image_upload_id, replacement)
+            self.assertIsNone(db.get(ImageUpload, replacement).deleted_at)
             self.assertIsNone(db.get(ImageUpload, old).deleted_at)
 
     def test_suspended_profile_retains_images_but_deleted_profile_releases_them(self):
@@ -302,12 +305,18 @@ class ImageCleanupDatabaseTests(ImageDatabaseFixture):
         with self.sessions() as db:
             upload = db.get(ImageUpload, identity)
             self.assertIsNone(upload.deleted_at)
-            self.assertGreater(upload.asset_cleanup_after, upload.processing_lease_until)
+            self.assertIsNotNone(upload.processing_lease_until)
         with self.sessions.begin() as db:
             db.get(ImageUpload, identity).processing_lease_until = self.now - timedelta(seconds=1)
         self.force_due(identity)
-        retire_unused_once(self.sessions)
+        self.assertFalse(retire_unused_once(self.sessions))
+        with self.sessions() as db:
+            abandon_upload(identity, db.get(Profile,self.owner), db)
         self.assertFalse(finish_work(self.sessions, Settings(), work, [], None, 'late'))
+        with patch('images.cleanup.remove_images'):
+            delete_retired_once(self.sessions)
+        self.assertEqual(self.budget(), 100)  # Legacy signed capability remains charged.
+        self.force_due(identity)
         with patch('images.cleanup.remove_images'):
             delete_retired_once(self.sessions)
         self.assertEqual(self.budget(), 0)

@@ -105,7 +105,8 @@ still describes the original even after its bytes are removed; inspect
 The shared account budget is now 50 MB with 10 unfinished slots. The storage
 ledger holds capacity before transfer, counts uncertain variant writes, and
 reconciles actual bytes atomically at terminal processing. Expired abandoned and
-failed-job inputs are cleaned once their reservation is closed (legacy inputs retain token grace); interrupted variant
+invalid-input failures can be cleaned once their reservation is closed; recoverable
+service failures preserve completed inputs. Legacy inputs retain token grace; interrupted variant
 writes are cleaned after their attempt ends. Failed deletion retains the charge.
 See [storage accounting](image-uploads.md#account-storage-budget-and-unfinished-uploads-fr-32).
 Reference-aware cleanup now permanently removes unused image files. Post deletion
@@ -239,3 +240,47 @@ Apply `20261022120000_authenticated_image_uploads.sql`, which lowers the bucket 
 adds `upload_method`/`upload_expires_at`, and preserves old signed rows/charges.
 Stop older backend instances before migration; restart both apps afterward. No new
 secrets are required. Old browser tabs must reload.
+
+## Service failures and safe recovery (FR-32/90–92)
+
+`20261023010000_preserve_recoverable_images.sql` protects sources after service
+failures. `recovery_required=true` survives exhausted retries and remains set
+while a manual retry runs; only a committed verdict plus stored versions clears
+it. Such assets are excluded from automatic source and unused-asset cleanup.
+Unexpected interruptions also preserve inputs. Uploaded jobs still pending or
+processing are not treated as 24-hour abandoned selections. Incomplete transfers
+still expire after their reservation deadline. Explicit owner abandonment is a
+separate action and cannot remove active post/profile content or a leased job.
+
+Before deleting a successful source, cleanup requires the full purpose-specific
+variant set and confirmed, nondeleted ledger rows. Storage also rejects source
+DELETEs without that condition, a deliberately retired asset, or a specifically
+invalid/expired input. This guard applies even to elevated Storage callers.
+
+OpenAI 401/403, missing configuration and Storage authentication errors trip a
+process-local circuit breaker shared by both workers. The current job stays
+private, its credential-failed attempt is refunded, and no further jobs/cleanup
+are claimed until backend restart. Outages/timeouts retain bounded retries;
+exhausted jobs can be retried after service restoration. No key is printed.
+
+`GET /workers/status` requires authentication and reports worker ID, enabled
+flags, pause status and a safe reason. Logs use worker/job IDs and error codes;
+no provider response body, image bytes or credentials. This reports only the
+current backend process; it cannot pause another developer's machine.
+
+Owner APIs: `POST /images/{id}/retry`, `POST /posts/{id}/retry-screening`, and
+`DELETE /images/{id}` for explicit unused-asset discard. Retry keeps the original
+asset ID, checks retained-source accounting, available headroom, cooldown and the
+10-slot limit under the account lock. Concurrent requests reserve headroom once.
+Rejected content cannot retry its way to approval. All successful retries still
+run image and post moderation. Preserved bytes stay charged; retries do not count
+as fresh uploads. Profile images keep their previous approved versions visible.
+
+Failure validation: invalid provider credentials pause both workers before other
+jobs; Storage auth errors are distinguished from outages; exhausted service
+failures survive source/unused cleanup and database DELETE attempts; concurrent
+retries charge once; insufficient quota/foreign owners cannot retry; successful
+recovery permits input deletion while retaining both versions. Optional database
+tests run only on disposable local databases; actual provider calls are mocked.
+A separate local Storage test verifies the real source-deletion guard and final
+variant reads. Shared credentials and shared data are not used in those tests.

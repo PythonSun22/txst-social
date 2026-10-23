@@ -13,6 +13,7 @@ from images.schemas import SOURCE_GRACE_SECONDS
 from images.worker_storage import remove_images
 from models import ImageStorageObject, ImageUpload, ImageVariant, Post, PostMedia, Profile
 from moderation.client import ModerationError
+from worker_control import credential_error
 
 
 def has_live_reference(db, upload_id):
@@ -27,7 +28,7 @@ def has_live_reference(db, upload_id):
         Profile.profile_image_upload_id == upload_id, Profile.banner_image_upload_id == upload_id,
         (or_(Profile.pending_profile_image_upload_id == upload_id, Profile.pending_banner_image_upload_id == upload_id)
          & select(ImageUpload.id).where(ImageUpload.id == upload_id,
-             ImageUpload.processing_status.not_in(["blocked", "failed"])).exists()),
+             or_(ImageUpload.processing_status.not_in(["blocked", "failed"]), ImageUpload.recovery_required.is_(True))).exists()),
     )).exists()
     return db.scalar(select(post | profile))
 
@@ -38,6 +39,8 @@ def retire_unused_once(sessions=SessionLocal):
     with sessions() as db:
         candidate = db.execute(select(ImageUpload.id, ImageUpload.owner_id).where(
             ImageUpload.deleted_at.is_(None), ImageUpload.files_deleted_at.is_(None),
+            ImageUpload.recovery_required.is_(False),
+            ~((ImageUpload.uploaded_at.is_not(None)) & ImageUpload.processing_status.in_(["pending", "processing"])),
             ImageUpload.asset_cleanup_after <= now,
         ).order_by(ImageUpload.asset_cleanup_after, ImageUpload.id).limit(1)).first()
         if candidate is None:
@@ -51,6 +54,10 @@ def retire_unused_once(sessions=SessionLocal):
             ImageUpload.deleted_at.is_(None), ImageUpload.asset_cleanup_after <= now)
             .with_for_update(skip_locked=True))
         if upload is None:
+            return False
+        if upload.recovery_required:
+            return False
+        if upload.uploaded_at is not None and upload.processing_status in {"pending", "processing"}:
             return False
         if has_live_reference(db, identity):
             upload.asset_cleanup_after = None  # Reference-removal triggers queue it again.
@@ -118,6 +125,8 @@ def delete_retired_once(sessions=SessionLocal):
                 upload.files_deleted_at = now
                 upload.asset_cleanup_after = None
         except ModerationError as error:
+            if credential_error(error.code):
+                raise
             upload.asset_cleanup_error = error.code
             upload.asset_cleanup_after = retry_time(now, upload.asset_cleanup_attempts)
         db.commit()
@@ -146,6 +155,8 @@ def cleanup_orphan_once(sessions=SessionLocal):
         linked = list(db.scalars(select(ImageUpload.id).where(ImageUpload.object_key == key).union(
             select(ImageVariant.image_upload_id).where(ImageVariant.object_key == key))).all())
         protected = raw_post or any(has_live_reference(db, identity) for identity in linked)
+        protected = protected or bool(db.scalar(select(ImageUpload.id).where(
+            ImageUpload.id.in_(linked), ImageUpload.recovery_required.is_(True), ImageUpload.deleted_at.is_(None)).limit(1)))
         source_capability = db.scalar(select(select(ImageUpload.id).where(ImageUpload.object_key == key,
             ImageUpload.original_cleanup_after > now).exists()))
         if protected or source_capability:
@@ -156,6 +167,8 @@ def cleanup_orphan_once(sessions=SessionLocal):
                 delete_recorded(db, [key], remove_images)
                 obj.cleanup_error = None
             except ModerationError as error:
+                if credential_error(error.code):
+                    raise
                 obj.cleanup_error = error.code
                 obj.cleanup_after = retry_time(now, obj.cleanup_attempts)
         db.commit()

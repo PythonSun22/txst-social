@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from openai import APIError, OpenAI
+from openai import APIError, APIStatusError, OpenAI
 from pydantic import BaseModel, ValidationError
 from typing import Literal
 
@@ -107,6 +107,8 @@ def moderate_context(post_text: str) -> ContextAssessment:
     try:
         with OpenAI(api_key=api_key, timeout=20, max_retries=0) as client:
             result = context_check(client, CONTEXT_MODEL, post_text)
+    except APIStatusError as error:
+        raise ModerationError("Context screening failed.", code=f"context_http_{error.status_code}") from None
     except (APIError, ValidationError, ValueError, AttributeError):
         # Provider errors can echo submitted content; never log or surface them.
         raise ModerationError("Context screening failed.", code="context_provider") from None

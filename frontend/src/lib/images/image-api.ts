@@ -21,6 +21,10 @@ export interface SavedImage {
   processing_status: "pending" | "processing" | "ready" | "blocked" | "failed";
   variants: { name: ImageVariant; width: number; height: number; size_bytes: number; content_type: string }[];
   original_deleted_at: string | null;
+  recovery_required: boolean;
+  processing_state: string;
+  processing_message: string;
+  can_retry: boolean;
 }
 
 export interface UploadTicket { upload: SavedImage; upload_expires_at: string; image: SelectedImage }
@@ -58,6 +62,8 @@ export async function getImagePolicy(signal?: AbortSignal): Promise<ImagePolicy>
 export const listImages = (signal?: AbortSignal) => apiRequest<SavedImage[]>("/images", { signal });
 export const completeImage = (id: string) => apiRequest<SavedImage>(`/images/${id}/complete`, { method: "POST" });
 export const getImage = (id: string, signal?: AbortSignal) => apiRequest<SavedImage>(`/images/${id}`, { signal });
+export const retryImage = (id: string) => apiRequest<SavedImage>(`/images/${id}/retry`, { method: "POST" });
+export const abandonImage = (id: string) => apiRequest<void>(`/images/${id}`, { method: "DELETE" });
 export const previewImage = (id: string, variant?: ImageVariant) =>
   apiRequest<{ url: string }>(`/images/${id}/preview${variant ? `?variant=${variant}` : ""}`);
 

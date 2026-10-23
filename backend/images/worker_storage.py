@@ -20,12 +20,31 @@ def settings():
     return f"{base}/storage/v1", headers
 
 
+def check_response(response, code):
+    if response.is_success:
+        return
+    if response.status_code in {401, 403}:
+        code = "storage_auth"
+    elif response.status_code == 400:
+        # Some gateways report unsupported/missing authorization as HTTP 400.
+        # Streaming responses have no .content until read; otherwise parsing
+        # the error itself raises ResponseNotRead and hides credential failures.
+        response.read()
+        try:
+            details = response.json()
+            message = str(details.get("message", "")).lower() if isinstance(details, dict) else ""
+            if any(word in message for word in ("authorization", "jwt", "jws", "api key")):
+                code = "storage_auth"
+        except ValueError:
+            pass
+    raise ModerationError("Storage request failed; no upstream details are logged.", code=code)
+
+
 def read_image(key: str) -> bytes:
     base, headers = settings()
     try:
         with httpx.stream("GET", f"{base}/object/authenticated/{IMAGE_BUCKET}/{quote(key, safe='/')}", headers=headers, timeout=30) as response:
-            if not response.is_success:
-                raise ModerationError("Unable to read image.", code="storage_read")
+            check_response(response, "storage_read")
             result = bytearray()
             for chunk in response.iter_bytes():
                 result.extend(chunk)
@@ -42,8 +61,7 @@ def write_image(key: str, data: bytes):
         response = httpx.post(f"{base}/object/{IMAGE_BUCKET}/{quote(key, safe='/')}",
                               headers={**headers, "Content-Type": "image/webp", "x-upsert": "false"},
                               content=data, timeout=30)
-        if not response.is_success:
-            raise ModerationError("Unable to store image version.", code="storage_write")
+        check_response(response, "storage_write")
     except httpx.RequestError:
         raise ModerationError("Image storage is unavailable.", code="storage_unavailable") from None
 
@@ -55,8 +73,7 @@ def remove_images(keys: list[str]):
     try:
         response = httpx.request("DELETE", f"{base}/object/{IMAGE_BUCKET}", headers=headers,
                                  json={"prefixes": keys}, timeout=30)
-        if not response.is_success:
-            raise ModerationError("Unable to delete temporary image.", code="storage_delete")
+        check_response(response, "storage_delete")
     except httpx.RequestError:
         raise ModerationError("Image storage is unavailable.", code="storage_unavailable") from None
 

@@ -209,7 +209,8 @@ deployment through the normal review/migration workflow.
 
 The shared account budget is **50 MB = 50,000,000 bytes**. At most **10 uploads or
 processing jobs** may be unfinished. Completed, blocked, or terminally failed jobs
-release their unfinished slot; all retained files still consume capacity.
+release their unfinished slot; all retained files still consume capacity. Service
+failures preserve their completed inputs for recovery.
 
 `image_storage_objects` is a backend-only, RLS-protected ledger keyed by object
 key. It counts each physical asset once regardless of references. Deleted-object
@@ -250,8 +251,8 @@ never releases capacity. Provider calls never hold database locks.
 
 An abandoned authenticated reservation expires after 15 minutes. Expiry releases
 its unfinished slot and processing headroom; input capacity stays charged until
-Storage confirms deletion. Completed inputs are eligible after terminal processing,
-including terminal failures. Legacy signed uploads retain their 7,500-second grace
+Storage confirms deletion. Completed inputs are eligible after successful processing and stored versions.
+Recoverable terminal failures preserve their inputs. Legacy signed uploads retain their 7,500-second grace
 and are not retroactively reduced to a 2 MB charge. Keep the worker enabled.
 The original upload row remains for rate history, audits and historical metadata.
 
@@ -283,7 +284,7 @@ using backend-only Storage credentials. Cleanup does not call OpenAI.
 | Avatar/banner replaced | Queue the old image only after the replacement becomes active. Pending or rejected replacements keep the current image. |
 | Selection removed/cancelled | Queue the detached selection for five minutes later. |
 | Never attached upload | Keep a 24-hour grace so composing, editing and retries can finish. |
-| Blocked/terminally failed upload | Queue after five minutes; any undeleted post reference still protects it. |
+| Blocked/invalid/expired upload | Queue after five minutes; live references still protect it. Infrastructure failures preserve completed inputs for retry. |
 | Original input | Delete after terminal processing and reservation closure; legacy signed inputs retain token grace. |
 | Unlinked inventory orphan | Wait 24 hours and check legacy file-key references and source capabilities before deleting. |
 
@@ -400,3 +401,13 @@ late Storage metadata writes, early source cleanup, unchanged moderation privacy
 and retained ledger charges on uncertain deletion. A failed Storage transfer may
 leave an uncommitted internal object version; Storage owns cleanup of those provider
 versions. Our ledger tracks registered objects and application-planned writes.
+
+## Failure protection update
+
+Service errors preserve completed inputs for recovery, including exhausted jobs.
+They no longer qualify for automatic failed-asset deletion or unused selection
+cleanup. They remain charged until explicitly discarded or successfully processed
+and cleaned. Apply `20261023010000_preserve_recoverable_images.sql` before running
+this version, after stopping old workers. Credential failures pause both workers
+in the affected process until restart. Owner retry/discard controls are available
+in the feed/profile/upload-test UI. See [recovery details](image-processing.md#service-failures-and-safe-recovery-fr-329092).

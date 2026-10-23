@@ -21,8 +21,9 @@ from images.schemas import SOURCE_GRACE_SECONDS
 from images.budget import (cleanup_attempt, cleanup_staged_once, delete_recorded,
                            expire_unfinished, release_processing, source_cleanup_time, stage_outputs, write_reserved)
 from images.cleanup import cleanup_orphan_once, delete_retired_once, retire_unused_once
-from models import ImageProcessingCheck, ImageUpload, ImageVariant, PostMedia, Profile
+from models import ImageProcessingCheck, ImageStorageObject, ImageUpload, ImageVariant, PostMedia, Profile
 from moderation.client import ModerationError, moderate_content
+from worker_control import WorkerControl, credential_error
 
 logger = logging.getLogger(__name__)
 LEASE_SECONDS = 600
@@ -70,6 +71,7 @@ def claim_work(sessions, settings: Settings, now: datetime) -> Work | None:
         if upload.processing_attempts >= settings.attempts:
             upload.processing_status = "failed"
             upload.processing_error = "attempt_limit"
+            upload.recovery_required = True
             upload.processing_claim = upload.processing_lease_until = None
             release_processing(db, upload)
             upload.original_cleanup_after = source_cleanup_time(upload, now)
@@ -112,8 +114,11 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
             return False
         if failure:
             upload.processing_error = failure
+            upload.recovery_required = failure not in {"invalid_image", "upload_expired", "unused_image"}
+            if credential_error(failure):
+                upload.processing_attempts = max(0, upload.processing_attempts - 1)
             upload.processing_status = "failed" if upload.processing_attempts >= settings.attempts else "pending"
-            delay = max(settings.retry_seconds * 4 ** (upload.processing_attempts - 1), retry_after)
+            delay = max(settings.retry_seconds * 4 ** max(0, upload.processing_attempts - 1), retry_after)
             try:
                 if not math.isfinite(delay):
                     raise ValueError()
@@ -129,6 +134,9 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
             largest, largest_key = outputs[-1]
             upload.processing_status = "blocked" if result.blocked else "ready"
             upload.processing_error = None
+            upload.recovery_required = False
+            if upload.asset_cleanup_after is None:
+                upload.asset_cleanup_after = now + timedelta(hours=24)
             upload.original_cleanup_after = source_cleanup_time(upload, now)
             db.add(ImageProcessingCheck(
                 image_upload_id=upload.id, attempt=upload.processing_attempts,
@@ -150,11 +158,14 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
         return failure is None
 
 
-def run_once(sessions=SessionLocal, settings: Settings | None = None) -> bool:
+def run_once(sessions=SessionLocal, settings: Settings | None = None, control: WorkerControl | None = None) -> bool:
     settings = settings or Settings.from_env()
+    if control and control.paused.is_set():
+        return False
     work = claim_work(sessions, settings, datetime.now(timezone.utc))
     if work is None:
         return False
+    logger.info("Image processing started worker_id=%s job_id=%s", control.worker_id if control else "manual", work.id)
     stored: list[tuple[Output, str]] = []
     try:
         data = read_image(work.key)
@@ -171,13 +182,27 @@ def run_once(sessions=SessionLocal, settings: Settings | None = None) -> bool:
         if committed:
             return True
     except (ModerationError, ValueError) as error:
+        code = error.code if isinstance(error, ModerationError) else "invalid_image"
+        logger.warning("Image processing failed worker_id=%s job_id=%s code=%s",
+                       control.worker_id if control else "manual", work.id, code)
+        if control and credential_error(code):
+            control.pause(code, work.id)
         finish_work(sessions, settings, work, [], None,
-                    error.code if isinstance(error, ModerationError) else "invalid_image",
+                    code,
                     getattr(error, "retry_after", 0))
     except Exception:
         # Commit outcomes can be uncertain; never delete files that may be live.
-        logger.error("Image processing interrupted; lease recovery will retry safely.")
+        logger.error("Image processing interrupted worker_id=%s job_id=%s code=unexpected_failure",
+                     control.worker_id if control else "manual", work.id)
+        # Safe even after an uncertain success commit: a cleared/replaced claim
+        # cannot be changed. Persist preservation when the claim is still ours.
+        try:
+            finish_work(sessions, settings, work, [], None, "unexpected_failure")
+        except Exception:
+            pass  # A database outage leaves the durable lease for recovery.
         return True
+    if control and control.paused.is_set():
+        return True  # No further Storage calls with credentials known to be broken.
     try:
         cleanup_attempt(sessions, [key for _, key in stored], remove_images)
     except ModerationError:
@@ -197,33 +222,53 @@ def cleanup_original_once(sessions=SessionLocal) -> bool:
         db.commit()
         upload = db.scalar(select(ImageUpload).where(
             ImageUpload.processing_status.in_(["ready", "blocked", "failed"]),
+            ImageUpload.recovery_required.is_(False),
             ImageUpload.original_deleted_at.is_(None), ImageUpload.original_cleanup_after <= now,
         ).order_by(ImageUpload.original_cleanup_after).limit(1).with_for_update(skip_locked=True))
         if upload is None:
             return False
+        if upload.processing_status in {"ready", "blocked"}:
+            expected = {"post": {"preview", "expanded"}, "avatar": {"avatar_small", "avatar_large"}, "banner": {"banner"}}[upload.purpose]
+            confirmed = set(db.scalars(select(ImageVariant.name).join(ImageStorageObject,
+                ImageStorageObject.object_key == ImageVariant.object_key).where(
+                ImageVariant.image_upload_id == upload.id, ImageStorageObject.confirmed_at.is_not(None),
+                ImageStorageObject.deleted_at.is_(None))).all())
+            if not expected <= confirmed:
+                upload.original_cleanup_error = "versions_unavailable"
+                upload.original_cleanup_after = now + timedelta(minutes=5)
+                db.commit()
+                return True  # Preserve input without starving other cleanup jobs.
         try:
             delete_recorded(db, [upload.object_key], remove_images)
             upload.original_deleted_at = now
             upload.original_cleanup_error = None
         except ModerationError as error:
+            if credential_error(error.code):
+                raise
             upload.original_cleanup_error = error.code
             upload.original_cleanup_after = now + timedelta(minutes=5)
         db.commit()
         return True
 
 
-def run_worker(stop: Event, settings: Settings):
+def run_worker(stop: Event, settings: Settings, control: WorkerControl | None = None):
+    control = control or WorkerControl()
     last_error = None
-    while not stop.is_set():
+    while not stop.is_set() and not control.paused.is_set():
         try:
             staged = cleanup_staged_once(SessionLocal, remove_images)
-            worked = run_once(settings=settings)
+            worked = run_once(settings=settings, control=control)
+            if control.paused.is_set():
+                break
             cleaned = cleanup_original_once()
             retired = retire_unused_once()
             deleted = delete_retired_once()
             orphan = cleanup_orphan_once()
             last_error = None
         except Exception as error:
+            if isinstance(error, ModerationError) and credential_error(error.code):
+                control.pause(error.code, "cleanup")
+                break
             signature = type(error).__name__
             if signature != last_error:
                 logger.error("Image worker unavailable; check image migrations and configuration.")

@@ -210,6 +210,7 @@ class ImageUpload(Base):
     processing_claim: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     processing_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recovery_required: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     original_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     original_cleanup_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     original_cleanup_error: Mapped[str | None] = mapped_column(Text, nullable=True)

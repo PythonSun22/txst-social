@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from images.worker_storage import read_image, write_image, remove_images
+from images.worker_storage import check_response, read_image, write_image, remove_images
 from moderation.client import ModerationError
 
 
@@ -45,3 +45,27 @@ class WorkerStorageTests(unittest.TestCase):
             remove_images(["owner/source.png"])
             self.assertEqual(request.call_args.args[0], "DELETE")
             self.assertEqual(request.call_args.kwargs["json"], {"prefixes": ["owner/source.png"]})
+
+    def test_authentication_failures_are_distinct_from_outages_without_echoing_secrets(self):
+        for status in (401,403):
+            with self.assertRaises(ModerationError) as caught:
+                check_response(httpx.Response(status,json={'message':'private secret'}),'storage_read')
+            self.assertEqual(caught.exception.code,'storage_auth')
+            self.assertNotIn('private',str(caught.exception))
+        with self.assertRaises(ModerationError) as caught:
+            check_response(httpx.Response(400,json={'message':"headers must have required property 'authorization'"}),'storage_read')
+        self.assertEqual(caught.exception.code,'storage_auth')
+        with self.assertRaises(ModerationError) as caught:
+            check_response(httpx.Response(503,content=b'unavailable'),'storage_read')
+        self.assertEqual(caught.exception.code,'storage_read')
+
+    def test_streamed_gateway_auth_error_is_read_before_classification(self):
+        response = httpx.Response(400, stream=httpx.ByteStream(
+            b'{"message":"headers must have required property authorization; private secret"}'))
+        self.assertFalse(response.is_stream_consumed)
+        with patch("images.worker_storage.httpx.stream") as stream:
+            stream.return_value.__enter__.return_value = response
+            with self.assertRaises(ModerationError) as caught:
+                read_image("owner/photo.png")
+        self.assertEqual(caught.exception.code, "storage_auth")
+        self.assertNotIn("private secret", str(caught.exception))

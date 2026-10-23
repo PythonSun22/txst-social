@@ -5,7 +5,7 @@ import Link from "next/link";
 import PawIcon from "@/components/ui/PawIcon";
 import ImageViewer from "@/components/images/ImageViewer";
 import { apiRequest } from "@/lib/api";
-import { fetchPost, deletePost, getPostImage, setPostLike, type FeedPost } from "@/lib/posts";
+import { fetchPost, deletePost, getPostImage, setPostLike, retryPostScreening, type FeedPost } from "@/lib/posts";
 import type { CurrentProfile } from "@/lib/profiles";
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
@@ -59,6 +59,8 @@ export default function PostCard({ post, profile, onLike, onDelete, onStatus }: 
   const inFlight = useRef(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
+  const [screening, setScreening] = useState<FeedPost | null>(null);
+  const screeningView = screening?.id === post.id ? screening : post;
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -72,6 +74,7 @@ export default function PostCard({ post, profile, onLike, onDelete, onStatus }: 
       try {
         const updated = await fetchPost(post.id, controller.signal);
         if (controller.signal.aborted) return;
+        setScreening(updated);
         onStatus?.(updated.id, updated.status, updated.moderation_failed);
         if (updated.status !== "pending" || updated.moderation_failed) return;
       } catch {
@@ -112,12 +115,26 @@ export default function PostCard({ post, profile, onLike, onDelete, onStatus }: 
       {post.status !== "approved" && <span className="rounded-full bg-accent/10 px-2 py-1 font-semibold text-primary">{post.status === "pending" ? (post.moderation_failed ? "Screening unavailable · Only you" : "Screening pending · Only you") : post.status}</span>}
     </div>
     <h2 className="mb-2 break-words text-base font-semibold">{post.title}</h2>
-    {post.moderation_failed && <p role="status" className="mb-3 text-sm text-muted-foreground">Automated review could not be completed. Your post remains private; automatic retries have stopped.</p>}
+    {post.status === "pending" && <p role="status" className="mb-3 text-sm text-muted-foreground">
+      {screeningView.processing_state === "service_unavailable" ? "Processing service unavailable. Your post stays private; recoverable image inputs are preserved."
+        : screeningView.processing_state === "image_rejected" ? "An image was rejected by automatic screening."
+        : screeningView.processing_state === "failed" ? "An image could not be processed. Select another image."
+        : post.moderation_failed ? "Screening could not finish. Your post stays private."
+        : screeningView.processing_state === "waiting_images" ? "Waiting for image processing and moderation." : "Waiting for post moderation."}
+    </p>}
+    {screeningView.can_retry && post.can_delete && <button type="button" disabled={busy} className="mb-3 text-sm underline" onClick={async () => {
+      setBusy(true); setError("");
+      try {
+        const updated = await retryPostScreening(post.id);
+        if (mounted.current) { setScreening(updated); onStatus?.(updated.id, updated.status, updated.moderation_failed); }
+      } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : "Unable to retry screening."); }
+      finally { if (mounted.current) setBusy(false); }
+    }}>Retry processing and screening</button>}
     {post.status === "blocked" && <p className="mb-3 text-sm text-muted-foreground">Automatic screening flagged this post, so it has not been published.</p>}
     {post.body && <p className="mb-3 whitespace-pre-wrap break-words text-sm">{post.body}</p>}
     {post.url && /^https?:\/\//i.test(post.url) && <a href={post.url} target="_blank" rel="noopener noreferrer" className="mb-3 block break-all text-sm text-primary underline">{post.url}</a>}
     <div className={`grid gap-3 ${post.media.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-      {post.media.map((media, index) => <PostImage key={media.position} postId={post.id} media={media} status={post.moderation_failed ? "failed" : post.status} onOpen={() => setViewing(index)} />)}
+      {post.media.map((media, index) => <PostImage key={media.position} postId={post.id} media={media} status={post.moderation_failed || screeningView.processing_state === "service_unavailable" || screeningView.processing_state === "failed" ? "failed" : post.status} onOpen={() => setViewing(index)} />)}
     </div>
     {viewing !== null && post.media[viewing] && <ImageViewer
       resource={`/posts/${post.id}/media/${post.media[viewing].position}/preview?variant=expanded`}

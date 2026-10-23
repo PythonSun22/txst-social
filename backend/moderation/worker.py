@@ -20,6 +20,7 @@ from moderation.client import ModerationError, TextModerationResult, moderate_co
 from moderation.context import (CONTEXT_MODEL, ContextAssessment, candidate_blocks,
                                 moderate_context, should_recheck)
 from images.worker_storage import image_data_url, read_image
+from worker_control import WorkerControl, credential_error
 
 logger = logging.getLogger(__name__)
 POLICY_VERSION = "forall-any-flag-v1"
@@ -93,7 +94,7 @@ def eligible_posts(now: datetime):
         # Waiting for image work does not consume the post's screening budget.
         ~select(ImageUpload.id).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id).where(
             PostMedia.post_id == Post.id,
-            ImageUpload.processing_status.in_(["pending", "processing"]),
+            ImageUpload.processing_status.in_(["pending", "processing", "failed"]),
         ).exists(),
     ).order_by(Post.created_at, Post.id).limit(1).with_for_update(of=Post, skip_locked=True)
 
@@ -129,8 +130,13 @@ def claim_work(session_factory, settings: Settings, now: datetime) -> Work | Non
 
 def record_failure(post: Post, settings: Settings, now: datetime, code: str, retry_after: float = 0):
     post.moderation_error = code
+    if credential_error(code):
+        post.moderation_attempts = max(0, post.moderation_attempts - 1)
+        post.moderation_next_attempt_at = now + timedelta(seconds=settings.retry_seconds)
+        return
     if post.moderation_attempts >= settings.max_attempts:
         post.moderation_exhausted_at = now
+        post.moderation_next_attempt_at = now + timedelta(seconds=settings.retry_seconds)
     else:
         delay = max(settings.retry_delay(post.moderation_attempts), retry_after)
         # Do not overflow on a malformed server delay; never retry before its hint.
@@ -205,12 +211,15 @@ def finish_work(session_factory, settings: Settings, work: Work,
         db.commit()
 
 
-def run_once(session_factory=SessionLocal, settings: Settings | None = None) -> bool:
+def run_once(session_factory=SessionLocal, settings: Settings | None = None, control: WorkerControl | None = None) -> bool:
     """Claim at most one post; never keep a DB transaction open across provider I/O."""
     settings = settings or Settings.from_env()
+    if control and control.paused.is_set():
+        return False
     work = claim_work(session_factory, settings, datetime.now(timezone.utc))
     if work is None:
         return False
+    logger.info("Post screening started worker_id=%s job_id=%s", control.worker_id if control else "manual", work.post_id)
     result, failure, context = None, None, None
     try:
         if work.post_type == "link":
@@ -229,20 +238,26 @@ def run_once(session_factory=SessionLocal, settings: Settings | None = None) -> 
             context = moderate_context(work.text)
     except ModerationError as error:
         failure = error
+        logger.warning("Post screening failed worker_id=%s job_id=%s code=%s",
+                       control.worker_id if control else "manual", work.post_id, error.code)
+        if control and credential_error(error.code):
+            control.pause(error.code, work.post_id)
     except Exception:
         # Never log request bodies, private signed URLs, credentials, or provider errors.
-        logger.error("Post moderation failed unexpectedly; the post remains pending.")
+        logger.error("Post screening interrupted worker_id=%s job_id=%s code=unexpected_failure",
+                     control.worker_id if control else "manual", work.post_id)
         failure = ModerationError("Screening failed.", code="unexpected_failure")
     finish_work(session_factory, settings, work, result, failure, datetime.now(timezone.utc), context)
     return True
 
 
-def run_worker(stop: Event, settings: Settings):
+def run_worker(stop: Event, settings: Settings, control: WorkerControl | None = None):
     """One thread per API process; database claims coordinate multiple processes."""
     last_error = None
-    while not stop.is_set():
+    control = control or WorkerControl()
+    while not stop.is_set() and not control.paused.is_set():
         try:
-            worked = run_once(settings=settings)
+            worked = run_once(settings=settings, control=control)
             if last_error is not None:
                 logger.info("Moderation worker recovered and resumed screening.")
                 last_error = None

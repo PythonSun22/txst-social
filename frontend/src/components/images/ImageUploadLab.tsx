@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import ImageUploader from "@/components/images/ImageUploader";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
-import { getImagePolicy, listImages, previewImage, type SavedImage } from "@/lib/images/image-api";
+import { getImagePolicy, listImages, previewImage, retryImage, abandonImage, type SavedImage } from "@/lib/images/image-api";
 import { aspectRatio, formatBytes, type ImagePolicy } from "@/lib/images/image-policy";
 
 /** Test harness around the same uploader that can be embedded in PostComposer. */
@@ -93,6 +93,16 @@ export default function ImageUploadLab() {
         {images.map((image) => <li key={image.id} className="flex items-center justify-between gap-3 p-3 text-sm">
           <div className="min-w-0"><p className="break-all font-semibold">{image.original_name}</p><p className="text-xs text-muted-foreground">Original: {formatBytes(image.size_bytes)} · {image.width} × {image.height} px · {aspectRatio(image.width, image.height)} · {image.processing_status}</p>
             {image.variants.map(version => <p key={version.name} className="text-xs text-muted-foreground">{version.name}: {version.width} × {version.height} · {formatBytes(version.size_bytes)}</p>)}
+            <p role="status">{image.processing_message}</p>
+            {image.can_retry && <button type="button" className="mr-3 underline" onClick={async () => {
+              try { const updated = await retryImage(image.id); setImages(items => items.map(item => item.id === updated.id ? updated : item)); }
+              catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to retry image."); }
+            }}>Retry processing</button>}
+            {image.processing_status === "failed" && <button type="button" className="text-red-700 underline" onClick={async () => {
+              if (!window.confirm("Discard this saved image permanently? Active post and profile images are protected.")) return;
+              try { await abandonImage(image.id); setImages(items => items.filter(item => item.id !== image.id)); }
+              catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to discard image."); }
+            }}>Discard saved image</button>}
             {!!image.variants.length && <p className="text-xs text-muted-foreground">Versions total: {formatBytes(image.variants.reduce((sum, v) => sum + v.size_bytes, 0))} · {image.original_deleted_at ? "Original removed" : "Original awaiting token expiry and cleanup"}</p>}</div>
           <button type="button" disabled={!image.variants.length} className="shrink-0 rounded-full border border-primary px-3 py-1 font-bold text-primary hover:bg-secondary disabled:opacity-40" onClick={() => void showPreview(image)}>View saved</button>
         </li>)}

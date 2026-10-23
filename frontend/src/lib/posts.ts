@@ -6,6 +6,8 @@ export interface FeedPost {
   type: "text" | "image" | "link";
   status: "pending" | "approved" | "blocked" | "removed";
   moderation_failed: boolean;
+  processing_state: string;
+  can_retry: boolean;
   created_at: string; like_count: number; comment_count: number; liked: boolean;
   media: { position: number; width: number | null; height: number | null }[];
 }
@@ -25,3 +27,4 @@ export const setPostLike = (id: string, liked: boolean) => apiRequest<{ liked: b
 export const getPostImage = (id: string, position: number, signal?: AbortSignal) =>
   apiRequest<{ url: string }>(`/posts/${id}/media/${position}/preview?variant=preview`, { signal }, true);
 export const deletePost = (id: string) => apiRequest<void>(`/posts/${id}`, { method: "DELETE" });
+export const retryPostScreening = (id: string) => apiRequest<FeedPost>(`/posts/${id}/retry-screening`, { method: "POST" });

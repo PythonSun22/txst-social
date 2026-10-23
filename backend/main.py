@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from threading import Event, Thread
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -17,6 +17,8 @@ from profiles.routes import router as profile_router
 from moderation.worker import Settings, run_worker
 from images.worker import Settings as ImageSettings, run_worker as run_image_worker
 from health_schemas import DatabaseHealthResponse, HealthResponse
+from auth import get_current_profile
+from worker_control import control
 
 
 @asynccontextmanager
@@ -26,11 +28,11 @@ async def lifespan(app: FastAPI):
     worker = None
     image_worker = None
     if os.getenv("IMAGE_PROCESSING_ENABLED", "false").lower() in {"true", "1", "yes"}:
-        image_worker = Thread(target=run_image_worker, args=(stop, ImageSettings.from_env()), daemon=True,
+        image_worker = Thread(target=run_image_worker, args=(stop, ImageSettings.from_env(), control), daemon=True,
                               name="image-processing")
         image_worker.start()
     if os.getenv("MODERATION_ENABLED", "false").lower() in {"true", "1", "yes"}:
-        worker = Thread(target=run_worker, args=(stop, Settings.from_env()), daemon=True,
+        worker = Thread(target=run_worker, args=(stop, Settings.from_env(), control), daemon=True,
                         name="post-moderation")
         worker.start()
     try:
@@ -45,6 +47,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/workers/status", dependencies=[Depends(get_current_profile)])
+def worker_status(response: Response):
+    """This API process only, not a claim about other hosts sharing the queue."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"worker_id": control.worker_id, "paused": control.paused.is_set(),
+            "reason": control.reason,
+            "images_enabled": os.getenv("IMAGE_PROCESSING_ENABLED", "false").lower() in {"true", "1", "yes"},
+            "moderation_enabled": os.getenv("MODERATION_ENABLED", "false").lower() in {"true", "1", "yes"}}
+
+
 app.include_router(images_router)
 app.include_router(posts_router)
 app.include_router(profile_router)

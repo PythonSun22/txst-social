@@ -721,3 +721,23 @@ The initial application and database foundations are complete:
 - Database migrations are version-controlled
 
 The next major milestone is Supabase authentication and the authenticated user-profile pipeline.
+
+### Recovering from image/worker service failures
+
+Before using this checkout, stop old backend workers and apply
+`20261023010000_preserve_recoverable_images.sql` to local Supabase with
+`supabase migration up --local`. Coordinate shared deployment after review.
+The migration adds `recovery_required` and a Storage source-deletion guard.
+
+Credential failures pause image and post workers in the affected backend process.
+Fix credentials privately and fully restart. Signed-in operators can inspect
+`GET /workers/status` (process-local, not cluster-wide). Use one designated worker
+backend for shared testing. A healthy API alone does not prove workers are running.
+
+Recoverable image inputs survive exhausted service retries and continue counting
+toward quota. Retry through the post/profile UI or `/upload-test`; APIs are
+`POST /images/{id}/retry` and `POST /posts/{id}/retry-screening`. Both require a
+verified owner. Retry cannot bypass moderation or recreate missing source bytes.
+`DELETE /images/{id}` explicitly abandons an unused asset; active references and
+leases prevent unsafe discard. No automatic retention deadline is imposed on
+recoverable failures. See `docs/image-processing.md` for the failure test matrix.

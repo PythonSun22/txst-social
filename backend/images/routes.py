@@ -21,6 +21,8 @@ from images import storage as image_storage
 from images.limits import reserve_upload_slot
 from images.budget import check_capacity, expire_unfinished, storage_budget
 from models import ImageStorageObject, ImageUpload, ImageVariant, Profile
+from images.recovery import image_processing_state, retry_image
+from worker_control import control
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -30,7 +32,10 @@ def upload_response(db: Session, upload: ImageUpload) -> ImageUploadResponse:
     values = {name: getattr(upload, name) for name in (
         "id", "object_key", "original_name", "content_type", "size_bytes", "width", "height",
         "created_at", "uploaded_at")}
+    state, message = image_processing_state(upload)
     return ImageUploadResponse(**values, bucket_id=upload.bucket_id or IMAGE_BUCKET,
+        recovery_required=bool(upload.recovery_required), processing_state=state, processing_message=message,
+        can_retry=bool(upload.recovery_required and upload.processing_status == "failed" and upload.original_deleted_at is None),
         purpose=upload.purpose or "post", processing_status=upload.processing_status or "pending",
         original_deleted_at=upload.original_deleted_at,
         variants=[ImageVariantResponse.model_validate(v) for v in db.scalars(
@@ -153,6 +158,52 @@ def get_upload(upload_id: UUID, response: Response,
                profile: Profile = Depends(get_current_profile), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return upload_response(db, own_upload(db, upload_id, profile))
+
+
+@router.post("/{upload_id}/retry", response_model=ImageUploadResponse)
+def retry_upload(upload_id: UUID, response: Response,
+    profile: Profile = Depends(require_verified_profile), db: Session = Depends(get_db)):
+    if control.paused.is_set():
+        raise HTTPException(503, "Image processing is temporarily unavailable. Your saved input is preserved; try again when service is restored.")
+    db.execute(select(Profile.id).where(Profile.id == profile.id).with_for_update())
+    upload = own_upload(db, upload_id, profile)
+    db.refresh(upload, with_for_update=True)
+    if upload.deleted_at is not None:
+        raise HTTPException(404, "Image upload not found.")
+    retry_image(db, upload)
+    db.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return upload_response(db, upload)
+
+
+@router.delete("/{upload_id}", status_code=204)
+def abandon_upload(upload_id: UUID, profile: Profile = Depends(require_verified_profile), db: Session = Depends(get_db)):
+    """Explicitly discard an unused asset; retirement is committed before deletion."""
+    from images.cleanup import has_live_reference
+    from images.budget import release_processing, source_cleanup_time
+    db.execute(select(Profile.id).where(Profile.id == profile.id).with_for_update())
+    upload = own_upload(db, upload_id, profile)
+    db.refresh(upload, with_for_update=True)
+    now = datetime.now(timezone.utc)
+    if upload.processing_lease_until and upload.processing_lease_until > now:
+        raise HTTPException(409, "Wait for active processing to finish before discarding this image.")
+    # A failed pending selection may be discarded without replacing the current image.
+    if upload.processing_status == "failed":
+        for field in ("pending_profile_image_upload_id", "pending_banner_image_upload_id"):
+            if getattr(profile, field) == upload.id:
+                setattr(profile, field, None)
+        db.flush()
+    if has_live_reference(db, upload.id):
+        raise HTTPException(409, "Remove this image from its active post or profile before discarding it.")
+    upload.deleted_at = now
+    upload.processing_status = "failed"
+    upload.processing_error = "unused_image"
+    upload.recovery_required = False
+    upload.original_cleanup_after = source_cleanup_time(upload, now)
+    upload.asset_cleanup_after = now
+    release_processing(db, upload)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/{upload_id}/published-preview", response_model=ImagePreviewResponse)
