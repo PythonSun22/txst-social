@@ -284,17 +284,28 @@ worker decodes still images (25 million pixel cap), strips metadata, generates
 WebP versions and screens the largest version before marking an asset ready.
 Post assets produce preview + expanded versions; avatars produce small + large;
 banners produce one. Presets/quality live in `backend/images/processing.py`.
+Shared image state and retry eligibility live in `backend/images/lifecycle.py`.
 Posts wait for image processing without consuming post-screening attempts, then
-retain title/body-plus-image screening. Both workers send bounded inline image
+retain title/body-plus-image screening. Any rejected attachment blocks its pending
+post even if another attachment is still processing or has failed. Both workers
+send bounded inline image
 bytes, so local loopback Storage no longer needs to be fetchable by OpenAI.
 Normal upload/preview routes still use caller JWTs; worker transfers require the
-backend-only Storage secret. New lifecycle/RLS tests are opt-in and still need
-local database execution; shared deployment remains pending. See `docs/image-processing.md`.
+backend-only Storage secret. Lifecycle/RLS tests use a disposable local database
+and mock provider/Storage HTTP. The separate opt-in
+`backend/tests/test_image_storage_integration.py` exercises real local Auth/Storage,
+with temporary accounts/files and no OpenAI calls. It reads local CLI configuration,
+rejects remote destinations and requires local workers to be stopped; see
+`docs/image-processing.md`. Shared deployment remains pending.
 
 Avatars and banners now require asset-level screening. Pending profile selections
 are separate from active references: old approved assets stay visible until a
 replacement passes; rejection/failure preserves them. Active approved profile
 assets support signed public previews, including small avatars beside posts.
+The pending-image notice owns polling and refreshes the profile after processing,
+including successful owner retries. Feed serialization batches pending-image
+states; moderation fields load with each post, without schema probes or deferred
+reads.
 Original input files are deleted through Storage after terminal processing and
 safe reservation closure. Legacy signed inputs retain at least 7,500 seconds after token issuance. Expired abandoned
 transfers and invalid images receive safe cleanup; infrastructure failures retain

@@ -16,7 +16,7 @@ os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 os.environ["MODERATION_ENABLED"] = "false"
 
 from fastapi import HTTPException, Response
-from sqlalchemy import create_engine, delete, select, text
+from sqlalchemy import create_engine, delete, event, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
@@ -24,7 +24,7 @@ from models import ImageStorageObject, ImageUpload, ImageVariant, ModerationChec
 from moderation.client import ModerationError
 from moderation.context import ContextAssessment
 from moderation.worker import Settings, claim_work, finish_work, run_once
-from posts.routes import get_post
+from posts.routes import get_post, serialize_posts
 from test_moderation_worker import verdict
 
 
@@ -108,6 +108,55 @@ class ImageDatabaseFixture(unittest.TestCase):
 
 
 class ModerationDatabaseTests(ImageDatabaseFixture):
+    def test_rejected_attachment_blocks_post_even_when_another_cannot_finish(self):
+        for other_status in ("pending", "processing", "failed"):
+            with self.subTest(other_status=other_status):
+                identity = self.post(images=2)
+                with self.sessions.begin() as db:
+                    assets = db.scalars(select(ImageUpload).join(PostMedia,
+                        PostMedia.image_upload_id == ImageUpload.id)
+                        .where(PostMedia.post_id == identity).order_by(PostMedia.position)).all()
+                    assets[0].processing_status = "blocked"
+                    assets[1].processing_status = other_status
+                    assets[1].recovery_required = True
+                with (patch("moderation.worker.moderate_content") as provider,
+                      patch("moderation.worker.moderation_image_input") as storage):
+                    self.assertTrue(run_once(self.sessions))
+                    provider.assert_not_called()
+                    storage.assert_not_called()
+                with self.sessions() as db:
+                    self.assertEqual(db.get(Post, identity).status, "blocked")
+                    audit = db.scalar(select(ModerationCheck).where(ModerationCheck.post_id == identity))
+                    self.assertEqual(audit.decision, "block")
+                    with self.assertRaises(HTTPException):
+                        get_post(identity, Response(), None, db)
+
+    def test_pending_feed_serialization_has_constant_query_count(self):
+        identities = [self.post(images=1) for _ in range(3)]
+        with self.sessions.begin() as db:
+            for identity in identities:
+                db.get(Post, identity).moderation_error = "provider_connection"
+
+        def serialize(count):
+            statements = []
+            def record(connection, cursor, statement, parameters, context, executemany):
+                statements.append(statement)
+            with self.sessions() as db:
+                posts = db.scalars(select(Post).where(Post.id.in_(identities[:count]))).all()
+                viewer = db.get(Profile, self.owner)
+                event.listen(self.engine, "before_cursor_execute", record)
+                try:
+                    result = serialize_posts(db, posts, viewer)
+                finally:
+                    event.remove(self.engine, "before_cursor_execute", record)
+            self.assertEqual(len(result), count)
+            self.assertTrue(all(post.processing_state == "service_unavailable" for post in result))
+            self.assertFalse(any("information_schema" in sql for sql in statements))
+            return len(statements)
+
+        self.assertEqual(serialize(1), 4)
+        self.assertEqual(serialize(3), 4)
+
     def test_oldest_first_approval_audit_and_public_visibility(self):
         newer = self.post()
         older = self.post(age=5)

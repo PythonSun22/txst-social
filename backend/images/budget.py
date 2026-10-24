@@ -6,6 +6,7 @@ from sqlalchemy import case, func, or_, select, true, update
 
 from images.schemas import (ACCOUNT_STORAGE_BYTES, MAX_UPLOAD_BYTES, MAX_UNFINISHED_UPLOADS,
                             PROCESSING_HEADROOM, SOURCE_GRACE_SECONDS, ImageStorageBudget)
+from images.lifecycle import PROCESSING_STATUSES
 from models import ImageStorageObject, ImageUpload, ImageVariant
 from moderation.client import ModerationError
 
@@ -18,7 +19,7 @@ def storage_budget(db, owner) -> ImageStorageBudget:
     ).where(ImageStorageObject.owner_id == owner, ImageStorageObject.deleted_at.is_(None)).subquery()
     jobs = select(
         func.coalesce(func.sum(ImageUpload.processing_reserved_bytes), 0).label("held"),
-        func.count().filter(ImageUpload.processing_status.in_(["pending", "processing"]),
+        func.count().filter(ImageUpload.processing_status.in_(PROCESSING_STATUSES),
                             ImageUpload.deleted_at.is_(None)).label("unfinished"),
     ).where(ImageUpload.owner_id == owner).subquery()
     charged, stored, held, unfinished = db.execute(select(objects.c.charged, objects.c.stored, jobs.c.held, jobs.c.unfinished)
@@ -47,7 +48,7 @@ def source_cleanup_time(upload, now):
 
 
 def expire_unfinished(db, now, owner=None):
-    query = select(ImageUpload).where(ImageUpload.processing_status.in_(["pending", "processing"]),
+    query = select(ImageUpload).where(ImageUpload.processing_status.in_(PROCESSING_STATUSES),
         or_(ImageUpload.deleted_at.is_not(None),
             (ImageUpload.uploaded_at.is_(None) & or_(
                 (ImageUpload.upload_method == "authenticated") & (ImageUpload.upload_expires_at <= now),

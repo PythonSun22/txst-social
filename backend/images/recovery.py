@@ -6,15 +6,15 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from images.budget import storage_budget
+from images.lifecycle import PROCESSING_STATUSES, can_retry_image
 from images.schemas import MAX_UNFINISHED_UPLOADS, PROCESSING_HEADROOM
 from models import ImageStorageObject
 
 
 def retry_image(db, upload):
-    if upload.processing_status in {"pending", "processing", "ready"}:
+    if upload.processing_status in (*PROCESSING_STATUSES, "ready"):
         return  # Idempotent: concurrent retries cannot reserve headroom twice.
-    if (upload.processing_status != "failed" or not upload.recovery_required
-            or upload.deleted_at is not None or upload.original_deleted_at is not None or upload.uploaded_at is None):
+    if not can_retry_image(upload):
         raise HTTPException(409, "This image cannot be retried. Select a new image.")
     now = datetime.now(timezone.utc)
     if upload.processing_next_attempt_at > now:
@@ -38,17 +38,3 @@ def retry_image(db, upload):
     upload.asset_cleanup_after = None
     # recovery_required remains true until a complete verdict+versions commit.
     db.flush()
-
-
-def image_processing_state(upload):
-    if upload.processing_status == "blocked":
-        return "image_rejected", "This image was rejected by automatic screening."
-    if upload.processing_status == "ready":
-        return "ready", "Image processing and screening are complete."
-    if upload.processing_status == "failed" and (upload.original_deleted_at is not None or upload.uploaded_at is None):
-        return "failed", "The saved image input is unavailable. Select another image."
-    if upload.processing_error or (upload.recovery_required and upload.processing_status == "failed"):
-        return "service_unavailable", "Image processing is unavailable. Your saved input is preserved for retry."
-    if upload.processing_status == "failed":
-        return "failed", "This image could not be processed. Select another image."
-    return "waiting", "Waiting for image processing and moderation."

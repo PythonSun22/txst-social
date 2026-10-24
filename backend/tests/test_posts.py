@@ -17,7 +17,7 @@ from database import get_db
 from main import app
 from models import Ban, ImageUpload, Post, PostLike, Profile, Space
 from posts.schemas import PostCreate
-from posts.routes import create_post, decode_cursor, delete_own_post, encode_cursor, list_posts, serialize_posts, set_like
+from posts.routes import create_post, decode_cursor, delete_own_post, encode_cursor, list_posts, processing_state, serialize_posts, set_like
 
 class PostTests(unittest.TestCase):
     def setUp(self):
@@ -26,6 +26,7 @@ class PostTests(unittest.TestCase):
         self.post=Post(id=uuid4(),space_id=self.space.id,author_id=self.user.id,title='Test',body='Body',type='text',status='pending',created_at=datetime.now(timezone.utc),like_count=0,comment_count=0)
         self.db=Mock(); self.db.get.return_value=None; self.db.scalar.return_value=self.post
         self.db.scalars.return_value.all.return_value=[]
+        self.db.execute.return_value.all.return_value=[]
         self.addCleanup(app.dependency_overrides.clear)
 
     def test_validation(self):
@@ -74,6 +75,19 @@ class PostTests(unittest.TestCase):
                                  (Profile(id=self.user.id), False)):
             with self.subTest(expected=expected, viewer=viewer):
                 self.assertEqual(serialize_posts(self.db, [self.post], viewer)[0].can_delete, expected)
+
+    def test_processing_notice_prioritizes_rejection_and_unrecoverable_inputs(self):
+        rejected = ImageUpload(processing_status="blocked")
+        failed = ImageUpload(processing_status="failed", processing_error="provider_connection",
+            recovery_required=True, uploaded_at=self.post.created_at)
+        self.assertEqual(processing_state(self.post, [rejected, failed], False), ("image_rejected", False))
+        self.assertEqual(processing_state(self.post, [failed], False), ("service_unavailable", True))
+        failed.original_deleted_at = self.post.created_at
+        self.assertEqual(processing_state(self.post, [failed], False), ("failed", False))
+        failed.original_deleted_at = None
+        failed.recovery_required = False
+        failed.processing_error = "invalid_image"
+        self.assertEqual(processing_state(self.post, [failed], False), ("failed", False))
 
     def test_soft_delete_text_and_image(self):
         # FR-34/32: retain the post and reusable media, decrement the space count once.

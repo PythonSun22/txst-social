@@ -16,6 +16,7 @@ from sqlalchemy import or_, select, update
 
 from database import SessionLocal
 from images.processing import Output, process_image
+from images.lifecycle import DISCARDABLE_ERRORS, PROCESSING_STATUSES, TERMINAL_STATUSES
 from images.worker_storage import image_data_url, read_image, remove_images, write_image
 from images.schemas import SOURCE_GRACE_SECONDS
 from images.budget import (cleanup_attempt, cleanup_staged_once, delete_recorded,
@@ -62,7 +63,7 @@ def claim_work(sessions, settings: Settings, now: datetime) -> Work | None:
     with sessions() as db:
         upload = db.scalar(select(ImageUpload).where(
             ImageUpload.uploaded_at.is_not(None), ImageUpload.deleted_at.is_(None),
-            ImageUpload.processing_status.in_(["pending", "processing"]),
+            ImageUpload.processing_status.in_(PROCESSING_STATUSES),
             ImageUpload.processing_next_attempt_at <= now,
             or_(ImageUpload.processing_lease_until.is_(None), ImageUpload.processing_lease_until <= now),
         ).order_by(ImageUpload.created_at, ImageUpload.id).limit(1).with_for_update(skip_locked=True))
@@ -114,7 +115,7 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
             return False
         if failure:
             upload.processing_error = failure
-            upload.recovery_required = failure not in {"invalid_image", "upload_expired", "unused_image"}
+            upload.recovery_required = failure not in DISCARDABLE_ERRORS
             if credential_error(failure):
                 upload.processing_attempts = max(0, upload.processing_attempts - 1)
             upload.processing_status = "failed" if upload.processing_attempts >= settings.attempts else "pending"
@@ -150,7 +151,7 @@ def finish_work(sessions, settings: Settings, work: Work, outputs: list[tuple[Ou
             db.flush()
             if not result.blocked:
                 activate_profile(db, upload)
-        if upload.processing_status in {"ready", "blocked", "failed"}:
+        if upload.processing_status in TERMINAL_STATUSES:
             release_processing(db, upload)
             upload.original_cleanup_after = source_cleanup_time(upload, now)
         upload.processing_claim = upload.processing_lease_until = None
@@ -221,7 +222,7 @@ def cleanup_original_once(sessions=SessionLocal) -> bool:
         expire_unfinished(db, now)
         db.commit()
         upload = db.scalar(select(ImageUpload).where(
-            ImageUpload.processing_status.in_(["ready", "blocked", "failed"]),
+            ImageUpload.processing_status.in_(TERMINAL_STATUSES),
             ImageUpload.recovery_required.is_(False),
             ImageUpload.original_deleted_at.is_(None), ImageUpload.original_cleanup_after <= now,
         ).order_by(ImageUpload.original_cleanup_after).limit(1).with_for_update(skip_locked=True))

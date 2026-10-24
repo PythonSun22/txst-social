@@ -1,6 +1,6 @@
 # Optimized image assets (FR-32, FR-90–92)
 
-This is the current implementation as of October 22, 2026. Images upload directly
+This is the current implementation as of October 23, 2026. Images upload directly
 from the browser to private Supabase Storage. A trusted backend worker decodes,
 resizes, re-encodes and screens each asset before its generated versions become
 public. FastAPI request handlers still handle metadata, not upload bytes; the
@@ -49,9 +49,11 @@ The durable queue is `image_uploads`: `pending` -> `processing` -> `ready` or
 `blocked`. Network failures consume bounded attempts and eventually become
 `failed`. Attempts and 10-minute leases persist across API restarts. A single
 worker processes one asset at a time per API process; row locks/leases coordinate
-multiple processes. No processing/provider call holds a database transaction.
-Crashes on the last attempt become failed after lease expiry. There is no user
-retry/reset endpoint for exhausted jobs; fix configuration and submit a new asset.
+multiple processes. Provider calls run outside database transactions; bounded
+Storage writes and deletes hold their accounting locks. Crashes on the last
+attempt become failed after lease expiry. Recoverable failures retain their input
+and can be retried by the verified owner after service restoration. Invalid or
+missing inputs require re-upload. See [safe recovery](#service-failures-and-safe-recovery-fr-329092).
 
 The worker first generates all versions in memory. It screens the largest
 display version using an inline data URL, then stores every version privately.
@@ -64,9 +66,10 @@ Post images get image-only screening at asset processing AND title/body-plus-ima
 screening in the existing post worker. This intentionally costs additional model
 requests: an asset passing alone does not approve a post's text or context.
 Posts waiting for asset processing do not consume their post-screening attempts.
-Blocked assets block their pending posts; failed assets leave posts private and
-eventually show the existing screening-failed notice. The narrow contextual
-recheck remains text-only and never overrides image verdicts.
+A blocked asset blocks its pending post even when another attachment is waiting
+or failed. Without a rejection, failed assets leave posts private and show a
+failure or service-unavailable notice according to whether retry is possible.
+The narrow contextual recheck remains text-only and never overrides image verdicts.
 
 `post_media` keeps one asset reference per attachment, so four images produce
 eight files without duplicating attachments. Feed cards request `preview` and
@@ -79,6 +82,10 @@ cannot activate an asset after the student selects a different replacement.
 Rejected/failed replacements retain the old image and display an explanation.
 Only purpose-matching uploads may be selected. Database triggers also enforce
 approved owned current avatar/banner references.
+
+The pending-image notice owns polling and refreshes the profile when processing
+finishes, including after an owner retry. The profile page has no separate polling
+loop. A failed profile refresh is retried before polling stops.
 
 Active approved profile assets have public signed-preview access for avatars
 beside public posts. Pending replacements and unattached assets are owner-only.
@@ -126,7 +133,9 @@ Processing and cleanup require the image worker to be running.
    `20260926000000_automatic_post_moderation.sql` and
    `20261022072231_image_variants.sql`, `20261022094443_image_upload_limits.sql`,
    `20261022095634_image_storage_budget.sql`, and
-   `20261022102230_image_asset_cleanup.sql`. Do not deploy shared migrations before review.
+   `20261022102230_image_asset_cleanup.sql`,
+   `20261022120000_authenticated_image_uploads.sql`, and
+   `20261023010000_preserve_recoverable_images.sql`. Do not deploy shared migrations before review.
 3. From `backend`, run `uv sync` (Pillow is now a dependency).
 4. Configure backend-only `SUPABASE_SECRET_KEY` (or legacy service role) and
    `OPENAI_API_KEY`. Set `IMAGE_PROCESSING_ENABLED=true` and
@@ -160,6 +169,30 @@ database named `moderation_test*`, with `MODERATION_TEST_DATABASE_URL` configure
 They apply all migrations against Auth/Storage schema stand-ins; providers and
 Storage HTTP remain mocked. Never point them at the shared database.
 
+Real Auth/Storage integration tests are separate and opt-in. Start local Supabase,
+apply its migrations, and stop local API/image workers before running from `backend/`:
+
+```sh
+RUN_LOCAL_STORAGE_TESTS=1 uv run python -m unittest discover -s tests \
+  -p test_image_storage_integration.py -v
+```
+
+The suite obtains credentials from `supabase status --output json` and refuses
+non-loopback API/database destinations. It creates temporary verified accounts and
+generated images, then removes only those fixtures through Auth/Storage APIs.
+It does not load shared credentials from `.env`, apply migrations, disable guards,
+or call OpenAI. FastAPI requests use real local Auth and SQL sessions; processing
+verdicts are supplied directly to exercise recovery and cleanup deterministically.
+
+Coverage includes owner-only uploads/private reads, missing reservations,
+duplicates and overwrites, mismatched size/MIME and the 2 MB cap, concurrent
+completion/accounting, expired and streamed late uploads, elevated deletion of
+recoverable inputs, missing-version protection, and successful recovery followed
+by input deletion with both variants and signed previews still readable. Storage
+may return an empty successful deletion when RLS hides all target rows; tests
+verify retained bytes rather than relying on a particular denial status/message.
+Run this suite before adopting a new local Supabase Storage version.
+
 Browser checklist:
 
 1. Upload four photos in `/submit`, reorder them, submit, and verify eight variant
@@ -175,56 +208,6 @@ Browser checklist:
    original bytes and still-working optimized previews. Restart to test recovery.
 6. Disable either worker or simulate Storage/provider failure: content must stay
    private and show processing/failure status rather than publishing unscreened.
-
-## Files changed in this implementation
-
-### New files
-
-- `backend/images/processing.py`
-- `backend/images/worker.py`
-- `backend/images/worker_storage.py`
-- `backend/tests/test_image_processing.py`
-- `backend/tests/test_image_processing_database.py`
-- `backend/tests/test_image_worker_storage.py`
-- `docs/image-processing.md`
-- `frontend/src/components/images/ImageViewer.tsx`
-- `supabase/migrations/20261022072231_image_variants.sql`
-
-### Updated files
-
-- `AGENTS.md`
-- `README.md`
-- `backend/.env.example`
-- `backend/images/schemas.py`
-- `backend/images/routes.py`
-- `backend/main.py`
-- `backend/models.py`
-- `backend/moderation/worker.py`
-- `backend/posts/schemas.py`
-- `backend/posts/routes.py`
-- `backend/profiles/routes.py`
-- `backend/profiles/schemas.py`
-- `backend/pyproject.toml`
-- `backend/tests/test_auth.py`
-- `backend/tests/test_images.py`
-- `backend/tests/test_moderation_database.py`
-- `backend/tests/test_moderation_worker.py`
-- `backend/tests/test_posts.py`
-- `backend/tests/test_profiles.py`
-- `backend/uv.lock`
-- `docs/image-uploads.md`
-- `docs/local-development.md`
-- `docs/moderation.md`
-- `docs/posts-and-media.md`
-- `frontend/src/app/profile/page.tsx`
-- `frontend/src/components/profiles/EditProfileModal.tsx`
-- `frontend/src/components/images/ImageUploadLab.tsx`
-- `frontend/src/components/images/ImageUploader.tsx`
-- `frontend/src/components/posts/PostCard.tsx`
-- `frontend/src/lib/profiles.ts`
-- `frontend/src/lib/images/image-api.ts`
-- `frontend/src/lib/posts.ts`
-
 
 ## Browser preparation and authenticated transfer
 
@@ -282,5 +265,20 @@ failures survive source/unused cleanup and database DELETE attempts; concurrent
 retries charge once; insufficient quota/foreign owners cannot retry; successful
 recovery permits input deletion while retaining both versions. Optional database
 tests run only on disposable local databases; actual provider calls are mocked.
-A separate local Storage test verifies the real source-deletion guard and final
-variant reads. Shared credentials and shared data are not used in those tests.
+The opt-in `test_image_storage_integration.py` suite above verifies the real
+source-deletion guard, variant reads and signed previews. Shared credentials and
+shared data are not used in those tests.
+
+## State handling and feed reads
+
+`backend/images/lifecycle.py` defines shared processing states, retained-input
+checks, retry eligibility and image notices. The image API and post serializer use
+these same rules: an invalid or missing input must not offer a service retry.
+`posts.routes.processing_state` derives post notices with rejection first, then
+unrecoverable failure, service failure and waiting states.
+
+Post moderation fields load with the post; all migrations are required. Feed
+serialization batches authors, media, likes and pending-image states. It performs
+at most four queries regardless of the number of posts, with no schema probes or
+per-post deferred reads. Database regression tests verify this bound and mixed
+rejected/unfinished attachment handling.

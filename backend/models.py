@@ -132,8 +132,6 @@ class Major(Base):
 class Post(Base):
     __tablename__ = "posts"
     __table_args__ = {"schema": "public"}
-    # Old post routes remain usable until the moderation migration is deployed.
-    __mapper_args__ = {"eager_defaults": False}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     space_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.spaces.id", ondelete="CASCADE"), nullable=False)
@@ -158,12 +156,12 @@ class Post(Base):
     removed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="SET NULL"), nullable=True)
 
     # Durable worker state; provider calls run outside the transaction holding a claim.
-    moderation_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", deferred=True)
-    moderation_next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), deferred=True)
-    moderation_claim: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, deferred=True)
-    moderation_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, deferred=True)
-    moderation_exhausted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, deferred=True)
-    moderation_error: Mapped[str | None] = mapped_column(Text, nullable=True, deferred=True)
+    moderation_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    moderation_next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    moderation_claim: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    moderation_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    moderation_exhausted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    moderation_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR, Computed("to_tsvector('english', title)", persisted=True))
 class PostMedia(Base):

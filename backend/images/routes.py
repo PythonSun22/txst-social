@@ -21,7 +21,8 @@ from images import storage as image_storage
 from images.limits import reserve_upload_slot
 from images.budget import check_capacity, expire_unfinished, storage_budget
 from models import ImageStorageObject, ImageUpload, ImageVariant, Profile
-from images.recovery import image_processing_state, retry_image
+from images.lifecycle import can_retry_image, image_processing_state
+from images.recovery import retry_image
 from worker_control import control
 
 router = APIRouter(prefix="/images", tags=["images"])
@@ -35,7 +36,7 @@ def upload_response(db: Session, upload: ImageUpload) -> ImageUploadResponse:
     state, message = image_processing_state(upload)
     return ImageUploadResponse(**values, bucket_id=upload.bucket_id or IMAGE_BUCKET,
         recovery_required=bool(upload.recovery_required), processing_state=state, processing_message=message,
-        can_retry=bool(upload.recovery_required and upload.processing_status == "failed" and upload.original_deleted_at is None),
+        can_retry=can_retry_image(upload),
         purpose=upload.purpose or "post", processing_status=upload.processing_status or "pending",
         original_deleted_at=upload.original_deleted_at,
         variants=[ImageVariantResponse.model_validate(v) for v in db.scalars(

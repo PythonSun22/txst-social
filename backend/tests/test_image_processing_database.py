@@ -11,10 +11,11 @@ from fastapi import Response
 from sqlalchemy import select, text
 
 from images.processing import process_image
+from images.routes import retry_upload
 from images.worker import Settings, claim_work, finish_work, cleanup_original_once
 from images.budget import stage_outputs, write_reserved
 from models import ImageUpload, ImageVariant, ImageProcessingCheck, Profile
-from profiles.routes import update_current_profile
+from profiles.routes import current_profile_response, update_current_profile
 from profiles.schemas import ProfileUpdate
 from test_image_processing import source, verdict
 from test_moderation_database import ImageDatabaseFixture
@@ -69,6 +70,34 @@ class ImageProcessingDatabaseTests(ImageDatabaseFixture):
         with self.sessions() as db:
             self.assertIsNone(db.get(Profile, self.owner).profile_image_upload_id)
             self.assertEqual(db.get(ImageUpload, second).processing_status, "blocked")
+
+    def test_failed_profile_replacement_can_retry_without_losing_current_avatar(self):
+        current = self.upload()
+        self.finish(claim_work(self.sessions, Settings(), datetime.now(timezone.utc)))
+        with self.sessions() as db:
+            update_current_profile(ProfileUpdate(profile_image_upload_id=current), Response(),
+                                   db.get(Profile, self.owner), db)
+        replacement = self.upload()
+        with self.sessions() as db:
+            update_current_profile(ProfileUpdate(profile_image_upload_id=replacement), Response(),
+                                   db.get(Profile, self.owner), db)
+        work = claim_work(self.sessions, Settings(), datetime.now(timezone.utc))
+        finish_work(self.sessions, Settings(attempts=1), work, [], None, "storage_unavailable")
+        with self.sessions.begin() as db:
+            db.get(ImageUpload, replacement).processing_next_attempt_at = self.now - timedelta(seconds=1)
+        with self.sessions() as db:
+            profile = db.get(Profile, self.owner)
+            failed = current_profile_response(db, profile)
+            self.assertEqual(failed.profile_image_upload_id, current)
+            self.assertEqual(failed.profile_image_status, "failed")
+            retry_upload(replacement, Response(), profile, db)
+            self.assertEqual(profile.profile_image_upload_id, current)
+        self.finish(claim_work(self.sessions, Settings(), datetime.now(timezone.utc)))
+        with self.sessions() as db:
+            recovered = current_profile_response(db, db.get(Profile, self.owner))
+            self.assertEqual(recovered.profile_image_upload_id, replacement)
+            self.assertIsNone(recovered.pending_profile_image_upload_id)
+            self.assertIsNone(recovered.profile_image_status)
 
     def test_rls_hides_unapproved_variants_and_never_publishes_original(self):
         uid = self.upload()

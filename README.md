@@ -274,9 +274,10 @@ The browser editor supports drag cropping, ratio presets and proportional resizi
 selection. Submit uploads the chosen version as a new private asset.
 
 Before testing this checkout, stop the backend and apply local migrations with
-`supabase migration up --local`, then restart both apps. The latest migration is
-`20261022120000_authenticated_image_uploads.sql`: authenticated reservations expire
-after 15 minutes, completed inputs can be cleaned after terminal processing, and
+`supabase migration up --local`, then restart both apps. Apply all migrations
+through `20261023010000_preserve_recoverable_images.sql`. Authenticated reservations
+expire after 15 minutes; successfully processed inputs can be cleaned after stored
+versions are confirmed. Recoverable service failures preserve their inputs, and
 legacy signed uploads retain their old expiry protection. Shared deployment still
 follows the review/migration workflow. Browser targets are in
 `frontend/src/lib/images/image-prepare.ts`; final variants are configured in

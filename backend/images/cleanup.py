@@ -9,6 +9,7 @@ from sqlalchemy import or_, select, update
 
 from database import SessionLocal
 from images.budget import delete_recorded, release_processing
+from images.lifecycle import PROCESSING_STATUSES
 from images.schemas import SOURCE_GRACE_SECONDS
 from images.worker_storage import remove_images
 from models import ImageStorageObject, ImageUpload, ImageVariant, Post, PostMedia, Profile
@@ -40,7 +41,7 @@ def retire_unused_once(sessions=SessionLocal):
         candidate = db.execute(select(ImageUpload.id, ImageUpload.owner_id).where(
             ImageUpload.deleted_at.is_(None), ImageUpload.files_deleted_at.is_(None),
             ImageUpload.recovery_required.is_(False),
-            ~((ImageUpload.uploaded_at.is_not(None)) & ImageUpload.processing_status.in_(["pending", "processing"])),
+            ~((ImageUpload.uploaded_at.is_not(None)) & ImageUpload.processing_status.in_(PROCESSING_STATUSES)),
             ImageUpload.asset_cleanup_after <= now,
         ).order_by(ImageUpload.asset_cleanup_after, ImageUpload.id).limit(1)).first()
         if candidate is None:
@@ -57,7 +58,7 @@ def retire_unused_once(sessions=SessionLocal):
             return False
         if upload.recovery_required:
             return False
-        if upload.uploaded_at is not None and upload.processing_status in {"pending", "processing"}:
+        if upload.uploaded_at is not None and upload.processing_status in PROCESSING_STATUSES:
             return False
         if has_live_reference(db, identity):
             upload.asset_cleanup_after = None  # Reference-removal triggers queue it again.
@@ -74,7 +75,7 @@ def retire_unused_once(sessions=SessionLocal):
             upload.deleted_at = now
             upload.asset_cleanup_after = now
             upload.asset_cleanup_error = None
-            if upload.processing_status in {"pending", "processing"}:
+            if upload.processing_status in PROCESSING_STATUSES:
                 upload.processing_status = "failed"
                 upload.processing_error = "unused_image"
             upload.processing_claim = upload.processing_lease_until = None

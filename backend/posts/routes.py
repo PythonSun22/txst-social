@@ -7,9 +7,10 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import and_, or_, select, text, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 from images.recovery import retry_image
+from images.lifecycle import can_retry_image, image_processing_state
 from worker_control import control
 
 from auth import (
@@ -39,6 +40,21 @@ def check_ban(db: Session, profile: Profile, space_id: UUID):
         raise HTTPException(403, "You cannot write in this space while banned.")
 
 
+def processing_state(post: Post, assets: list[ImageUpload], paused: bool) -> tuple[str, bool]:
+    """One precedence order for owner notices and retry controls (FR-90–92)."""
+    if post.status != "pending":
+        return post.status, False
+    states = {image_processing_state(upload)[0] for upload in assets}
+    if "image_rejected" in states:
+        return "image_rejected", False
+    if "failed" in states:
+        return "failed", False
+    retry = post.moderation_exhausted_at is not None or any(can_retry_image(upload) for upload in assets)
+    if paused or post.moderation_error or "service_unavailable" in states:
+        return "service_unavailable", retry
+    return ("waiting_images" if "waiting" in states else "waiting_moderation"), retry
+
+
 def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> list[PostResponse]:
     """Batch related records; feed length does not multiply database queries."""
     if not posts:
@@ -53,45 +69,24 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
     liked = set(db.scalars(select(PostLike.post_id).where(
         PostLike.post_id.in_(ids), PostLike.user_id == viewer.id,
     )).all()) if viewer else set()
-    pending_ids = [post.id for post in posts if post.status == "pending"]
-    exhausted_ids = set()
-    if pending_ids and db.scalar(text("""
-        select exists (
-            select 1 from information_schema.columns
-            where table_schema = 'public' and table_name = 'posts'
-              and column_name = 'moderation_exhausted_at'
-        )
-    """)) is True:
-        exhausted_ids = set(db.scalars(select(Post.id).where(
-            Post.id.in_(pending_ids), Post.moderation_exhausted_at.is_not(None),
-        )).all())
+    pending_images = [post.id for post in posts if post.status == "pending" and post.type == "image"]
+    assets: dict[UUID, list[ImageUpload]] = {pid: [] for pid in pending_images}
+    if pending_images:
+        for post_id, upload in db.execute(select(PostMedia.post_id, ImageUpload)
+                .join(ImageUpload, PostMedia.image_upload_id == ImageUpload.id)
+                .where(PostMedia.post_id.in_(pending_images))).all():
+            assets[post_id].append(upload)
     result = []
     for post in posts:
         author = authors.get(post.author_id)
         name = (author.display_name or author.username) if author and author.deleted_at is None else "Former student"
-        state = post.status
-        retry = False
-        if post.status == "pending":
-            state = "waiting_moderation"
-            assets = list(db.scalars(select(ImageUpload).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id)
-                .where(PostMedia.post_id == post.id)).all()) if post.type == "image" else []
-            if assets and any(u.processing_status == "blocked" for u in assets):
-                state = "image_rejected"
-            elif assets and any(u.processing_status == "failed" and not u.recovery_required for u in assets):
-                state = "failed"
-            elif (control.paused.is_set() or post.moderation_error is not None
-                  or any(u.processing_error or (u.recovery_required and u.processing_status == "failed") for u in assets)):
-                state = "service_unavailable"
-            elif assets and any(u.processing_status != "ready" for u in assets):
-                state = "waiting_images"
-            retry = bool(state not in {"image_rejected", "failed"} and viewer and viewer.id == post.author_id and
-                (post.id in exhausted_ids or any(u.recovery_required and u.processing_status == "failed" for u in assets)))
+        state, retry = processing_state(post, assets.get(post.id, []), control.paused.is_set())
         result.append(PostResponse(
             id=post.id, author=name, title=post.title, body=post.body, url=post.url,
             can_delete=bool(viewer and viewer.id == post.author_id and viewer.email_verified_at),
             type=post.type, status=post.status, created_at=post.created_at,
-            moderation_failed=post.id in exhausted_ids,
-            processing_state=state, can_retry=retry,
+            moderation_failed=post.moderation_exhausted_at is not None,
+            processing_state=state, can_retry=bool(retry and viewer and viewer.id == post.author_id),
             like_count=post.like_count, comment_count=post.comment_count,
             liked=post.id in liked, media=attachments[post.id],
             author_avatar_upload_id=author.profile_image_upload_id if author and author.deleted_at is None and author.suspended_at is None else None,

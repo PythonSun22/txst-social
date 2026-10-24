@@ -91,11 +91,17 @@ def eligible_posts(now: datetime):
         Post.status == "pending", Post.deleted_at.is_(None),
         Post.moderation_exhausted_at.is_(None), Post.moderation_next_attempt_at <= now,
         or_(Post.moderation_lease_until.is_(None), Post.moderation_lease_until <= now),
-        # Waiting for image work does not consume the post's screening budget.
-        ~select(ImageUpload.id).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id).where(
-            PostMedia.post_id == Post.id,
-            ImageUpload.processing_status.in_(["pending", "processing", "failed"]),
-        ).exists(),
+        # A rejection is final even if another attachment is waiting or failed.
+        # Otherwise image work must finish before spending post-screening attempts.
+        or_(
+            select(ImageUpload.id).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id).where(
+                PostMedia.post_id == Post.id, ImageUpload.processing_status == "blocked",
+            ).exists(),
+            ~select(ImageUpload.id).join(PostMedia, PostMedia.image_upload_id == ImageUpload.id).where(
+                PostMedia.post_id == Post.id,
+                ImageUpload.processing_status.in_(["pending", "processing", "failed"]),
+            ).exists(),
+        ),
     ).order_by(Post.created_at, Post.id).limit(1).with_for_update(of=Post, skip_locked=True)
 
 

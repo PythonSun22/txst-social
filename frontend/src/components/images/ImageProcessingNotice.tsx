@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { getImage, retryImage, type SavedImage } from "@/lib/images/image-api";
 
 /** Owner-only state for a pending avatar/banner; never replaces the active asset. */
-export default function ImageProcessingNotice({ id, label }: { id: string; label: string }) {
+export default function ImageProcessingNotice({ id, label, onProcessed }: {
+  id: string;
+  label: string;
+  onProcessed: (signal: AbortSignal) => Promise<void>;
+}) {
   const [image, setImage] = useState<SavedImage | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -17,7 +21,12 @@ export default function ImageProcessingNotice({ id, label }: { id: string; label
         const updated = await getImage(id, controller.signal);
         if (controller.signal.aborted) return;
         setImage(updated);
-        if (!["pending", "processing"].includes(updated.processing_status)) return;
+        if (!["pending", "processing"].includes(updated.processing_status)) {
+          // Refresh the active profile after completion, including manual retries.
+          // If this read fails, keep polling until the parent sees the result.
+          await onProcessed(controller.signal);
+          return;
+        }
       } catch {
         if (controller.signal.aborted) return;
       }
@@ -25,7 +34,7 @@ export default function ImageProcessingNotice({ id, label }: { id: string; label
     }
     void refresh();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [id, reload]);
+  }, [id, reload, onProcessed]);
   const current = image?.id === id ? image : null;
   return <div>
     <p>{label}: {current?.processing_message ?? "Waiting for image processing and moderation."}</p>

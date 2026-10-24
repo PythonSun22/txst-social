@@ -18,7 +18,7 @@ import { previewImage } from "@/lib/images/image-api";
 import { getSupabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 function sortPosts(posts: FeedPost[], order: SortOrder): FeedPost[] {
   const time = (post: FeedPost) =>
@@ -69,18 +69,10 @@ export default function Profile() {
 
   const pendingAvatar = profile?.pending_profile_image_upload_id;
   const pendingBanner = profile?.pending_banner_image_upload_id;
-  const avatarStatus = profile?.profile_image_status;
-  const bannerStatus = profile?.banner_image_status;
-  useEffect(() => {
-    const waiting = (pendingAvatar && !["blocked", "failed"].includes(avatarStatus ?? "")) ||
-      (pendingBanner && !["blocked", "failed"].includes(bannerStatus ?? ""));
-    if (!waiting) return;
-    let active = true;
-    const timer = setInterval(() => { void getCurrentProfile().then(updated => {
-      if (active && updated) setProfile(updated);
-    }).catch(() => { /* Keep current approved assets; retry on the next tick. */ }); }, 3000);
-    return () => { active = false; clearInterval(timer); };
-  }, [pendingAvatar, pendingBanner, avatarStatus, bannerStatus]);
+  const refreshProfile = useCallback(async (signal: AbortSignal) => {
+    const updated = await getCurrentProfile(signal);
+    if (!signal.aborted) setProfile(updated);
+  }, []);
 
   // Load the authenticated profile when this component mounts.
   useEffect(() => {
@@ -283,8 +275,8 @@ export default function Profile() {
       </article>
 
       {(pendingAvatar || pendingBanner) && <div role="status" className="rounded-card border border-border bg-card p-3 text-sm">
-        {pendingAvatar && <ImageProcessingNotice id={pendingAvatar} label="Profile photo" />}
-        {pendingBanner && <ImageProcessingNotice id={pendingBanner} label="Banner" />}
+        {pendingAvatar && <ImageProcessingNotice id={pendingAvatar} label="Profile photo" onProcessed={refreshProfile} />}
+        {pendingBanner && <ImageProcessingNotice id={pendingBanner} label="Banner" onProcessed={refreshProfile} />}
       </div>}
       {viewAvatar && profile.profile_image_upload_id && <ImageViewer
         resource={`/images/${profile.profile_image_upload_id}/preview?variant=avatar_large`}
