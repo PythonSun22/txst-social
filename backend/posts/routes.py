@@ -112,12 +112,13 @@ def decode_cursor(cursor: str):
 @router.get("", response_model=FeedResponse)
 def list_posts(
     response: Response, cursor: str | None = Query(default=None, max_length=200),
+    space: str = Query(default="general", max_length=64),
     limit: int = Query(default=20, ge=1, le=50),
     viewer: Profile | None = Depends(get_optional_profile), db: Session = Depends(get_db),
 ) -> FeedResponse:
-    """Read General newest first; include pending content only for its author."""
+    """Read one space's feed newest first; include pending content only for its author."""
     query = select(Post).join(Space, Post.space_id == Space.id).where(
-        Space.kind == "campus", Space.slug == "general", Space.deleted_at.is_(None), visible_to(viewer),
+        Space.slug == space, Space.deleted_at.is_(None), visible_to(viewer),
     )
     if cursor:
         created, identity = decode_cursor(cursor)
