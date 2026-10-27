@@ -8,6 +8,39 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ---
 
+## Basic post search (`feature/search`, FR-80)
+
+Sprint 5 asks to "begin basic search". The core migration already maintains
+`posts.search_vector` (a generated `tsvector` over the title) with a GIN index,
+so this pass is an endpoint and a page — no schema change.
+
+### Steps
+
+1. **`backend/search.py`** — new router with `GET /search/posts?q=&cursor=&limit=`.
+   Parse `q` with `websearch_to_tsquery('english', …)` so user input can never
+   be a syntax error. Apply the same `visible_to()` rule as the feed (approved,
+   or the caller's own pending post); exclude tombstoned posts and spaces.
+   Search every space, not only General, so college posts appear once they exist.
+2. Order newest first and reuse the feed's `(created_at, id)` cursor, so paging
+   is stable (FR-66) and shares one tested implementation.
+3. Return the existing `FeedResponse`, so results render with `PostCard`.
+4. Wire `search_router` into `main.py`; add offline tests in
+   `backend/tests/test_search.py` mirroring `test_posts.py`.
+5. **Frontend:** `lib/search.ts`, a `/search?q=` page (results + Load more),
+   and a search box in `Navbar` that navigates to it.
+6. Update README endpoints, AGENTS.md §7 and CLAUDE.md status.
+
+**Constraints:** No migration. Same visibility rule as the feed — search must
+never reveal a pending/blocked post to anyone but its author. Query length
+capped at 100 characters.
+
+**Non-goals (this pass):** Searching post bodies (needs a migration to widen
+`search_vector`), space-name search (FR-80, wait for the colleges work),
+comment search (FR-81), relevance ranking, prefix/typo matching
+("calc" will not match "calculus"), and search-as-you-type.
+
+---
+
 ## Moderation (FR-32, FR-60, FR-90–92)
 
 ### Multiple-image screening (FR-32, FR-90–92)
