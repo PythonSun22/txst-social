@@ -53,6 +53,7 @@ txst-social/
 │   ├── models.py          # SQLAlchemy database models
 │   ├── profile_routes.py  # Profile reads, options, and edits
 │   ├── profile_schemas.py # Profile request/response schemas
+│   ├── user_social.py     # Student search, public profiles, and user follows
 │   ├── posts.py           # Post routes, including /posts/me
 │   ├── schemas.py         # Health response schemas
 │   ├── .env.example       # Environment variable template
@@ -214,6 +215,14 @@ configuration/service failures return 503. Unverified active users can inspect
 their identity, but `require_verified_profile` rejects them for writes.
 Post and like routes additionally check space-specific bans.
 
+Public student discovery uses `GET /profiles/search?q=...` and
+`GET /profiles/{id}`. The profile page links its follower/following lists to
+`GET /profiles/{id}/followers` and `/following`. Verified active students can
+follow with `PUT /profiles/{id}/follow`; `DELETE` on that route unfollows.
+Search and profile reads expose public profile fields only. ForAll post author
+names link to these profile pages. The top-bar search currently searches
+students only.
+
 The existing backend database connection must be authorized to read profiles.
 It is a trusted server connection: passing a bearer token to FastAPI does not
 change its SQL role or set `auth.uid()`. Application authorization is enforced
@@ -353,7 +362,9 @@ http://127.0.0.1:8000/profiles
 
 This retrieves profiles from PostgreSQL through the SQLAlchemy `Profile` model.
 
-Profile creation, editing, and authenticated profile access are not implemented yet.
+Authenticated profile reads and edits use `GET` and `PATCH /auth/me`. Public
+profile lookup and student follow/search routes are described in the
+authentication section above.
 
 ```json
 []
@@ -504,8 +515,8 @@ ProfileResponse
 ### `main.py`
 
 Assembles the FastAPI application, middleware and feature routers. Profile routes
-live in `profile_routes.py`; image routes live in `images.py`; post routes live
-in `posts.py`.
+live in `profile_routes.py`; student discovery and follows live in
+`user_social.py`; image routes live in `images.py`; post routes live in `posts.py`.
 
 ## Current Development Pipeline
 

@@ -70,6 +70,13 @@ export default function Navbar() {
           ))}
         </ul>
 
+        <Link href="/search" aria-label="Search students" title="Search students" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/40 text-white transition-colors hover:bg-white/10">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <circle cx="10.8" cy="10.8" r="6.8" />
+            <path d="m16 16 5 5" />
+          </svg>
+        </Link>
+
         <Link
           href={profile ? "/profile" : "/login"}
           className="ml-auto rounded-full border border-white/50 px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/10"

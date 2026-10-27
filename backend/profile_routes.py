@@ -3,12 +3,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from auth import get_current_profile, require_verified_profile
 from database import get_db
-from models import College, Follow, ImageUpload, Major, Profile, Space
+from models import College, Follow, ImageUpload, Major, Profile, Space, UserFollow
 from profile_schemas import (
     STUDENT_LEVELS,
     CurrentProfileResponse,
@@ -77,12 +77,25 @@ def current_profile_response(db: Session, profile: Profile) -> CurrentProfileRes
         )
     ).one()
 
+    user_follows_ready = db.scalar(text("select to_regclass('public.user_follows') is not null")) is True
+    follower_count = 0
+    following_count = 0
+    if user_follows_ready:
+        follower_count = db.scalar(
+            select(func.count()).select_from(UserFollow).where(UserFollow.followed_id == profile.id)
+        ) or 0
+        following_count = db.scalar(
+            select(func.count()).select_from(UserFollow).where(UserFollow.follower_id == profile.id)
+        ) or 0
+
     return CurrentProfileResponse(
         **ProfileResponse.model_validate(profile).model_dump(),
         email_verified=profile.email_verified_at is not None,
         home_college=home_college,
         followed_space_count=followed_space_count,
         joined_community_count=joined_community_count,
+        follower_count=follower_count,
+        following_count=following_count,
     )
 
 

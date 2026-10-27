@@ -1,6 +1,6 @@
 import { apiRequest } from "./api";
 export interface FeedPost {
-  id: string; author: string; title: string; body: string | null; url: string | null;
+  id: string; author: string; author_id: string | null; title: string; body: string | null; url: string | null;
   can_delete: boolean;
   type: "text" | "image" | "link";
   status: "pending" | "approved" | "blocked" | "removed";

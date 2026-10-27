@@ -68,7 +68,7 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
         author = authors.get(post.author_id)
         name = (author.display_name or author.username) if author and author.deleted_at is None else "Former student"
         result.append(PostResponse(
-            id=post.id, author=name, title=post.title, body=post.body, url=post.url,
+            id=post.id, author=name, author_id=post.author_id, title=post.title, body=post.body, url=post.url,
             can_delete=bool(viewer and viewer.id == post.author_id and viewer.email_verified_at),
             type=post.type, status=post.status, created_at=post.created_at,
             moderation_failed=post.id in exhausted_ids,

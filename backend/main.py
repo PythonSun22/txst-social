@@ -14,6 +14,7 @@ from database import engine
 from images import router as images_router
 from posts import router as posts_router
 from profile_routes import router as profile_router
+from user_social import router as user_social_router
 from moderation_worker import Settings, run_worker
 from schemas import DatabaseHealthResponse, HealthResponse
 
@@ -40,6 +41,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(images_router)
 app.include_router(posts_router)
 app.include_router(profile_router)
+app.include_router(user_social_router)
 app.include_router(comments_router)
 
 app.add_middleware(

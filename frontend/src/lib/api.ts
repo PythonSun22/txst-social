@@ -34,6 +34,26 @@ export interface CurrentProfile {
   followed_space_count: number;
   joined_community_count: number;
   email_verified: boolean;
+  follower_count: number;
+  following_count: number;
+}
+
+/** Public fields returned for a search result or a follower/following row. */
+export interface ProfileListItem {
+  id: string;
+  username: string;
+  display_name: string | null;
+  major: string | null;
+}
+
+/** Public profile data plus the viewer-specific follow state. */
+export interface PublicProfile extends Omit<CurrentProfile, "email_verified" | "followed_space_count" | "joined_community_count"> {
+  is_following: boolean;
+}
+
+export interface UserFollowResult {
+  following: boolean;
+  follower_count: number;
 }
 
 export interface MajorOption {
@@ -135,3 +155,19 @@ export const updateCurrentProfile = (updates: ProfileUpdate) =>
     method: "PATCH",
     body: JSON.stringify(updates),
   });
+
+/** Search active public profiles by username or display name. */
+export const searchProfiles = (query: string, signal?: AbortSignal) =>
+  apiRequest<ProfileListItem[]>(`/profiles/search?q=${encodeURIComponent(query)}`, { signal }, true);
+
+/** Retrieve a public profile and its viewer-specific follow state. */
+export const getPublicProfile = (id: string, signal?: AbortSignal) =>
+  apiRequest<PublicProfile>(`/profiles/${encodeURIComponent(id)}`, { signal }, true);
+
+/** Retrieve the public student list for one side of a profile's connections. */
+export const getProfileConnections = (id: string, kind: "followers" | "following", signal?: AbortSignal) =>
+  apiRequest<ProfileListItem[]>(`/profiles/${encodeURIComponent(id)}/${kind}`, { signal }, true);
+
+/** Follow or unfollow a student through FastAPI. */
+export const setUserFollow = (id: string, following: boolean) =>
+  apiRequest<UserFollowResult>(`/profiles/${encodeURIComponent(id)}/follow`, { method: following ? "PUT" : "DELETE" });

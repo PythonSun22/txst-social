@@ -53,7 +53,7 @@ revisit one — several were argued through and closed deliberately.
 |---|---|
 | **Upvotes only** | There is no downvote anywhere in this product. A like is the existence of a row. There is no `value` column holding `+1/-1`, and no score arithmetic. |
 | **General is a place** | It is a destination you post *to*, not an aggregate view of the other spaces. A post appears in exactly one feed. |
-| **Nobody follows a person** | The social graph connects people to spaces only. No user-to-user following, no friend requests. |
+| **People and spaces can be followed** | A student can follow spaces and other active students. There are no friend requests; student follows are one-way. |
 | **One `spaces` table** | Campus, colleges and communities are one table with a `kind` enum, not three parallel tables. This is decision `[D-2]` and reversing it costs six tables and every feed query. |
 | **Supabase Auth owns identity** | We store no passwords. `public.profiles.id` **is** `auth.users.id`. |
 | **`txstate.edu` only** | Enforced in the database by a trigger on `auth.users`, not only in application code. |
@@ -91,6 +91,7 @@ txst-social/
 │   ├── models.py              # SQLAlchemy models — mirrors the migrations BY HAND
 │   ├── profile_routes.py      # profile reads, options and current-user edits
 │   ├── profile_schemas.py     # profile request/response contracts
+│   ├── user_social.py         # student search, public profiles and user follows
 │   ├── posts.py               # post routes, including /posts/me
 │   └── schemas.py             # small application/health response contracts
 ├── supabase/migrations/
@@ -132,6 +133,8 @@ Fifteen tables of ours, plus Supabase's `auth.users` which we do not own.
 - `spaces` — General, colleges and communities, discriminated by `kind`.
 - `follows` — `(user_id, space_id)` plus `muted`. Composite PK, so following
   twice is impossible rather than merely handled.
+- `user_follows` — `(follower_id, followed_id)` plus `followed_at`. A separate
+  composite-key table for one-way student follows; self-follows are forbidden.
 - `moderators` — `(space_id, user_id)`. Deliberately separate from `follows`;
   moderating is not a stronger kind of following.
 - `bans` — `(space_id, user_id)` with an optional expiry.
@@ -343,7 +346,8 @@ correct answer.
    is one row in `spaces` with `kind = 'campus'`.
 4. **Colleges, communities and General are one table.** Do not propose a
    `communities` table; `[D-2]` closed this.
-5. **Users cannot follow users.** `follows` points at spaces only.
+5. **Student follows and space follows are separate.** `follows` points at
+   spaces; `user_follows` points from one profile to another.
 6. **We store no passwords.** No `password_hash`, no bcrypt, no session table.
    Supabase Auth handles login, sessions and the verification email.
 7. **`profiles.email` is trigger-maintained.** Application code writing it is a
@@ -366,11 +370,13 @@ metadata and documentation. The GitHub repository remains `txst-social`.
 Migration `20260924204603_update_site_name.sql` updates the FR-01 error message
 on existing databases; it was applied under the explicit exception above.
 
-**Post like writes are API-only.** The post-media migration removes the old
+**Post likes and student follows write through the API.** The post-media migration removes the old
 browser INSERT/DELETE policies on `post_likes`, ensuring counters cannot be
-bypassed. Older direct-write policies for comment likes and follows still exist;
-when implementing those features, reconcile them with the frontend-to-FastAPI
-rule. Auth and signed Storage transfers remain intentional browser integrations.
+bypassed. The user-follow migration allows direct writes only for the caller's
+own verified account, but the frontend uses FastAPI so account and target checks
+stay consistent. Older direct-write policies for comment likes and space follows
+still exist; reconcile those when implementing those features. Auth and signed
+Storage transfers remain intentional browser integrations.
 
 ---
 
