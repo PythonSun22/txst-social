@@ -13,7 +13,7 @@ from auth import get_optional_profile
 from database import get_db
 from main import app
 from models import Post, Profile
-from posts import encode_cursor
+from posts.routes import encode_cursor
 from search import search_posts
 
 class SearchTests(unittest.TestCase):

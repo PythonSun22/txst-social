@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from auth import get_optional_profile
 from database import get_db
 from models import Post, Profile, Space
-from post_schemas import FeedResponse
-from posts import decode_cursor, encode_cursor, serialize_posts, visible_to
+from posts.schemas import FeedResponse
+from posts.routes import decode_cursor, encode_cursor, serialize_posts, visible_to
 
 router = APIRouter(prefix="/search", tags=["search"])
 

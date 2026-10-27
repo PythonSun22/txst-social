@@ -1,8 +1,8 @@
 "use client";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import PostCard from "@/components/PostCard";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import PostCard from "@/components/posts/PostCard";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 import { getSupabase } from "@/lib/supabase";
 import type { FeedPost } from "@/lib/posts";
 import { searchPosts } from "@/lib/search";
