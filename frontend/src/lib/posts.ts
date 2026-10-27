@@ -12,9 +12,11 @@ export interface FeedPost {
   media: { position: number; width: number | null; height: number | null }[];
 }
 export interface FeedPage { items: FeedPost[]; next_cursor: string | null }
-export const fetchPosts = (cursor?: string, signal?: AbortSignal) => apiRequest<FeedPage>(
-  `/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal }, true,
-);
+export const fetchPosts = (cursor?: string, signal?: AbortSignal, space = "general") => {
+  const params = new URLSearchParams({ space });
+  if(cursor) params.set("cursor", cursor);
+  return apiRequest<FeedPage>(`/posts?${params}`, { signal}, true); 
+};
 export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
 export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[] }) =>
