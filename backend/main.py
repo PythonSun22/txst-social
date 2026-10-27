@@ -19,6 +19,7 @@ from images.worker import Settings as ImageSettings, run_worker as run_image_wor
 from health_schemas import DatabaseHealthResponse, HealthResponse
 from auth import get_current_profile
 from worker_control import control
+from search import router as search_router
 
 
 @asynccontextmanager
@@ -63,6 +64,7 @@ app.include_router(images_router)
 app.include_router(posts_router)
 app.include_router(profile_router)
 app.include_router(comments_router)
+app.include_router(search_router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -331,6 +331,19 @@ and routes post-like writes through FastAPI. The shared development database
 already has this and the branding migration under the explicitly authorized
 2026-09-24 exception; the two-approval merge rule still applies.
 
+### Search (FR-80, FR-66)
+
+`GET /search/posts?q=<words>&cursor=&limit=` matches whole words in post
+**titles** across every space, newest first. It uses the existing generated
+`posts.search_vector` column, so no migration is needed. `q` is parsed with
+PostgreSQL's `websearch_to_tsquery`: stemming applies ("test" finds "testing"),
+`"quoted phrases"`, `OR` and `-word` work, and no input causes a syntax error.
+Visibility is the same as the feed: approved posts, plus the caller's own
+pending posts. The response is the feed's `{ items, next_cursor }` shape.
+
+The navbar search box opens `/search?q=…`. Post bodies, space names, comments,
+prefix matching and relevance ranking are not searched yet; see `docs/PLAN.md`.
+
 ### Health Check
 
 ```text
