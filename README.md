@@ -212,6 +212,8 @@ belongs in these Auth settings; never put a service-role or secret key in a
 `NEXT_PUBLIC_` variable. Restart the frontend after changing its environment.
 
 Open `/login` and sign in with an existing Texas State email/password account.
+The login page uses its own account branding and does not show the site navigation
+header; other pages retain that header.
 Supabase's browser SDK manages session persistence and refresh. Passwords go
 directly to Supabase Auth. The browser uses Supabase for Auth and authenticated image
 transfers; application records continue through FastAPI. Account signup/reset UI is not part of this
