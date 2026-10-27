@@ -100,8 +100,10 @@ Image attachments are screened separately with the title/body; all must pass
 for publication, and the first flag blocks the whole post. Individual checks
 are retained by attachment position in the existing JSON audit.
 Posts start private/pending, then approve or block automatically; failed screening
-retries with a persisted limit and an author-facing exhaustion notice. Comments
-and reports remain schema only. Apply the new moderation migration and configure
+retries with a persisted limit and an author-facing exhaustion notice. Threaded
+comments and comment likes work and publish unscreened; reports remain schema
+only. Basic post-title search (`GET /search/posts`, `/search`, FR-80) is on
+`feature/search`. Apply the new moderation migration and configure
 the backend Storage secret and explicitly enable the worker before use; no
 shared deployment has occurred. See
 `docs/moderation.md` and `docs/posts-and-media.md`.
@@ -136,9 +138,12 @@ context for next time. No match → add a new subsection (name from
 
 ### Sachin Pandey — xachin300@gmail.com
 
-- **Working on:** repo tooling and assistant context (`CLAUDE.md`, `AGENTS.md`).
-
-- **Notes for Claude:** —
+- **Working on:** basic post search on `feature/search` (FR-80) — endpoint,
+  `/search` page and navbar box done; not yet committed/PR'd. Also repo tooling
+  and assistant context (`CLAUDE.md`, `AGENTS.md`).
+- **Notes for Claude:** a teammate owns the colleges/spaces work — don't touch
+  space feeds or college pages. Search follow-ups (bodies need a migration,
+  space names wait on colleges) are listed as non-goals in `docs/PLAN.md`.
 
 ### Daniel Pelley — daniel.pelley@outlook.com
 
