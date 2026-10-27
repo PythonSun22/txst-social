@@ -1,7 +1,15 @@
 /** Upload policy comes from FastAPI so UI limits cannot silently drift from the API. */
 export interface ImagePolicy {
   max_bytes: number;
+  max_upload_bytes: number;
   allowed_types: string[];
+  max_images_per_post: number;
+  uploads_per_minute: number;
+  uploads_per_hour: number;
+  account_storage_bytes: number;
+  max_unfinished_uploads: number;
+  original_reservation_bytes: number;
+  processing_headroom: Record<"post" | "avatar" | "banner", number>;
 }
 
 export function formatBytes(bytes: number): string {

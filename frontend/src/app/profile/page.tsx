@@ -2,21 +2,23 @@
 
 /* eslint-disable @next/next/no-img-element -- Signed private image URLs are generated at runtime. */
 
-import PostCard from "@/components/PostCard";
-import PawIcon from "@/components/PawIcon";
-import JoinedCommunitiesCard from "@/components/JoinedCommunitiesCard";
-import EditProfileModal from "@/components/EditProfileModal";
-import SortBar, { type SortOrder } from "@/components/SortBar";
+import PostCard from "@/components/posts/PostCard";
+import PawIcon from "@/components/ui/PawIcon";
+import JoinedCommunitiesCard from "@/components/communities/JoinedCommunitiesCard";
+import EditProfileModal from "@/components/profiles/EditProfileModal";
+import ImageViewer from "@/components/images/ImageViewer";
+import ImageProcessingNotice from "@/components/images/ImageProcessingNotice";
+import SortBar, { type SortOrder } from "@/components/posts/SortBar";
 import {
   getCurrentProfile,
   type CurrentProfile,
-} from "@/lib/api";
+} from "@/lib/profiles";
 import { getMyPosts, type FeedPost } from "@/lib/posts";
 import { previewImage } from "@/lib/images/image-api";
 import { getSupabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 function sortPosts(posts: FeedPost[], order: SortOrder): FeedPost[] {
   const time = (post: FeedPost) =>
@@ -60,9 +62,17 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [viewAvatar, setViewAvatar] = useState(false);
   const posts = sortPosts(myPosts, sort);
   const avatarUrl = usePrivateImagePreview(profile?.profile_image_upload_id ?? null);
   const bannerUrl = usePrivateImagePreview(profile?.banner_image_upload_id ?? null);
+
+  const pendingAvatar = profile?.pending_profile_image_upload_id;
+  const pendingBanner = profile?.pending_banner_image_upload_id;
+  const refreshProfile = useCallback(async (signal: AbortSignal) => {
+    const updated = await getCurrentProfile(signal);
+    if (!signal.aborted) setProfile(updated);
+  }, []);
 
   // Load the authenticated profile when this component mounts.
   useEffect(() => {
@@ -166,11 +176,12 @@ export default function Profile() {
         <div className="px-5 pb-6 sm:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-7">
             <div
-              aria-hidden="true"
               className="relative -mt-16 flex h-32 w-32 shrink-0 items-center justify-center rounded-full border-[5px] border-card bg-primary text-3xl font-bold text-white shadow-md sm:-mt-20 sm:h-40 sm:w-40 sm:text-4xl"
             >
               {avatarUrl ? (
-                <img src={avatarUrl} alt={`${displayName}'s profile`} className="h-full w-full rounded-full object-cover" />
+                <button type="button" onClick={() => setViewAvatar(true)} aria-label="View profile photo" className="h-full w-full rounded-full">
+                  <img src={avatarUrl} alt={`${displayName}'s profile`} className="h-full w-full rounded-full object-cover" />
+                </button>
               ) : initials}
               <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-card bg-accent text-white">
                 <PawIcon size={17} />
@@ -263,6 +274,14 @@ export default function Profile() {
         </div>
       </article>
 
+      {(pendingAvatar || pendingBanner) && <div role="status" className="rounded-card border border-border bg-card p-3 text-sm">
+        {pendingAvatar && <ImageProcessingNotice id={pendingAvatar} label="Profile photo" onProcessed={refreshProfile} />}
+        {pendingBanner && <ImageProcessingNotice id={pendingBanner} label="Banner" onProcessed={refreshProfile} />}
+      </div>}
+      {viewAvatar && profile.profile_image_upload_id && <ImageViewer
+        resource={`/images/${profile.profile_image_upload_id}/preview?variant=avatar_large`}
+        title={`${displayName}'s profile photo`} onClose={() => setViewAvatar(false)} />}
+
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -294,6 +313,7 @@ export default function Profile() {
                 key={`${profile.id}:${post.id}`}
                 post={post}
                 profile={profile}
+                onStatus={(id, status, failed) => setMyPosts(items => items.map(item => item.id === id ? { ...item, status, moderation_failed: failed } : item))}
                 onDelete={(id) =>
                   setMyPosts((items) =>
                     items.filter((item) => item.id !== id)

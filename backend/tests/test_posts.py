@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 from uuid import uuid4
 os.environ['DATABASE_URL']='postgresql+psycopg://test:test@localhost/test'
+os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 os.environ['MODERATION_ENABLED']='false'
 from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
@@ -15,8 +16,8 @@ from auth import get_authenticated_user_id
 from database import get_db
 from main import app
 from models import Ban, ImageUpload, Post, PostLike, Profile, Space
-from post_schemas import PostCreate
-from posts import create_post, decode_cursor, delete_own_post, encode_cursor, list_posts, serialize_posts, set_like
+from posts.schemas import PostCreate
+from posts.routes import create_post, decode_cursor, delete_own_post, encode_cursor, list_posts, processing_state, serialize_posts, set_like
 
 class PostTests(unittest.TestCase):
     def setUp(self):
@@ -25,15 +26,17 @@ class PostTests(unittest.TestCase):
         self.post=Post(id=uuid4(),space_id=self.space.id,author_id=self.user.id,title='Test',body='Body',type='text',status='pending',created_at=datetime.now(timezone.utc),like_count=0,comment_count=0)
         self.db=Mock(); self.db.get.return_value=None; self.db.scalar.return_value=self.post
         self.db.scalars.return_value.all.return_value=[]
+        self.db.execute.return_value.all.return_value=[]
         self.addCleanup(app.dependency_overrides.clear)
 
     def test_validation(self):
-        for fields in ({'title':' '},{'body':' '},{'author_id':str(uuid4())},{'status':'approved'},{'body':'x'*20001},{'image_ids':[uuid4() for _ in range(11)]}):
+        for fields in ({'title':' '},{'body':' '},{'author_id':str(uuid4())},{'status':'approved'},{'body':'x'*20001},{'image_ids':[uuid4() for _ in range(5)]}):
             with self.subTest(fields=fields),self.assertRaises(ValidationError):
                 PostCreate(submission_id=uuid4(),**{'title':'Title','body':'Body',**fields})
         uid=uuid4()
         with self.assertRaises(ValidationError): PostCreate(submission_id=uuid4(),title='T',image_ids=[uid,uid])
         self.assertIsNone(PostCreate(submission_id=uuid4(),title='T',image_ids=[uid]).body)
+        self.assertEqual(len(PostCreate(submission_id=uuid4(), title='T', image_ids=[uuid4() for _ in range(4)]).image_ids), 4)
 
     def test_anonymous_feed_visibility_and_order(self):
         self.assertEqual(list_posts(Response(),cursor=None,limit=20,viewer=None,db=self.db).items,[])
@@ -73,6 +76,19 @@ class PostTests(unittest.TestCase):
             with self.subTest(expected=expected, viewer=viewer):
                 self.assertEqual(serialize_posts(self.db, [self.post], viewer)[0].can_delete, expected)
 
+    def test_processing_notice_prioritizes_rejection_and_unrecoverable_inputs(self):
+        rejected = ImageUpload(processing_status="blocked")
+        failed = ImageUpload(processing_status="failed", processing_error="provider_connection",
+            recovery_required=True, uploaded_at=self.post.created_at)
+        self.assertEqual(processing_state(self.post, [rejected, failed], False), ("image_rejected", False))
+        self.assertEqual(processing_state(self.post, [failed], False), ("service_unavailable", True))
+        failed.original_deleted_at = self.post.created_at
+        self.assertEqual(processing_state(self.post, [failed], False), ("failed", False))
+        failed.original_deleted_at = None
+        failed.recovery_required = False
+        failed.processing_error = "invalid_image"
+        self.assertEqual(processing_state(self.post, [failed], False), ("failed", False))
+
     def test_soft_delete_text_and_image(self):
         # FR-34/32: retain the post and reusable media, decrement the space count once.
         for kind in ('text', 'image', 'link'):
@@ -87,7 +103,8 @@ class PostTests(unittest.TestCase):
                 query = self.db.scalar.call_args.args[0].compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True})
                 for clause in (str(self.user.id), 'posts.author_id =', 'posts.deleted_at IS NULL', 'FOR UPDATE'):
                     self.assertIn(clause, str(query))
-                self.db.execute.assert_called_once()
+                self.assertEqual(self.db.execute.call_count, 2)
+                self.assertIn('FOR UPDATE', str(self.db.execute.call_args_list[0].args[0]))
                 self.db.commit.assert_called_once()
                 self.db.delete.assert_not_called()
 
@@ -96,7 +113,7 @@ class PostTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as error:
             delete_own_post(self.post.id, self.user, self.db)
         self.assertEqual(error.exception.status_code, 404)
-        self.db.execute.assert_not_called()
+        self.db.execute.assert_called_once()  # Account lock; no counters are changed.
         self.db.commit.assert_not_called()
 
     def test_anonymous_writes(self):
@@ -137,7 +154,8 @@ class PostTests(unittest.TestCase):
                         else:
                             self.assertEqual(response.status_code, 404)
                             self.assertIsNone(self.post.deleted_at)
-                            self.db.execute.assert_not_called()
+                            self.db.execute.assert_called_once()  # Only the caller's account lock.
+                            self.assertIn('FOR UPDATE', str(self.db.execute.call_args.args[0]))
                             self.db.commit.assert_not_called()
 
     def test_invalid_attachment(self):
@@ -150,14 +168,14 @@ class PostTests(unittest.TestCase):
     def test_attachment_order_and_pending(self):
         uploads=[ImageUpload(id=uuid4(),owner_id=self.user.id,object_key=f'{n}.png',width=100,height=50) for n in range(2)]
         self.db.scalar.side_effect=[None,self.space]; self.db.scalars.return_value.all.return_value=uploads
-        with patch('posts.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='T',body='B',image_ids=[uploads[1].id,uploads[0].id]),Response(),self.user,self.db)
+        with patch('posts.routes.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='T',body='B',image_ids=[uploads[1].id,uploads[0].id]),Response(),self.user,self.db)
         added=[c.args[0] for c in self.db.add.call_args_list]
         self.assertEqual((added[0].status,added[0].author_id,added[0].type),('pending',self.user.id,'image'))
         self.assertEqual([(a.position,a.image_upload_id) for a in added[1:]],[(0,uploads[1].id),(1,uploads[0].id)])
         self.db.commit.assert_called_once()
 
     def test_submission_retry(self):
-        with patch('posts.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='Test',body='Body'),Response(),self.user,self.db)
+        with patch('posts.routes.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='Test',body='Body'),Response(),self.user,self.db)
         self.db.add.assert_not_called(); self.db.commit.assert_not_called()
         with self.assertRaises(HTTPException) as error: create_post(PostCreate(submission_id=uuid4(),title='Changed',body='Body'),Response(),self.user,self.db)
         self.assertEqual(error.exception.status_code,409)

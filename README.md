@@ -46,23 +46,35 @@ test accounts, migrations, and the team's two-approval merge workflow.
 
 ```text
 txst-social/
-├── frontend/              # Next.js application
-├── backend/               # FastAPI application
-│   ├── main.py            # FastAPI assembly, middleware, health checks
-│   ├── database.py        # PostgreSQL connection and DB sessions
-│   ├── models.py          # SQLAlchemy database models
-│   ├── profile_routes.py  # Profile reads, options, and edits
-│   ├── profile_schemas.py # Profile request/response schemas
-│   ├── posts.py           # Post routes, including /posts/me
-│   ├── schemas.py         # Health response schemas
-│   ├── .env.example       # Environment variable template
+├── frontend/
+│   └── src/
+│       ├── app/                   # Next.js pages and layouts
+│       ├── components/            # auth, comments, communities, images,
+│       │                         # layout, posts, profiles, ui
+│       └── lib/                   # api.ts (shared HTTP), profiles.ts,
+│                                 # posts.ts, comments.ts, images/
+├── backend/
+│   ├── main.py                    # FastAPI assembly and worker startup
+│   ├── auth.py                    # Shared authentication dependencies
+│   ├── database.py                # Engine and database sessions
+│   ├── models.py                  # SQLAlchemy models mirror migrations
+│   ├── health_schemas.py          # Health response contracts
+│   ├── comments/                  # routes.py, schemas.py
+│   ├── profiles/                  # routes.py, schemas.py
+│   ├── posts/                     # routes.py, schemas.py
+│   ├── images/                    # routes.py, schemas.py, processing.py,
+│   │                             # worker.py, storage.py, worker_storage.py
+│   ├── moderation/                # client.py, context.py, worker.py, evaluate.py
+│   ├── tests/
+│   ├── scripts/
+│   ├── evals/
+│   ├── .env.example
 │   ├── pyproject.toml
 │   └── uv.lock
 ├── supabase/
 │   ├── config.toml
-│   └── migrations/        # Version-controlled SQL migrations
-├── .gitignore
-└── README.md
+│   └── migrations/                # Version-controlled SQL migrations
+└── docs/
 ```
 
 ## Prerequisites
@@ -201,7 +213,7 @@ belongs in these Auth settings; never put a service-role or secret key in a
 
 Open `/login` and sign in with an existing Texas State email/password account.
 Supabase's browser SDK manages session persistence and refresh. Passwords go
-directly to Supabase Auth. The browser uses Supabase for Auth and signed image
+directly to Supabase Auth. The browser uses Supabase for Auth and authenticated image
 transfers; application records continue through FastAPI. Account signup/reset UI is not part of this
 foundation stage.
 
@@ -241,18 +253,39 @@ Persistent posts, images and likes are described below.
 
 ### Image upload test (FR-02, FR-32, FR-90)
 
+The current image pipeline generates compressed WebP versions: post preview +
+expanded, avatar small + large, and one banner. Profile replacements require
+screening before activation. Read [image processing and compression settings](docs/image-processing.md)
+for migration/setup steps, original cleanup, current limitations and browser checks.
+`backend/images/processing.py` contains all version dimensions and quality settings.
+Apply `20261022072231_image_variants.sql`, run `uv sync`, and enable both
+`IMAGE_PROCESSING_ENABLED=true` and `MODERATION_ENABLED=true` with backend Storage
+and OpenAI credentials before testing the full workflow. Shared deployment remains
+subject to review; no shared migrations were applied for this change.
+
+
 Open `/upload-test` from the **Upload test** navigation link. The page accepts
 one JPEG, PNG, or WebP up to 10 MB (10,000,000 bytes), displays its dimensions
 and aspect ratio, and enables upload for verified students when validation passes.
-Original bytes and aspect ratio are preserved unless you choose **Edit image**.
+Every selection is compressed before transfer to at most 2 MB; post/banner aspect
+ratios are preserved and avatars use a square crop. The untouched original stays local.
 The browser editor supports drag cropping, ratio presets and proportional resizing.
 **Save changes** revalidates the edited file; **Discard changes** keeps the current
 selection. Submit uploads the chosen version as a new private asset.
 
-Before testing persistence, apply
-`supabase/migrations/20260924191615_image_upload_pipeline.sql` with the normal
-`supabase db push` workflow. It creates `image_uploads`, the private
-`post-images` Storage bucket, and ownership policies. Use the same Supabase
+Before testing this checkout, stop the backend and apply local migrations with
+`supabase migration up --local`, then restart both apps. Apply all migrations
+through `20261023010000_preserve_recoverable_images.sql`. Authenticated reservations
+expire after 15 minutes; successfully processed inputs can be cleaned after stored
+versions are confirmed. Recoverable service failures preserve their inputs, and
+legacy signed uploads retain their old expiry protection. Shared deployment still
+follows the review/migration workflow. Browser targets are in
+`frontend/src/lib/images/image-prepare.ts`; final variants are configured in
+`backend/images/processing.py`.
+
+The original migration, `20260924191615_image_upload_pipeline.sql`, creates
+`image_uploads`, the private `post-images` bucket, and ownership policies.
+Apply every subsequent migration as well. Use the same Supabase
 project in both `.env` files and `DATABASE_URL`; uploads use the caller's JWT.
 The separate moderation worker requires a backend-only Storage secret for
 pending images; see [moderation setup](docs/moderation.md).
@@ -267,7 +300,11 @@ checks, limits, cleanup considerations and reusable modules.
 
 ### Posts and likes (FR-30/31/32/50/51/60/90)
 
-`/submit` saves a title with text, up to ten ordered images, or both. The same
+`/submit` saves a title with text, up to four ordered images, or both. Image uploads
+share an account limit of 10 per rolling minute and 40 per rolling hour across
+posts, profile photos and banners, with a shared 50 MB storage budget and at most
+10 unfinished uploads/jobs. Unused images are permanently removed after reference
+checks and retention periods; see [upload limits](docs/image-uploads.md#shared-account-upload-limits-fr-32). The same
 browser image editor used by `/upload-test` is embedded in the form. The ForAll
 feed reads saved posts newest first with cursor pagination; mock posts are removed.
 Signed-in verified students can like a post and click again to remove the like.
@@ -490,7 +527,7 @@ Current model:
 Profile ↔ public.profiles
 ```
 
-### `profile_schemas.py`
+### `profiles/schemas.py`
 
 Contains Pydantic models that define the profile JSON FastAPI accepts and returns.
 
@@ -504,8 +541,10 @@ ProfileResponse
 ### `main.py`
 
 Assembles the FastAPI application, middleware and feature routers. Profile routes
-live in `profile_routes.py`; image routes live in `images.py`; post routes live
-in `posts.py`.
+live in `profiles/routes.py`; image routes live in `images/routes.py`; post routes
+live in `posts/routes.py`. Each feature keeps its request/response contracts in
+its own `schemas.py`. The frontend shares HTTP/session handling in `lib/api.ts`
+and keeps profile contracts and requests in `lib/profiles.ts`.
 
 ## Current Development Pipeline
 
@@ -683,3 +722,23 @@ The initial application and database foundations are complete:
 - Database migrations are version-controlled
 
 The next major milestone is Supabase authentication and the authenticated user-profile pipeline.
+
+### Recovering from image/worker service failures
+
+Before using this checkout, stop old backend workers and apply
+`20261023010000_preserve_recoverable_images.sql` to local Supabase with
+`supabase migration up --local`. Coordinate shared deployment after review.
+The migration adds `recovery_required` and a Storage source-deletion guard.
+
+Credential failures pause image and post workers in the affected backend process.
+Fix credentials privately and fully restart. Signed-in operators can inspect
+`GET /workers/status` (process-local, not cluster-wide). Use one designated worker
+backend for shared testing. A healthy API alone does not prove workers are running.
+
+Recoverable image inputs survive exhausted service retries and continue counting
+toward quota. Retry through the post/profile UI or `/upload-test`; APIs are
+`POST /images/{id}/retry` and `POST /posts/{id}/retry-screening`. Both require a
+verified owner. Retry cannot bypass moderation or recreate missing source bytes.
+`DELETE /images/{id}` explicitly abandons an unused asset; active references and
+leases prevent unsafe discard. No automatic retention deadline is imposed on
+recoverable failures. See `docs/image-processing.md` for the failure test matrix.

@@ -89,10 +89,14 @@ txst-social/
 │   ├── main.py                # FastAPI assembly, middleware, health endpoints
 │   ├── database.py            # engine, sessions, get_db()
 │   ├── models.py              # SQLAlchemy models — mirrors the migrations BY HAND
-│   ├── profile_routes.py      # profile reads, options and current-user edits
-│   ├── profile_schemas.py     # profile request/response contracts
-│   ├── posts.py               # post routes, including /posts/me
-│   └── schemas.py             # small application/health response contracts
+│   ├── auth.py                # shared authentication dependencies
+│   ├── health_schemas.py      # small application/health response contracts
+│   ├── profiles/              # routes.py and schemas.py
+│   ├── posts/                 # routes.py and schemas.py
+│   ├── comments/              # routes.py and schemas.py
+│   ├── images/                # routes, schemas, processing, worker,
+│   │                          # caller Storage signing and worker byte transfers
+│   └── moderation/            # client, context, worker and offline evaluation
 ├── supabase/migrations/
 │   ├── 20260901212005_initial_schema.sql   # profiles, RLS enabled
 │   └── 20260910200000_lynx_core.sql        # everything else — READ THIS ONE
@@ -102,6 +106,14 @@ txst-social/
     ├── Two_Week_Sprint_Timeline.md
     └── txst-lynx-proposal.html
 ```
+
+Feature folders own their routes and schemas; shared auth, database setup and
+SQLAlchemy models stay at the backend root. Frontend components are grouped under
+`src/components/{auth,comments,communities,images,layout,posts,profiles,ui}`.
+`frontend/src/lib/api.ts` owns the shared HTTP/session helper; profile contracts
+and API calls live in `frontend/src/lib/profiles.ts`. Image API helpers remain
+in `frontend/src/lib/images/`. Run moderation CLIs from `backend/` with
+`uv run python -m moderation.client` or `uv run python -m moderation.evaluate`.
 
 **`supabase/migrations/20260910200000_lynx_core.sql` and subsequent migrations
 are the source of truth for the data model.** Read the core migration first;
@@ -115,7 +127,7 @@ full provider audits; it has not been applied to the shared database.
 
 ## 4. The data model
 
-Fifteen tables of ours, plus Supabase's `auth.users` which we do not own.
+Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, bio, a
@@ -152,8 +164,17 @@ Fifteen tables of ours, plus Supabase's `auth.users` which we do not own.
 - `image_uploads` — an owner, private Storage object key, file name, MIME type,
   byte size, browser-measured width/height, and upload timestamps. Independent
   of posts so the upload pipeline can be tested and reused before post creation.
-  `uploaded_at` means transfer confirmed, **not moderation approved**. Dimensions
-  are browser-reported; server-side image decoding is not implemented yet.
+  `uploaded_at` means transfer confirmed, **not moderation approved**. Source
+  dimensions are browser-reported. A trusted worker independently decodes still
+  images and generates purpose-specific WebP versions; see `docs/image-processing.md`.
+- `image_variants` — immutable optimized versions per upload: post preview/expanded,
+  avatar small/large, or one banner; measured size and dimensions, private object keys.
+- `image_processing_checks` — asset-level screening audit, separate from post audits.
+  Uploads carry durable processing claims, retries, original cleanup state and
+  reference-aware asset retirement/deletion state.
+- `image_storage_objects` — owner-scoped file/capacity ledger. Object rows retain
+  confirmed deletion timestamps and orphan retry state; historical metadata costs
+  no image storage.
 
 **Engagement**
 - `post_likes`, `comment_likes` — composite PK `(user_id, target_id)`. Unliking
@@ -194,8 +215,10 @@ that must be written in the same transaction as the row they summarise.
    query. If a query mysteriously returns nothing, suspect RLS first.
 7. **Rankings are computed on write, never on read.** `hot_rank` is a stored
    column: `log(greatest(like_count,1)) + extract(epoch from created_at)/45000`.
-8. **Images never enter the database.** Store the object key; upload directly
-   from browser to storage with a signed URL.
+8. **Images never enter the database.** Store object keys; upload directly
+   from browser to Storage using the student’s Auth session and an open reservation. Trusted background workers may
+   read image bytes for validation, optimization and screening; API requests
+   continue to carry metadata.
 
 ---
 
@@ -209,7 +232,7 @@ pick one** — if a question depends on an open decision, say so.
 | `[D-1]` | Who owns authentication? | **Closed** — Supabase Auth. |
 | `[D-2]` | One `spaces` table or three? | **Closed** — one, with a `kind`. |
 | `[D-3]` | Comment tree as a materialised `ltree` path | Implemented, not yet reviewed by the team. |
-| `[D-4]` | What happens when the classifier does not answer? | **Resolved for new ForAll posts:** remain pending; default 3 total background attempts, with 30s/120s retry delays. Exhausted posts remain private and show a failure notice. Settings are configurable; editing and recovery after exhaustion remain future work. See `docs/moderation.md`. |
+| `[D-4]` | What happens when the classifier does not answer? | **Resolved for new ForAll posts:** remain pending; default 3 total background attempts, with 30s/120s retry delays. Exhausted posts remain private and show a failure notice. Settings are configurable; editing remains future work; owner-requested screening retries are implemented below. See `docs/moderation.md`. |
 | `[D-5]` | Colleges or departments? | **Open.** The seed holds the ten real colleges, so computer science shares a bucket with biology and maths. Per-department would be ~40–50 spaces. One `INSERT` to change; large effect on how the product feels. |
 
 ---
@@ -229,8 +252,9 @@ dependency requires verified email (FR-02). Post routes derive `author_id` from
 that profile and check bans for the target space (FR-95).
 Application queries still use the server's SQLAlchemy connection, not the
 browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
-General posts, ordered images, chronological feed reads and post likes now work
-through `/posts`. Comments and reports remain **schema only**.
+General posts, ordered images, chronological feed reads and post likes work
+through `/posts`. Threaded comments, replies, comment likes and deletion are also
+implemented. Reports remain **schema only**.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
@@ -253,22 +277,54 @@ candidate on synthetic text cases; the optional worker path is for local tests
 only pending representative, independently labeled evaluation.
 Results and limitations are in `docs/moderation.md`.
 
-Apply the new moderation migration before running this checkout and configure
-the backend-only Storage secret for pending images. Normal upload/preview routes
-still use caller JWTs. Local image posts cannot finish screening through the
-current loopback signed-URL handoff; see `docs/moderation.md`. Isolated PostgreSQL
-integration checks passed with Auth/Storage schema stand-ins; shared deployment
-remains pending.
+Apply the moderation and `20261022072231_image_variants.sql` migrations before
+running this checkout. The latter is not deployed to the shared database.
+Enable `IMAGE_PROCESSING_ENABLED` separately from `MODERATION_ENABLED`. The image
+worker decodes still images (25 million pixel cap), strips metadata, generates
+WebP versions and screens the largest version before marking an asset ready.
+Post assets produce preview + expanded versions; avatars produce small + large;
+banners produce one. Presets/quality live in `backend/images/processing.py`.
+Shared image state and retry eligibility live in `backend/images/lifecycle.py`.
+Posts wait for image processing without consuming post-screening attempts, then
+retain title/body-plus-image screening. Any rejected attachment blocks its pending
+post even if another attachment is still processing or has failed. Both workers
+send bounded inline image
+bytes, so local loopback Storage no longer needs to be fetchable by OpenAI.
+Normal upload/preview routes still use caller JWTs; worker transfers require the
+backend-only Storage secret. Lifecycle/RLS tests use a disposable local database
+and mock provider/Storage HTTP. The separate opt-in
+`backend/tests/test_image_storage_integration.py` exercises real local Auth/Storage,
+with temporary accounts/files and no OpenAI calls. It reads local CLI configuration,
+rejects remote destinations and requires local workers to be stopped; see
+`docs/image-processing.md`. Shared deployment remains pending.
+
+Avatars and banners now require asset-level screening. Pending profile selections
+are separate from active references: old approved assets stay visible until a
+replacement passes; rejection/failure preserves them. Active approved profile
+assets support signed public previews, including small avatars beside posts.
+The pending-image notice owns polling and refreshes the profile after processing,
+including successful owner retries. Feed serialization batches pending-image
+states; moderation fields load with each post, without schema probes or deferred
+reads.
+Original input files are deleted through Storage after terminal processing and
+safe reservation closure. Legacy signed inputs retain at least 7,500 seconds after token issuance. Expired abandoned
+transfers and invalid images receive safe cleanup; infrastructure failures retain
+their completed inputs for recovery. Account rates, storage
+budgets and reference-aware hard deletion are implemented below. Changing presets
+affects future processing; ready assets are not regenerated. Existing uploads queue for processing; old profile assets are hidden
+until approved. Previously approved image posts return to pending for processing
+and screening. Legacy sources shared across purposes may require re-upload.
+
 
 `/upload-test` is a Next.js page for the reusable image upload pipeline (FR-32).
 Drag/drop or browse one JPEG, PNG, or WebP up to **10,000,000 bytes (10 MB)**;
 display byte size, dimensions and aspect ratio. An optional browser editor offers
 drag cropping, ratio presets, pixel controls and proportional downscaling (maximum
 export edge 4096 px). Save replaces the local selection after revalidation;
-Discard preserves it. Edits are re-encoded as still images; unedited uploads
-preserve original bytes. Editing an uploaded selection creates a new asset on
+Discard preserves it. Every selection is automatically resized/re-encoded before
+transfer to at most 2 MB (WebP, with JPEG fallback). The untouched source stays local. Editing an uploaded selection creates a new asset on
 the next submission, never overwrites the old object. FastAPI `/images` reserves an owner-scoped
-object key and signs with the caller's JWT; the browser transfers bytes directly
+object key with a 15-minute authenticated reservation; the browser transfers bytes directly
 to the private `post-images` bucket. Completion checks Storage size/MIME metadata.
 Only the owner can list uploads or get an upload preview; post image previews
 also permit readers of approved posts. Verified, active
@@ -278,7 +334,7 @@ moderation worker needs backend-only elevated Storage access. See
 `docs/image-uploads.md` for setup, limitations and the post integration seam.
 
 Implemented slice: persistent General/ForAll posts with required titles,
-text only, images only, or text plus up to ten ordered images. `post_media`
+text only, images only, or text plus up to four ordered images. `post_media`
 replaces `posts.image_key`. Existing links remain readable. The main feed has
 no mock posts and uses cursor pagination, most recent first. Verified signed-in
 students can like/unlike through FastAPI; counters, karma and hot rank change
@@ -289,13 +345,74 @@ complete unflagged screening result. Failed screening never approves a post.
 Verified authors can soft-delete their own posts from the feed (FR-34), with
 confirmation, through `DELETE /posts/{id}`. The API returns viewer-specific
 `can_delete`; deletion decrements the space count in the same transaction.
-Media references and reusable private uploads are retained.
+Media/audit metadata is retained; unused image bytes are queued for reference-aware
+hard deletion through the Storage API (FR-32/34).
+
+Image reservations share a per-account rolling limit of **10 per minute and 40
+per hour** across posts, avatars and banners (FR-32). A reservation counts even
+if signing, transfer or moderation fails, or it is soft-deleted. Generated
+variants and repeated completion calls do not count again. The API locks the
+account's profile row until the reservation commits, so requests across API
+processes cannot spend the same final slot. HTTP 429 includes `Retry-After` and
+a wait message. `GET /images/policy` exposes these limits and the four-image post
+cap; backend constants live in `images/schemas.py`. New attachments are also
+bounded by a database trigger; existing posts with more images remain intact.
+Apply `20261022094443_image_upload_limits.sql` before running this checkout.
+Account image storage is capped at **50,000,000 bytes**, shared across all image
+purposes, with at most **10 unfinished uploads/jobs**. `image_storage_objects`
+tracks physical object keys, confirmed sizes, pending writes and confirmed deletion;
+`image_uploads.processing_reserved_bytes` holds processing headroom. Assets count
+once regardless of post references, and source-size metadata after confirmed
+removal costs nothing. Unknown source transfers reserve the full bucket limit
+(2 MB for new authenticated uploads), then reconcile to confirmed size; processing reserves 2 MB for posts,
+250 KB for avatars and 1 MB for banners. The encoder enforces per-variant byte caps.
+The composer uses atomic `POST /images/batch` before transferring a multi-image
+selection. `GET /images/budget` returns stored/reserved/available bytes and slots.
+Terminal jobs release their unfinished slot and reconcile headroom to retained
+files; failed/uncertain writes remain charged until deletion is confirmed. Source
+cleanup also handles expired abandoned uploads and terminal failures after the
+reservation deadline (15 minutes) or terminal processing. Existing signed uploads
+keep their original 7,500-second token horizon and 10 MB source reservation. New
+Storage INSERTs require the exact open owner reservation; overwrites are denied.
+A Storage metadata-write trigger locks the reservation and rejects late writes
+even from internal Storage roles after completion/expiry/deletion. Apply
+`20261022120000_authenticated_image_uploads.sql` before starting this checkout;
+stop old API/workers first and restart the frontend too. Backend decoders retain
+the legacy 10 MB input limit for already stored originals. Four new post images
+reserve 16 MB. Browser preparation settings live in `image-prepare.ts`; final
+variant presets remain in `backend/images/processing.py`.
+Staged-write cleanup handles interrupted worker files.
+Apply `20261022095634_image_storage_budget.sql`; its backfill uses Storage inventory
+for historical files. Accounts already over budget are blocked from new uploads;
+existing published content is preserved. Stop image workers during deployment
+and restart them after all migrations; older worker code does not maintain the ledger.
+Reference-aware hard deletion runs in the image worker (`images/cleanup.py`).
+Unattached uploads get 24 hours; deleting a post, detaching/replacing a profile
+asset, or an invalid/rejected asset queues cleanup after five minutes.
+Recoverable service failures are protected from automatic retirement. Every
+undeleted post (including blocked/private/exhausted posts), current profile asset,
+and valid pending selection protects its files. Failed pending selections may be
+cleared while the old approved image is preserved. Suspended profiles retain
+images; soft-deleted profiles do not protect them. Shared assets are retired only
+after their final live reference disappears. Database reference guards and a
+consistent account-before-upload lock order prevent reattachment/deletion races.
+Retirement sets an upload tombstone and fences workers; unused variants are
+removed through Storage; authenticated inputs need only safe reservation closure,
+while legacy signed inputs still wait for token expiry. Confirmed
+file deletion releases quota; failures persist error codes and retry with capped
+backoff. `files_deleted_at` records completion. Uploads, media/variant metadata,
+moderation audits and ledger tombstones remain, preserving rate history. This is
+hard deletion of image bytes, not wholesale removal of content/audit rows.
+Unlinked inventory orphans also get reference checks and delayed cleanup. Apply
+`20261022102230_image_asset_cleanup.sql` before starting this checkout. All cleanup
+requires the image worker and backend Storage credentials; no OpenAI request is
+made by cleanup. No additional account/post hard-delete API is introduced.
 
 Keep the upload/editor modules independent of posts. `ImageUploader` supports
 selection-only mode for the composer and standalone transfer mode for the lab;
 `PostComposer` owns ordered attachments and post submission. The profile editor
-also uses standalone transfers for private avatar and banner assets, then stores
-the completed upload IDs on `profiles`. Read
+also uses standalone transfers for private avatar and banner assets, then submits
+completed purpose-specific upload IDs as pending selections on `profiles`. Read
 [posts and media](docs/posts-and-media.md) before extending these features.
 
 Sprint 2 (Sept 14–27) is the first vertical slice: posts through every layer,
@@ -370,7 +487,7 @@ on existing databases; it was applied under the explicit exception above.
 browser INSERT/DELETE policies on `post_likes`, ensuring counters cannot be
 bypassed. Older direct-write policies for comment likes and follows still exist;
 when implementing those features, reconcile them with the frontend-to-FastAPI
-rule. Auth and signed Storage transfers remain intentional browser integrations.
+rule. Auth and authenticated Storage transfers remain intentional browser integrations.
 
 ---
 
@@ -382,3 +499,37 @@ rule. Auth and signed Storage transfers remain intentional browser integrations.
 - If the answer depends on `[D-4]` or `[D-5]`, say so instead of assuming.
 - Prefer the boring solution. This is a semester project run by five people who
   are learning most of this stack as they go, and the deadline is fixed.
+
+## Image failure protection (FR-32/90–92)
+
+Apply `20261023010000_preserve_recoverable_images.sql` locally before running this
+checkout; shared deployment remains subject to review. Stop all old API/workers
+before migration and restart afterward. Do not test destructive changes against
+shared data before review without an explicit coordinated exception.
+
+`image_uploads.recovery_required` protects completed inputs after infrastructure
+failures, including retries exhausted or interrupted. They remain charged once
+until confirmed deletion. They are excluded from automatic unused-asset retirement
+and original cleanup; pending profile references remain available for recovery.
+Storage has a BEFORE DELETE guard for originals, including service-role requests:
+only complete confirmed variant sets, invalid/expired inputs, or explicitly
+retired/abandoned assets may lose the source. Bounded retries remain; recovery
+retention has no automatic expiry. Owners can deliberately discard unused assets
+with `DELETE /images/{id}` after active references are removed.
+
+A credential failure pauses BOTH workers in that backend process. It preserves
+the current input and refunds its credential-failed attempt, then claims no more
+jobs or cleanup. Fix configuration and restart to resume; other machines are not
+controlled by this process. `GET /workers/status` requires sign-in and reports
+that process's worker ID, enabled flags and pause reason. Use one designated
+backend for shared testing. Logs contain worker/job IDs and safe error codes,
+never image data, provider bodies or credentials.
+
+Owners can use `POST /images/{id}/retry` and `POST /posts/{id}/retry-screening`
+(or the profile/feed/upload-test controls). Retries reuse the same asset and input,
+check source accounting, unfinished slots and available processing headroom under
+the account lock, and cannot approve/retry rejected content. Concurrent retries
+are idempotent; no new original reservation or upload-rate charge is created.
+Preserved inputs and uncertain files continue to consume storage. A missing or
+already-deleted source requires re-upload. There is no way to recover removed
+Storage bytes merely by resetting database metadata.

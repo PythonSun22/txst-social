@@ -7,7 +7,7 @@ from unittest.mock import patch
 import httpx2 as httpx
 from openai import OpenAI
 
-from moderation import ModerationError, moderate_content, moderate_text
+from moderation.client import ModerationError, moderate_content, moderate_text
 
 
 class ModerationTests(unittest.TestCase):
@@ -15,11 +15,11 @@ class ModerationTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"})
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.dotenv = patch("moderation.load_dotenv")
+        self.dotenv = patch("moderation.client.load_dotenv")
         self.dotenv.start()
         self.addCleanup(self.dotenv.stop)
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_preserves_safe_and_flagged_provider_results(self, send):
         for flagged in (False, True):
             with self.subTest(flagged=flagged):
@@ -46,20 +46,20 @@ class ModerationTests(unittest.TestCase):
                 self.assertEqual(json.loads(request.content)["input"], "A sample post")
                 self.assertGreaterEqual(result.latency_ms, 0)
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_blank_input_does_not_call_provider(self, send):
         with self.assertRaises(ValueError):
             moderate_text(" \n ")
         send.assert_not_called()
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_missing_key_does_not_call_provider(self, send):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
             with self.assertRaisesRegex(ModerationError, "OPENAI_API_KEY"):
                 moderate_text("A sample post")
         send.assert_not_called()
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_provider_errors_do_not_return_classifications(self, send):
         for status in (401, 429, 500):
             with self.subTest(status=status):
@@ -75,7 +75,7 @@ class ModerationTests(unittest.TestCase):
                 self.assertNotIn("private provider message", str(caught.exception))
                 self.assertEqual(len(requests), 1)
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_timeout_does_not_return_classification_or_retry(self, send):
         requests = []
         def handle(request):
@@ -88,7 +88,7 @@ class ModerationTests(unittest.TestCase):
             moderate_text("A sample post")
         self.assertEqual(len(requests), 1)
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_invalid_results_do_not_return_classifications(self, send):
         for payload in (
             b"not json",
@@ -104,7 +104,7 @@ class ModerationTests(unittest.TestCase):
                 with self.assertRaises(ModerationError):
                     moderate_text("A sample post")
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_later_image_flag_blocks_even_with_false_overall_flag(self, send):
         for overall in (False, True):
             with self.subTest(overall=overall):
@@ -132,7 +132,7 @@ class ModerationTests(unittest.TestCase):
                 # A later error cannot turn an already decisive block into retries.
                 self.assertEqual(len(requests), 2)
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_later_image_failure_never_returns_partial_approval(self, send):
         safe = {"flagged": False, "categories": {"violence": False},
                 "category_scores": {"violence": 0.01}}
@@ -163,7 +163,7 @@ class ModerationTests(unittest.TestCase):
                     self.assertEqual(caught.exception.retry_after, 180)
                 self.assertEqual(len(requests), 2)
 
-    @patch("moderation.OpenAI")
+    @patch("moderation.client.OpenAI")
     def test_too_many_images_does_not_call_provider(self, send):
         with self.assertRaises(ValueError):
             moderate_content("Title", ("https://private",) * 11)
