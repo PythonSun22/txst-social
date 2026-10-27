@@ -53,7 +53,7 @@ revisit one — several were argued through and closed deliberately.
 |---|---|
 | **Upvotes only** | There is no downvote anywhere in this product. A like is the existence of a row. There is no `value` column holding `+1/-1`, and no score arithmetic. |
 | **General is a place** | It is a destination you post *to*, not an aggregate view of the other spaces. A post appears in exactly one feed. |
-| **People and spaces can be followed** | A student can follow spaces and other active students. There are no friend requests; student follows are one-way. |
+| **People and spaces can be followed** | A student can follow spaces and other active students. Student follows are one-way, with no friend requests. Migration `20261026000000_user_follows.sql` supersedes the original space-only FR-70 statement in the core migration. |
 | **One `spaces` table** | Campus, colleges and communities are one table with a `kind` enum, not three parallel tables. This is decision `[D-2]` and reversing it costs six tables and every feed query. |
 | **Supabase Auth owns identity** | We store no passwords. `public.profiles.id` **is** `auth.users.id`. |
 | **`txstate.edu` only** | Enforced in the database by a trigger on `auth.users`, not only in application code. |
@@ -108,7 +108,8 @@ txst-social/
 are the source of truth for the data model.** Read the core migration first;
 `20260924191615_image_upload_pipeline.sql` adds private image uploads, and
 `20260924205639_persistent_posts_and_likes.sql` adds ordered attachments and
-replaces the old post content constraint.
+replaces the old post content constraint. `20261026000000_user_follows.sql`
+adds one-way student follows, superseding the original space-only FR-70 rule.
 `20260926000000_automatic_post_moderation.sql` adds durable screening state and
 full provider audits; it has not been applied to the shared database.
 
