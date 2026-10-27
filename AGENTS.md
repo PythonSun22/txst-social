@@ -96,8 +96,8 @@ txst-social/
 │   ├── comments/              # routes.py and schemas.py
 │   ├── images/                # routes, schemas, processing, worker,
 │   │                          # caller Storage signing and worker byte transfers
-│   └── moderation/            # client, context, worker and offline evaluation
 │   ├── search.py              # GET /search/posts — title search (FR-80)
+│   └── moderation/            # client, context, worker and offline evaluation
 ├── supabase/migrations/
 │   ├── 20260901212005_initial_schema.sql   # profiles, RLS enabled
 │   └── 20260910200000_lynx_core.sql        # everything else — READ THIS ONE
@@ -259,6 +259,10 @@ through `/posts`. Threaded comments and comment likes work through
 post titles with the feed's visibility rule and cursor (FR-80, FR-66); the
 navbar opens `/search?q=…`. Bodies, space names and comments are not searched
 yet. Reports remain **schema only**.
+`GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
+shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
+seed) linking to `/colleges/[slug]` feeds (FR-13). Creating posts and the
+moderation worker are still General-only, so college feeds stay empty for now.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
