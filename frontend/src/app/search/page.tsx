@@ -2,6 +2,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import PostCard from "@/components/posts/PostCard";
+import PostSearch from "@/components/posts/PostSearch";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 import { getSupabase } from "@/lib/supabase";
 import type { FeedPost } from "@/lib/posts";
@@ -71,7 +72,9 @@ function SearchResults() {
         <h1 className="font-serif text-xl font-bold text-primary">{q ? <>Results for “{q}”</> : "Search"}</h1>
         {q && <span className="text-xs text-muted-foreground">Post titles, newest first</span>}
       </div>
-      {!q && <p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">Use the search box above to find posts by title.</p>}
+      {/* key resets the uncontrolled input when the URL query changes (e.g. browser back). */}
+      <PostSearch key={q} defaultValue={q} />
+      {!q && <p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">Type a word from a post title to search.</p>}
       {loading && <p role="status">Searching…</p>}
       {error && <p role="alert" className="mb-3 text-sm text-red-700">{error}</p>}
       {q && !loading && !error && !posts.length && (<p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">No posts match “{q}”. Search looks at whole words in titles — try a different word.</p>)}

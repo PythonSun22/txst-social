@@ -341,7 +341,7 @@ PostgreSQL's `websearch_to_tsquery`: stemming applies ("test" finds "testing"),
 Visibility is the same as the feed: approved posts, plus the caller's own
 pending posts. The response is the feed's `{ items, next_cursor }` shape.
 
-The navbar search box opens `/search?q=…`. Post bodies, space names, comments,
+A search box above the ForAll feed opens `/search?q=…`. Post bodies, space names, comments,
 prefix matching and relevance ranking are not searched yet; see `docs/PLAN.md`.
 
 ### Health Check

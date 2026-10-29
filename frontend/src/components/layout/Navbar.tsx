@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Form from "next/form";
 import Link from "next/link";
 import PawIcon from "@/components/ui/PawIcon";
 import { getSupabase } from "@/lib/supabase";
@@ -71,22 +70,9 @@ export default function Navbar() {
           ))}
         </ul>
 
-        {/* next/form turns this GET form into a client-side navigation to /search?q=… (FR-80). */}
-        <Form action="/search" role="search" className="ml-auto">
-          <input
-            type="search"
-            name="q"
-            required
-            maxLength={100}
-            placeholder="Search posts"
-            aria-label="Search posts by title"
-            className="w-40 rounded-full border border-white/40 bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/60 focus:w-56 focus:bg-white/20 focus:outline-none sm:w-48"
-          />
-        </Form>
-
         <Link
           href={profile ? "/profile" : "/login"}
-          className="rounded-full border border-white/50 px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/10"
+          className="ml-auto rounded-full border border-white/50 px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/10"
         >
           {profile ? profile.display_name || profile.username : "Log In"}
         </Link>

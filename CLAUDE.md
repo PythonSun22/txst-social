@@ -139,7 +139,8 @@ context for next time. No match → add a new subsection (name from
 ### Sachin Pandey — xachin300@gmail.com
 
 - **Working on:** basic post search on `feature/search` (FR-80) — endpoint,
-  `/search` page and navbar box done; not yet committed/PR'd. Also repo tooling
+  `/search` page and a `PostSearch` box above the ForAll feed; pushed, PR into
+  `dev` pending. The navbar is reserved for a later site-wide search. Also repo tooling
   and assistant context (`CLAUDE.md`, `AGENTS.md`).
 - **Notes for Claude:** a teammate owns the colleges/spaces work — don't touch
   space feeds or college pages. Search follow-ups (bodies need a migration,

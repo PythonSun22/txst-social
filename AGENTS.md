@@ -257,7 +257,7 @@ General posts, ordered images, chronological feed reads and post likes now work
 through `/posts`. Threaded comments and comment likes work through
 `/posts/{id}/comments` and publish unscreened. `GET /search/posts` searches
 post titles with the feed's visibility rule and cursor (FR-80, FR-66); the
-navbar opens `/search?q=…`. Bodies, space names and comments are not searched
+box above the ForAll feed opens `/search?q=…`. Bodies, space names and comments are not searched
 yet. Reports remain **schema only**.
 `GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
 shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the

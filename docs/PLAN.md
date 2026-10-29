@@ -27,7 +27,8 @@ so this pass is an endpoint and a page — no schema change.
 4. Wire `search_router` into `main.py`; add offline tests in
    `backend/tests/test_search.py` mirroring `test_posts.py`.
 5. **Frontend:** `lib/search.ts`, a `/search?q=` page (results + Load more),
-   and a search box in `Navbar` that navigates to it.
+   and a `PostSearch` box above the ForAll feed and on the results page. The
+   navbar is kept free for a future site-wide search.
 6. Update README endpoints, AGENTS.md §7 and CLAUDE.md status.
 
 **Constraints:** No migration. Same visibility rule as the feed — search must
