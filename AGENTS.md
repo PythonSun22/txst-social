@@ -245,7 +245,8 @@ are version-controlled, and the full schema is merged into `dev`.
 
 Working endpoints today are `GET /health`, `GET /db-health`, `GET /profiles`,
 `GET /auth/me`, `PATCH /auth/me`, and `GET /profile/options`. `/login` signs
-existing users in through Supabase Auth.
+existing users in through Supabase Auth and sends authenticated students to
+the ForAll feed at `/` after sign-in or email-code confirmation (FR-01/02).
 FastAPI validates bearer tokens with the project's Auth server, then loads the
 matching profile. Inactive accounts are rejected (FR-96); a reusable write
 dependency requires verified email (FR-02). Post routes derive `author_id` from
