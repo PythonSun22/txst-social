@@ -163,9 +163,9 @@ def create_post(
             raise HTTPException(409, "This submission was already saved with different content. Reload before creating another post.")
         response.headers["Cache-Control"] = "no-store"
         return serialize_posts(db, [existing], profile)[0]
-    space = db.scalar(select(Space).where(Space.kind == "campus", Space.slug == "general", Space.deleted_at.is_(None)))
+    space = db.scalar(select(Space).where(Space.slug == payload.space, Space.deleted_at.is_(None)))
     if space is None:
-        raise HTTPException(503, "The General space is unavailable.")
+        raise HTTPException(404, "This space is not found.")
     check_ban(db, profile, space.id)
     uploads = list(db.scalars(select(ImageUpload).where(
         ImageUpload.id.in_(payload.image_ids), ImageUpload.owner_id == profile.id,
