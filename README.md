@@ -212,10 +212,15 @@ belongs in these Auth settings; never put a service-role or secret key in a
 `NEXT_PUBLIC_` variable. Restart the frontend after changing its environment.
 
 Open `/login` and sign in with an existing Texas State email/password account.
+The login page uses its own account branding and does not show the site navigation
+header; other pages retain that header. Successful sign-in or email-code
+confirmation opens the ForAll feed at `/`; an existing signed-in visitor to
+`/login` is redirected there too.
 Supabase's browser SDK manages session persistence and refresh. Passwords go
 directly to Supabase Auth. The browser uses Supabase for Auth and authenticated image
-transfers; application records continue through FastAPI. Account signup/reset UI is not part of this
-foundation stage.
+transfers; application records continue through FastAPI. Account creation and
+email-code confirmation are available on `/login`; password-reset UI is not
+part of this foundation stage.
 
 `GET /auth/me` accepts `Authorization: Bearer <access token>`. FastAPI asks the
 configured project's `/auth/v1/user` endpoint to validate the token and uses
@@ -248,7 +253,8 @@ uv run python -m unittest discover -s tests -v
 ```
 
 These tests mock Supabase Auth and database access. For a live smoke test, sign
-in, verify the username/verification state on `/login`, refresh, and sign out.
+in, confirm the redirect to ForAll, refresh the feed, then open `/profile` to
+check the account and sign out.
 Persistent posts, images and likes are described below.
 
 ### Image upload test (FR-02, FR-32, FR-90)
