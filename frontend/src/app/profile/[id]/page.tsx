@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import UserConnections from "@/components/UserConnections";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   getCurrentProfile,
   getPublicProfile,
@@ -14,6 +14,7 @@ import {
 
 export default function PublicProfilePage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [viewer, setViewer] = useState<CurrentProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,12 @@ export default function PublicProfilePage() {
     return () => { active = false; };
   }, [id]);
 
+  useEffect(() => {
+    if (!loading && profile && viewer?.id === profile.id) {
+      router.replace("/profile");
+    }
+  }, [loading, profile, router, viewer]);
+
   async function toggleFollow() {
     if (!profile || busy) return;
     setBusy(true);
@@ -56,7 +63,7 @@ export default function PublicProfilePage() {
   if (loading) return <p role="status">Loading profile…</p>;
   if (error && !profile) return <p role="alert" className="text-primary">{error}</p>;
   if (!profile) return <p role="alert">Profile not found.</p>;
-  if (viewer?.id === profile.id) return <p>This is your profile. <Link className="text-primary underline" href="/profile">Open your profile</Link></p>;
+  if (viewer?.id === profile.id) return <p role="status">Opening your profile…</p>;
 
   const name = profile.display_name || profile.username;
   return <section className="mx-auto max-w-4xl space-y-5">
