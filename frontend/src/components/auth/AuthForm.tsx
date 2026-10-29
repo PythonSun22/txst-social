@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { AuthError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
+import styles from "./AuthForm.module.css";
 
 type Mode = "signin" | "signup" | "confirm";
 
@@ -33,6 +35,7 @@ export default function AuthForm() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
@@ -138,57 +141,72 @@ export default function AuthForm() {
     } finally { setBusy(false); }
   }
 
-  return <div className="max-w-md space-y-4 py-4">
-    {loading && <p role="status">Loading account…</p>}
-    {error && <p role="alert">{error}</p>}
-    {message && <p role="status">{message}</p>}
-    {profile ? <>
+  return <div className={styles.auth}>
+    {loading && <p className={styles.notice} role="status">Loading account…</p>}
+    {error && <p className={styles.error} role="alert">{error}</p>}
+    {message && <p className={styles.notice} role="status">{message}</p>}
+    {profile ? <div className={styles.account}>
       <p>Signed in as {profile.display_name || profile.username}.</p>
       <p>{profile.email_verified ? "Your Texas State email is verified." : "Verify your Texas State email before posting."}</p>
-    </> : mode === "confirm" ? <form onSubmit={submit} className="space-y-4">
+      <button className={styles.primaryButton} type="button" disabled={busy} onClick={signOut}>Sign out</button>
+    </div> : mode === "confirm" ? <form onSubmit={submit} className={styles.form} aria-label="Confirm your email">
+      <div className={styles.confirmation}>
       <p>Enter the code we emailed to {pendingEmail}.</p>
-      <p className="text-sm text-gray-500">
+      <p className={styles.hint}>
         Don&apos;t see it? Check your Junk/Spam folder — Texas State&apos;s mail
         filter sometimes routes it there.
       </p>
-      <label className="block">Confirmation code
-        <input className="block w-full rounded border p-2" type="text" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} />
+      </div>
+      <label>
+        <span className="sr-only">Confirmation code</span>
+        <input className={`${styles.input} ${styles.codeInput}`} placeholder="Confirmation code" type="text" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} />
       </label>
-      <button className="rounded border px-4 py-2" disabled={busy} type="submit">
+      <button className={styles.primaryButton} disabled={busy} type="submit">
         {busy ? "Please wait…" : "Confirm"}
       </button>
       <button
-        className="block text-sm underline"
+        className={styles.textButton}
         type="button"
         disabled={busy}
         onClick={() => { setMode("signup"); setCode(""); setPendingEmail(""); setError(""); setMessage(""); }}
       >
         Start over
       </button>
-    </form> : !loading && <form onSubmit={submit} className="space-y-4">
-      <p>
+    </form> : !loading && <>
+      <form onSubmit={submit} className={styles.form} aria-label={mode === "signup" ? "Create your account" : "Log in"}>
+      <p className="sr-only">
         {mode === "signup"
           ? "Create an account with your Texas State email."
           : "Sign in with your existing Texas State account."}
       </p>
-      <label className="block">Texas State email
-        <input className="block w-full rounded border p-2" type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} />
-      </label>
-      <label className="block">Password
-        <input className="block w-full rounded border p-2" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={6} value={password} onChange={event => setPassword(event.target.value)} />
-      </label>
-      <button className="rounded border px-4 py-2" disabled={busy} type="submit">
-        {busy ? "Please wait…" : mode === "signup" ? "Sign up" : "Sign in"}
+      <div className={styles.field}>
+        <Mail className={styles.fieldIcon} strokeWidth={1.8} aria-hidden="true" />
+        <input className={styles.input} aria-label="Texas State email" placeholder="TXST Email" type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} />
+      </div>
+      <div className={styles.field}>
+        <LockKeyhole className={styles.fieldIcon} strokeWidth={1.8} aria-hidden="true" />
+        <input id="auth-password" className={`${styles.input} ${styles.passwordInput}`} aria-label="Password" placeholder="Password" type={showPassword ? "text" : "password"} autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={6} value={password} onChange={event => setPassword(event.target.value)} />
+        <button className={styles.visibilityButton} type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>
+          {showPassword ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+        </button>
+      </div>
+      {mode === "signup" && <p className={styles.hint}>Use your @txstate.edu email and a password with at least 6 characters.</p>}
+      <button className={styles.primaryButton} disabled={busy} type="submit">
+        {busy ? "Please wait…" : mode === "signup" ? "Sign up" : "Log In"}
+        {!busy && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6" /></svg>}
       </button>
+      </form>
+      <div className={styles.footer}>
+      {mode === "signup" && <span>Already have an account?</span>}
       <button
-        className="block text-sm underline"
+        className={styles.textButton}
         type="button"
         disabled={busy}
-        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(""); setMessage(""); }}
+        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setShowPassword(true); setError(""); setMessage(""); }}
       >
-        {mode === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}
+        {mode === "signup" ? "Log in" : "Sign up"}
       </button>
-    </form>}
-    {!loading && <button className="rounded border px-4 py-2" disabled={busy} onClick={signOut}>Sign out</button>}
+      </div>
+    </>}
   </div>;
 }

@@ -1,0 +1,221 @@
+.auth {
+  width: 100%;
+  color: #501214;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fieldIcon {
+  position: absolute;
+  left: 18px;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 60px;
+  padding: 16px 18px 16px 60px;
+  border: 1px solid #fffaf6;
+  border-radius: 12px;
+  background: #faf7f4;
+  color: #3f2022;
+  font: inherit;
+  font-size: 17px;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.input::placeholder {
+  color: #77716e;
+  opacity: 1;
+}
+
+.input:focus-visible {
+  border-color: #6c1425;
+  outline: 3px solid rgb(108 20 37 / 20%);
+  outline-offset: 2px;
+}
+
+.passwordInput {
+  padding-right: 64px;
+}
+
+.visibilityButton {
+  position: absolute;
+  right: 8px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  color: #6c1425;
+  cursor: pointer;
+}
+
+.visibilityButton svg {
+  width: 26px;
+  height: 26px;
+}
+
+.visibilityButton:hover {
+  background: #eee3df;
+}
+
+.primaryButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 4px;
+  padding: 12px 20px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(105deg, #500b19, #711529);
+  color: #fff;
+  font: inherit;
+  font-size: 19px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: box-shadow 150ms, filter 150ms;
+}
+
+.primaryButton svg {
+  width: 22px;
+  height: 22px;
+}
+
+.primaryButton:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: 0 4px 14px rgb(80 11 25 / 20%);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #604744;
+  font-size: 20px;
+  text-align: center;
+}
+
+.textButton {
+  min-height: 44px;
+  padding: 8px 4px;
+  border-radius: 4px;
+  color: #6c1425;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.textButton:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.textButton:focus-visible,
+.visibilityButton:focus-visible,
+.primaryButton:focus-visible {
+  outline: 3px solid #8a4926;
+  outline-offset: 4px;
+}
+
+.auth button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.notice,
+.error {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #cdb7a8;
+  border-radius: 10px;
+  background: #f7efe6;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  border-color: #b66e72;
+  background: #fff0ed;
+  color: #7d1724;
+}
+
+.account,
+.confirmation {
+  display: grid;
+  gap: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  color: #66534d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.codeInput {
+  padding-inline: 20px;
+  text-align: center;
+  letter-spacing: 0.2em;
+}
+
+@media (max-width: 520px) {
+  .input {
+    min-height: 56px;
+    padding: 14px 16px 14px 52px;
+    font-size: 16px;
+  }
+
+  .passwordInput {
+    padding-right: 60px;
+  }
+
+  .fieldIcon {
+    left: 16px;
+    width: 22px;
+    height: 22px;
+  }
+
+  .primaryButton {
+    min-height: 50px;
+    padding-block: 10px;
+    font-size: 18px;
+  }
+
+  .footer {
+    font-size: 14px;
+  }
+
+  .codeInput {
+    padding-inline: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .primaryButton {
+    transition: none;
+  }
+}

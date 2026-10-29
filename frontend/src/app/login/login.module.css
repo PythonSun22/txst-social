@@ -9,10 +9,31 @@
 
 .card {
   width: 100%;
-  max-width: 460px;
-  padding: 2rem;
-  border: 1px solid rgb(255 255 255 / 45%);
-  border-radius: 24px;
-  background: rgb(255 255 255 / 65%);
-  backdrop-filter: blur(18px);
+  max-width: 440px;
+  padding: 12px 34px 20px;
+  border: 1px solid #b74900;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #d6b6bc, #e8c5b0 42%, #bcb4a4);
+  box-shadow: 0 24px 72px rgb(30 10 12 / 30%);
+}
+
+.brand {
+  overflow: hidden;
+  margin-bottom: 2px;
+  text-align: center;
+}
+
+.logo {
+  display: block;
+  /* Account for the transparent padding around the supplied logo artwork. */
+  width: 136%;
+  max-width: none;
+  height: auto;
+  margin-inline: -18%;
+}
+
+@media (max-width: 520px) {
+  .card {
+    padding: 12px 22px 20px;
+  }
 }
