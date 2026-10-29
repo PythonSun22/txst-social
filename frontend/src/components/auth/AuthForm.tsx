@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AuthError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
@@ -33,6 +33,7 @@ function describeAuthError(cause: unknown, mode: Mode): string {
 }
 
 export default function AuthForm() {
+  const router = useRouter();
   const [profile, setProfile] = useState<CurrentProfile | null>(null);
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
@@ -42,7 +43,6 @@ export default function AuthForm() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -78,9 +78,13 @@ export default function AuthForm() {
     }
   }, []);
 
+  useEffect(() => {
+    if (profile) router.replace("/");
+  }, [profile, router]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true); setError(""); setMessage("");
+    setBusy(true); setError("");
     try {
       if (mode === "signup") {
         const trimmedEmail = email.trim();
@@ -109,7 +113,6 @@ export default function AuthForm() {
           // scanner that only fetches URLs, so we use verifyOtp instead of
           // relying on the emailed link.
           setPendingEmail(trimmedEmail);
-          setMessage("Enter the confirmation code we emailed you.");
           setMode("confirm");
         }
       } else if (mode === "confirm") {
@@ -119,11 +122,17 @@ export default function AuthForm() {
           type: "email",
         });
         if (error) throw error;
+        const current = await getCurrentProfile();
+        if (!current) throw new Error("Unable to load your account.");
+        setProfile(current);
         setCode("");
         setPendingEmail("");
       } else {
         const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
+        const current = await getCurrentProfile();
+        if (!current) throw new Error("Unable to load your account.");
+        setProfile(current);
       }
       setPassword("");
     } catch (cause) {
@@ -131,22 +140,9 @@ export default function AuthForm() {
     } finally { setBusy(false); }
   }
 
-  async function signOut() {
-    setBusy(true); setError("");
-    try {
-      const { error } = await getSupabase().auth.signOut({ scope: "local" });
-      if (error) throw error;
-      setProfile(null); setMessage("Signed out.");
-      setMode("signin"); setCode(""); setPendingEmail("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Sign-out failed.");
-    } finally { setBusy(false); }
-  }
-
   function switchMode(nextMode: "signin" | "signup") {
     setMode(nextMode);
     setError("");
-    setMessage("");
   }
 
   return (
@@ -156,47 +152,15 @@ export default function AuthForm() {
           {error}
         </p>
       )}
-      {message && !profile && (
-        <p role="status" className="mb-6 rounded-xl border border-accent/30 bg-[#fff8e8] px-4 py-3 text-sm leading-6 text-primary">
-          {message}
-        </p>
-      )}
-
-      {loading ? (
+      {loading || profile ? (
         <div role="status" className="flex min-h-44 items-center gap-3 text-sm text-muted-foreground">
           <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-          Loading your account…
-        </div>
-      ) : profile ? (
-        <div>
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#eef5ee] text-[#2f7042]">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-6 w-6" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" />
-            </svg>
-          </span>
-          <h2 className="mt-5 font-serif text-2xl font-bold text-primary">You&apos;re signed in</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Welcome back, <span className="font-semibold text-foreground">{profile.display_name || profile.username}</span>.
-          </p>
-          <p className="mt-5 rounded-xl border border-border bg-secondary px-4 py-3 text-sm leading-6 text-foreground">
-            {profile.email_verified
-              ? "Your Texas State email is verified."
-              : "Verify your Texas State email before posting."}
-          </p>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link href="/profile" className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-[#681c20] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25">
-              View profile
-            </Link>
-            <button type="button" className="min-h-12 rounded-xl border border-border px-5 py-3 text-sm font-semibold text-primary transition hover:bg-secondary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:opacity-60" disabled={busy} onClick={signOut}>
-              {busy ? "Signing out…" : "Sign out"}
-            </button>
-          </div>
+          {profile ? "Opening ForAll…" : "Loading your account…"}
         </div>
       ) : mode === "confirm" ? (
         <form onSubmit={submit} className="space-y-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">One more step</p>
-            <h2 className="mt-2 font-serif text-2xl font-bold text-primary">Check your inbox</h2>
+            <h2 className="font-serif text-2xl font-bold text-primary">Check your inbox</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Enter the confirmation code we emailed to <span className="break-all font-semibold text-foreground">{pendingEmail}</span>.
             </p>
@@ -225,7 +189,7 @@ export default function AuthForm() {
             className="w-full rounded-lg py-1 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
             type="button"
             disabled={busy}
-            onClick={() => { setMode("signup"); setCode(""); setPendingEmail(""); setError(""); setMessage(""); }}
+            onClick={() => { setMode("signup"); setCode(""); setPendingEmail(""); setError(""); }}
           >
             Start over
           </button>
