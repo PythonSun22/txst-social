@@ -1,17 +1,10 @@
-.background {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: url("/images/old-main-sunset.jpg") center / cover no-repeat;
-}
-
 .loginPage {
-  position: relative;
-  z-index: 1;
-  min-height: 85svh;
+  min-height: 100svh;
+  width: 100%;
   display: grid;
   place-items: center;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  background: var(--primary) url("/images/old-main-sunset.jpg") center / cover no-repeat;
 }
 
 .card {
