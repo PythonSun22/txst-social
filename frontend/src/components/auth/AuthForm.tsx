@@ -5,6 +5,7 @@ import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { AuthError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
+import { useRouter } from "next/navigation";
 import styles from "./AuthForm.module.css";
 
 type Mode = "signin" | "signup" | "confirm";
@@ -42,6 +43,7 @@ export default function AuthForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     let active = true;
@@ -52,7 +54,11 @@ export default function AuthForm() {
       request = controller;
       try {
         const current = await getCurrentProfile(controller.signal);
-        if (active && !controller.signal.aborted) { setProfile(current); setError(""); }
+        if (active && !controller.signal.aborted) {
+          setProfile(current);
+          setError("");
+          if (current) router.replace("/");
+        }
       } catch (cause) {
         if (active && !controller.signal.aborted) {
           setProfile(null);
@@ -75,24 +81,20 @@ export default function AuthForm() {
       });
       return () => { active = false; };
     }
-  }, []);
+  }, [router]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError(""); setMessage("");
     try {
+      const trimmedEmail = email.trim();
+      // FR-01: explain the email restriction before calling Auth; the server
+      // and database remain responsible for enforcing it.
+      if (mode !== "confirm" && !trimmedEmail.toLowerCase().endsWith("@txstate.edu")) {
+        setError("Please use your Texas State (@txstate.edu) email address.");
+        return;
+      }
       if (mode === "signup") {
-        const trimmedEmail = email.trim();
-        // FR-01 is enforced for real by a DB trigger, but Supabase's Auth API
-        // wraps the trigger's rejection into a generic "Database error saving
-        // new user" message instead of passing it through (confirmed against
-        // the real project) — so we check client-side first for a message
-        // that's actually useful.
-        if (!trimmedEmail.toLowerCase().endsWith("@txstate.edu")) {
-          setError("Boko Lynx is limited to Texas State (txstate.edu) email addresses.");
-          setBusy(false);
-          return;
-        }
         const { data, error } = await getSupabase().auth.signUp({ email: trimmedEmail, password });
         if (error) throw error;
         // Supabase returns 200 with an empty identities array instead of an
@@ -121,7 +123,7 @@ export default function AuthForm() {
         setCode("");
         setPendingEmail("");
       } else {
-        const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim(), password });
+        const { error } = await getSupabase().auth.signInWithPassword({ email: trimmedEmail, password });
         if (error) throw error;
       }
       setPassword("");
@@ -168,7 +170,7 @@ export default function AuthForm() {
         className={styles.textButton}
         type="button"
         disabled={busy}
-        onClick={() => { setMode("signup"); setCode(""); setPendingEmail(""); setError(""); setMessage(""); }}
+        onClick={() => { setMode("signup"); setShowPassword(false); setCode(""); setPendingEmail(""); setError(""); setMessage(""); }}
       >
         Start over
       </button>
@@ -202,7 +204,7 @@ export default function AuthForm() {
         className={styles.textButton}
         type="button"
         disabled={busy}
-        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setShowPassword(true); setError(""); setMessage(""); }}
+        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setShowPassword(false); setError(""); setMessage(""); }}
       >
         {mode === "signup" ? "Log in" : "Sign up"}
       </button>
