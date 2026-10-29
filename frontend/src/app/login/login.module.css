@@ -1,0 +1,25 @@
+.background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: url("/images/old-main-sunset.jpg") center / cover no-repeat;
+}
+
+.loginPage {
+  position: relative;
+  z-index: 1;
+  min-height: 85svh;
+  display: grid;
+  place-items: center;
+}
+
+.card {
+  width: 100%;
+  max-width: 460px;
+  padding: 2rem;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 65%);
+  backdrop-filter: blur(18px);
+}
