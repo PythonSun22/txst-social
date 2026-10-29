@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import UserConnections from "@/components/UserConnections";
+import PostCard from "@/components/PostCard";
 import { useParams, useRouter } from "next/navigation";
 import {
   getCurrentProfile,
@@ -11,6 +12,7 @@ import {
   type CurrentProfile,
   type PublicProfile,
 } from "@/lib/api";
+import { getUserPosts, type FeedPost } from "@/lib/posts";
 
 export default function PublicProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +22,9 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState("");
 
   const refresh = useCallback(async () => {
     const [publicProfile, currentProfile] = await Promise.all([
@@ -33,12 +38,27 @@ export default function PublicProfilePage() {
     let active = true;
     setLoading(true);
     setError("");
-    Promise.all([getPublicProfile(id), getCurrentProfile().catch(() => null)])
-      .then(([publicProfile, currentProfile]) => {
-        if (active) { setProfile(publicProfile); setViewer(currentProfile); }
+    setPostsLoading(true);
+    setPostsError("");
+    setPosts([]);
+    Promise.all([
+      getPublicProfile(id),
+      getCurrentProfile().catch(() => null),
+      getUserPosts(id).then((items) => ({ items, error: "" })).catch((cause) => ({
+        items: [] as FeedPost[],
+        error: cause instanceof Error ? cause.message : "Unable to load this student's posts.",
+      })),
+    ])
+      .then(([publicProfile, currentProfile, userPosts]) => {
+        if (active) {
+          setProfile(publicProfile);
+          setViewer(currentProfile);
+          setPosts(userPosts.items);
+          setPostsError(userPosts.error);
+        }
       })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Unable to load this profile."); })
-      .finally(() => { if (active) setLoading(false); });
+      .finally(() => { if (active) { setLoading(false); setPostsLoading(false); } });
     return () => { active = false; };
   }, [id]);
 
@@ -75,7 +95,7 @@ export default function PublicProfilePage() {
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3 pb-1">
             <h1 className="font-serif text-2xl font-bold text-primary">{name}</h1>
             {viewer?.email_verified && <button type="button" disabled={busy} onClick={() => void toggleFollow()} className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90 disabled:opacity-50">
-              {busy ? "Saving…" : profile.is_following ? "Following" : "Follow"}
+              {busy ? "Saving…" : profile.is_following ? "Unfollow" : "Follow"}
             </button>}
             {!viewer && <Link href="/login" className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90">Sign in to follow</Link>}
             {viewer && !viewer.email_verified && <span className="text-sm text-muted-foreground">Verify your email to follow students.</span>}
@@ -92,5 +112,19 @@ export default function PublicProfilePage() {
       </div>
     </article>
     {error && <p role="alert" className="text-sm text-primary">{error}</p>}
+    <section className="space-y-3" aria-labelledby="student-posts-heading">
+      <h2 id="student-posts-heading" className="font-serif text-xl font-bold text-primary">{name}&apos;s Posts</h2>
+      {postsLoading && <p role="status" className="text-sm text-muted-foreground">Loading posts…</p>}
+      {postsError && <p role="alert" className="text-sm text-primary">{postsError}</p>}
+      {!postsLoading && !postsError && posts.length === 0 && <p className="rounded-card border border-border bg-card p-5 text-sm text-muted-foreground">No public posts yet.</p>}
+      {posts.map((post) => <PostCard
+        key={`${viewer?.id ?? "guest"}:${post.id}`}
+        post={post}
+        profile={viewer}
+        onDelete={(postId) => setPosts((items) => items.filter((item) => item.id !== postId))}
+        onLike={(postId, value) => setPosts((items) => items.map((item) => item.id === postId ? { ...item, ...value } : item))}
+        onStatus={() => undefined}
+      />)}
+    </section>
   </section>;
 }

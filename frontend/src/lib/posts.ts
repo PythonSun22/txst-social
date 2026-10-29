@@ -14,6 +14,8 @@ export const fetchPosts = (cursor?: string, signal?: AbortSignal) => apiRequest<
 );
 export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
+export const getUserPosts = (authorId: string, signal?: AbortSignal) =>
+  apiRequest<FeedPost[]>(`/posts/user/${encodeURIComponent(authorId)}`, { signal }, true);
 export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[] }) =>
   apiRequest<FeedPost>("/posts", { method: "POST", body: JSON.stringify(payload) });
 export const fetchPost = (id: string, signal?: AbortSignal) =>

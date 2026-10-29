@@ -131,6 +131,34 @@ def get_my_posts(
     return serialize_posts(db, list(posts), profile)
 
 
+@router.get("/user/{author_id}", response_model=list[PostResponse])
+def get_user_posts(
+    author_id: UUID,
+    response: Response,
+    viewer: Profile | None = Depends(get_optional_profile),
+    db: Session = Depends(get_db),
+) -> list[PostResponse]:
+    """List a student's public, approved posts for their profile page."""
+    author = db.scalar(select(Profile).where(
+        Profile.id == author_id,
+        Profile.deleted_at.is_(None),
+        Profile.suspended_at.is_(None),
+    ))
+    if author is None:
+        raise HTTPException(404, "Profile not found.")
+    response.headers["Cache-Control"] = "no-store"
+    posts = db.scalars(
+        select(Post)
+        .where(
+            Post.author_id == author_id,
+            Post.deleted_at.is_(None),
+            Post.status == "approved",
+        )
+        .order_by(Post.created_at.desc(), Post.id.desc())
+    ).all()
+    return serialize_posts(db, list(posts), viewer)
+
+
 @router.post("", response_model=PostResponse, status_code=201)
 def create_post(
     payload: PostCreate, response: Response, profile: Profile = Depends(require_verified_profile),

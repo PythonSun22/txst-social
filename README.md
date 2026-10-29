@@ -219,6 +219,7 @@ Public student discovery uses `GET /profiles/search?q=...` and
 `GET /profiles/{id}`. The profile page links its follower/following lists to
 `GET /profiles/{id}/followers` and `/following`. Verified active students can
 follow with `PUT /profiles/{id}/follow`; `DELETE` on that route unfollows.
+`GET /posts/user/{author_id}` supplies approved public posts for the profile.
 Search and profile reads expose public profile fields only. ForAll post author
 names link to these profile pages. The top-bar search currently searches
 students only.
@@ -226,7 +227,7 @@ students only.
 The existing backend database connection must be authorized to read profiles.
 It is a trusted server connection: passing a bearer token to FastAPI does not
 change its SQL role or set `auth.uid()`. Application authorization is enforced
-explicitly. No browser profile-read policy or database migration is added here.
+explicitly; no browser profile-read policy is needed.
 The migrations' signup trigger must have created the account's profile; the API
 does not create missing profiles or write mirrored email/verification fields.
 
