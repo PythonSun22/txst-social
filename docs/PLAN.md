@@ -8,6 +8,19 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ---
 
+## Account page UI (FR-01, FR-02)
+
+Implemented. Frontend lint, all 22 tests, and the production build passed.
+
+1. Give `/login` a clear page heading and a compact TXST Lynx introduction within the existing site layout.
+2. Restyle the shared auth form for sign-in, sign-up, confirmation, loading, feedback, and signed-in states. Keep labels and keyboard focus visible on mobile and desktop.
+3. Run the frontend lint and build checks; review the page without changing authentication calls.
+
+**Constraints:** Keep Texas State email validation, confirmation-code verification, and existing Supabase Auth behavior. Scope the design to the account page.
+**Non-goals:** Database, backend, navigation, password-reset, or other-page changes.
+
+---
+
 ## Moderation (FR-32, FR-60, FR-90–92)
 
 ### Multiple-image screening (FR-32, FR-90–92)

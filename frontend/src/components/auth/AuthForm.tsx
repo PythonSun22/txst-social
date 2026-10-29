@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { AuthError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 
 type Mode = "signin" | "signup" | "confirm";
+
+const fieldClassName = "mt-2 block w-full rounded-xl border border-border bg-white px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary focus:ring-4 focus:ring-primary/10";
+const primaryButtonClassName = "flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#681c20] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-60";
 
 function describeAuthError(cause: unknown, mode: Mode): string {
   if (cause instanceof AuthError) {
@@ -133,62 +137,183 @@ export default function AuthForm() {
       const { error } = await getSupabase().auth.signOut({ scope: "local" });
       if (error) throw error;
       setProfile(null); setMessage("Signed out.");
+      setMode("signin"); setCode(""); setPendingEmail("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Sign-out failed.");
     } finally { setBusy(false); }
   }
 
-  return <div className="max-w-md space-y-4 py-4">
-    {loading && <p role="status">Loading account…</p>}
-    {error && <p role="alert">{error}</p>}
-    {message && <p role="status">{message}</p>}
-    {profile ? <>
-      <p>Signed in as {profile.display_name || profile.username}.</p>
-      <p>{profile.email_verified ? "Your Texas State email is verified." : "Verify your Texas State email before posting."}</p>
-    </> : mode === "confirm" ? <form onSubmit={submit} className="space-y-4">
-      <p>Enter the code we emailed to {pendingEmail}.</p>
-      <p className="text-sm text-gray-500">
-        Don&apos;t see it? Check your Junk/Spam folder — Texas State&apos;s mail
-        filter sometimes routes it there.
-      </p>
-      <label className="block">Confirmation code
-        <input className="block w-full rounded border p-2" type="text" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} />
-      </label>
-      <button className="rounded border px-4 py-2" disabled={busy} type="submit">
-        {busy ? "Please wait…" : "Confirm"}
-      </button>
-      <button
-        className="block text-sm underline"
-        type="button"
-        disabled={busy}
-        onClick={() => { setMode("signup"); setCode(""); setPendingEmail(""); setError(""); setMessage(""); }}
-      >
-        Start over
-      </button>
-    </form> : !loading && <form onSubmit={submit} className="space-y-4">
-      <p>
-        {mode === "signup"
-          ? "Create an account with your Texas State email."
-          : "Sign in with your existing Texas State account."}
-      </p>
-      <label className="block">Texas State email
-        <input className="block w-full rounded border p-2" type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} />
-      </label>
-      <label className="block">Password
-        <input className="block w-full rounded border p-2" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={6} value={password} onChange={event => setPassword(event.target.value)} />
-      </label>
-      <button className="rounded border px-4 py-2" disabled={busy} type="submit">
-        {busy ? "Please wait…" : mode === "signup" ? "Sign up" : "Sign in"}
-      </button>
-      <button
-        className="block text-sm underline"
-        type="button"
-        disabled={busy}
-        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(""); setMessage(""); }}
-      >
-        {mode === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}
-      </button>
-    </form>}
-    {!loading && <button className="rounded border px-4 py-2" disabled={busy} onClick={signOut}>Sign out</button>}
-  </div>;
+  function switchMode(nextMode: "signin" | "signup") {
+    setMode(nextMode);
+    setError("");
+    setMessage("");
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-lg px-6 py-7 sm:px-8 sm:py-8">
+      {error && (
+        <p role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+          {error}
+        </p>
+      )}
+      {message && !profile && (
+        <p role="status" className="mb-6 rounded-xl border border-accent/30 bg-[#fff8e8] px-4 py-3 text-sm leading-6 text-primary">
+          {message}
+        </p>
+      )}
+
+      {loading ? (
+        <div role="status" className="flex min-h-44 items-center gap-3 text-sm text-muted-foreground">
+          <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+          Loading your account…
+        </div>
+      ) : profile ? (
+        <div>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#eef5ee] text-[#2f7042]">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-6 w-6" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" />
+            </svg>
+          </span>
+          <h2 className="mt-5 font-serif text-2xl font-bold text-primary">You&apos;re signed in</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Welcome back, <span className="font-semibold text-foreground">{profile.display_name || profile.username}</span>.
+          </p>
+          <p className="mt-5 rounded-xl border border-border bg-secondary px-4 py-3 text-sm leading-6 text-foreground">
+            {profile.email_verified
+              ? "Your Texas State email is verified."
+              : "Verify your Texas State email before posting."}
+          </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <Link href="/profile" className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-[#681c20] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25">
+              View profile
+            </Link>
+            <button type="button" className="min-h-12 rounded-xl border border-border px-5 py-3 text-sm font-semibold text-primary transition hover:bg-secondary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:opacity-60" disabled={busy} onClick={signOut}>
+              {busy ? "Signing out…" : "Sign out"}
+            </button>
+          </div>
+        </div>
+      ) : mode === "confirm" ? (
+        <form onSubmit={submit} className="space-y-6">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">One more step</p>
+            <h2 className="mt-2 font-serif text-2xl font-bold text-primary">Check your inbox</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Enter the confirmation code we emailed to <span className="break-all font-semibold text-foreground">{pendingEmail}</span>.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="auth-code" className="text-sm font-semibold text-foreground">Confirmation code</label>
+            <input
+              id="auth-code"
+              name="code"
+              className={fieldClassName}
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              value={code}
+              onChange={event => setCode(event.target.value)}
+            />
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              Check your Junk or Spam folder if the email has not arrived.
+            </p>
+          </div>
+          <button className={primaryButtonClassName} disabled={busy} type="submit">
+            {busy ? "Please wait…" : "Confirm email"}
+          </button>
+          <button
+            className="w-full rounded-lg py-1 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
+            type="button"
+            disabled={busy}
+            onClick={() => { setMode("signup"); setCode(""); setPendingEmail(""); setError(""); setMessage(""); }}
+          >
+            Start over
+          </button>
+        </form>
+      ) : (
+        <div>
+          <div className="mb-7 grid grid-cols-2 rounded-xl bg-secondary p-1" aria-label="Account action">
+            <button
+              type="button"
+              aria-pressed={mode === "signin"}
+              className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 ${mode === "signin" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-primary"}`}
+              disabled={busy}
+              onClick={() => switchMode("signin")}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === "signup"}
+              className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 ${mode === "signup" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-primary"}`}
+              disabled={busy}
+              onClick={() => switchMode("signup")}
+            >
+              Create account
+            </button>
+          </div>
+
+          <div className="mb-6">
+            <h2 className="font-serif text-2xl font-bold text-primary">
+              {mode === "signup" ? "Join TXST Lynx" : "Welcome back"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {mode === "signup"
+                ? "Create an account with your Texas State email."
+                : "Sign in with your Texas State account."}
+            </p>
+          </div>
+
+          <form onSubmit={submit} className="space-y-5">
+            <div>
+              <label htmlFor="auth-email" className="text-sm font-semibold text-foreground">Texas State email</label>
+              <input
+                id="auth-email"
+                name="email"
+                className={fieldClassName}
+                type="email"
+                placeholder="name@txstate.edu"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                value={email}
+                onChange={event => setEmail(event.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="auth-password" className="text-sm font-semibold text-foreground">Password</label>
+              <input
+                id="auth-password"
+                name="password"
+                className={fieldClassName}
+                type="password"
+                placeholder="Enter your password"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                required
+                minLength={6}
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+              />
+              {mode === "signup" && <p className="mt-2 text-xs text-muted-foreground">Use at least 6 characters.</p>}
+            </div>
+            <button className={primaryButtonClassName} disabled={busy} type="submit">
+              {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+            </button>
+          </form>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            {mode === "signup" ? "Already have an account?" : "New to TXST Lynx?"}{" "}
+            <button
+              className="rounded font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
+              type="button"
+              disabled={busy}
+              onClick={() => switchMode(mode === "signup" ? "signin" : "signup")}
+            >
+              {mode === "signup" ? "Sign in" : "Create an account"}
+            </button>
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
