@@ -15,7 +15,7 @@ export interface FeedPage { items: FeedPost[]; next_cursor: string | null }
 export const fetchPosts = (cursor?: string, signal?: AbortSignal, space = "general") => {
   const params = new URLSearchParams({ space });
   if(cursor) params.set("cursor", cursor);
-  return apiRequest<FeedPage>(`/posts?${params}`, { signal}, true); 
+  return apiRequest<FeedPage>(`/posts?${params}`, { signal}, true);
 };
 export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
