@@ -2,16 +2,21 @@ import { apiRequest } from "./api";
 export interface FeedPost {
   id: string; author: string; author_id: string | null; title: string; body: string | null; url: string | null;
   can_delete: boolean;
+  author_avatar_upload_id?: string | null;
   type: "text" | "image" | "link";
   status: "pending" | "approved" | "blocked" | "removed";
   moderation_failed: boolean;
+  processing_state: string;
+  can_retry: boolean;
   created_at: string; like_count: number; comment_count: number; liked: boolean;
   media: { position: number; width: number | null; height: number | null }[];
 }
 export interface FeedPage { items: FeedPost[]; next_cursor: string | null }
-export const fetchPosts = (cursor?: string, signal?: AbortSignal) => apiRequest<FeedPage>(
-  `/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal }, true,
-);
+export const fetchPosts = (cursor?: string, signal?: AbortSignal, space = "general") => {
+  const params = new URLSearchParams({ space });
+  if(cursor) params.set("cursor", cursor);
+  return apiRequest<FeedPage>(`/posts?${params}`, { signal}, true); 
+};
 export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
 export const getUserPosts = (authorId: string, signal?: AbortSignal) =>
@@ -24,5 +29,6 @@ export const setPostLike = (id: string, liked: boolean) => apiRequest<{ liked: b
   `/posts/${id}/like`, { method: liked ? "PUT" : "DELETE" },
 );
 export const getPostImage = (id: string, position: number, signal?: AbortSignal) =>
-  apiRequest<{ url: string }>(`/posts/${id}/media/${position}/preview`, { signal }, true);
+  apiRequest<{ url: string }>(`/posts/${id}/media/${position}/preview?variant=preview`, { signal }, true);
 export const deletePost = (id: string) => apiRequest<void>(`/posts/${id}`, { method: "DELETE" });
+export const retryPostScreening = (id: string) => apiRequest<FeedPost>(`/posts/${id}/retry-screening`, { method: "POST" });

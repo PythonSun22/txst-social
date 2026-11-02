@@ -12,23 +12,24 @@ from unittest.mock import patch
 from uuid import uuid4
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
+os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 os.environ["MODERATION_ENABLED"] = "false"
 
 from fastapi import HTTPException, Response
-from sqlalchemy import create_engine, delete, select, text
+from sqlalchemy import create_engine, delete, event, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
-from models import ImageUpload, ModerationCheck, Post, PostMedia, Profile, Space
-from moderation import ModerationError
-from moderation_context import ContextAssessment
-from moderation_worker import Settings, claim_work, finish_work, run_once
-from posts import get_post
+from models import ImageStorageObject, ImageUpload, ImageVariant, ModerationCheck, Post, PostMedia, Profile, Space
+from moderation.client import ModerationError
+from moderation.context import ContextAssessment
+from moderation.worker import Settings, claim_work, finish_work, run_once
+from posts.routes import get_post, serialize_posts
 from test_moderation_worker import verdict
 
 
 @unittest.skipUnless(os.getenv("MODERATION_TEST_DATABASE_URL"), "Set a disposable local moderation test database")
-class ModerationDatabaseTests(unittest.TestCase):
+class ImageDatabaseFixture(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         url = make_url(os.environ["MODERATION_TEST_DATABASE_URL"])
@@ -50,7 +51,7 @@ class ModerationDatabaseTests(unittest.TestCase):
                         $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
                     create table storage.buckets (id text primary key, name text, public boolean,
                         file_size_limit bigint, allowed_mime_types text[]);
-                    create table storage.objects (id uuid primary key, bucket_id text, name text);
+                    create table storage.objects (id uuid primary key, bucket_id text, name text, metadata jsonb);
                     alter table storage.objects enable row level security;
                     grant usage on schema public, auth, storage to anon, authenticated;
                     alter default privileges in schema public grant select, insert, update, delete on tables to anon, authenticated;
@@ -78,6 +79,7 @@ class ModerationDatabaseTests(unittest.TestCase):
     def tearDown(self):
         with self.sessions.begin() as db:
             db.execute(delete(Post).where(Post.id.in_(self.ids)))
+            db.execute(delete(ImageStorageObject).where(ImageStorageObject.owner_id == self.owner))
             db.execute(delete(ImageUpload).where(ImageUpload.id.in_(self.uploads)))
             db.execute(text("delete from auth.users where id=:id"), {"id": self.owner})
 
@@ -96,17 +98,71 @@ class ModerationDatabaseTests(unittest.TestCase):
                 self.uploads.append(uid)
                 key = f"{self.owner}/{uid}.png"
                 db.add(ImageUpload(id=uid, owner_id=self.owner, object_key=key, original_name="image.png",
-                       content_type="image/png", size_bytes=100, width=10, height=10, uploaded_at=self.now))
+                       content_type="image/png", size_bytes=100, width=10, height=10, uploaded_at=self.now,
+                       purpose="post", processing_status="ready"))
                 db.flush()
+                db.add(ImageVariant(image_upload_id=uid, name="expanded", object_key=f"{self.owner}/variants/{uid}/expanded.webp",
+                                    width=10, height=10, size_bytes=50, content_type="image/webp"))
                 db.add(PostMedia(post_id=identity, position=position, image_upload_id=uid, object_key=key, width=10, height=10))
         return identity
+
+
+class ModerationDatabaseTests(ImageDatabaseFixture):
+    def test_rejected_attachment_blocks_post_even_when_another_cannot_finish(self):
+        for other_status in ("pending", "processing", "failed"):
+            with self.subTest(other_status=other_status):
+                identity = self.post(images=2)
+                with self.sessions.begin() as db:
+                    assets = db.scalars(select(ImageUpload).join(PostMedia,
+                        PostMedia.image_upload_id == ImageUpload.id)
+                        .where(PostMedia.post_id == identity).order_by(PostMedia.position)).all()
+                    assets[0].processing_status = "blocked"
+                    assets[1].processing_status = other_status
+                    assets[1].recovery_required = True
+                with (patch("moderation.worker.moderate_content") as provider,
+                      patch("moderation.worker.moderation_image_input") as storage):
+                    self.assertTrue(run_once(self.sessions))
+                    provider.assert_not_called()
+                    storage.assert_not_called()
+                with self.sessions() as db:
+                    self.assertEqual(db.get(Post, identity).status, "blocked")
+                    audit = db.scalar(select(ModerationCheck).where(ModerationCheck.post_id == identity))
+                    self.assertEqual(audit.decision, "block")
+                    with self.assertRaises(HTTPException):
+                        get_post(identity, Response(), None, db)
+
+    def test_pending_feed_serialization_has_constant_query_count(self):
+        identities = [self.post(images=1) for _ in range(3)]
+        with self.sessions.begin() as db:
+            for identity in identities:
+                db.get(Post, identity).moderation_error = "provider_connection"
+
+        def serialize(count):
+            statements = []
+            def record(connection, cursor, statement, parameters, context, executemany):
+                statements.append(statement)
+            with self.sessions() as db:
+                posts = db.scalars(select(Post).where(Post.id.in_(identities[:count]))).all()
+                viewer = db.get(Profile, self.owner)
+                event.listen(self.engine, "before_cursor_execute", record)
+                try:
+                    result = serialize_posts(db, posts, viewer)
+                finally:
+                    event.remove(self.engine, "before_cursor_execute", record)
+            self.assertEqual(len(result), count)
+            self.assertTrue(all(post.processing_state == "service_unavailable" for post in result))
+            self.assertFalse(any("information_schema" in sql for sql in statements))
+            return len(statements)
+
+        self.assertEqual(serialize(1), 4)
+        self.assertEqual(serialize(3), 4)
 
     def test_oldest_first_approval_audit_and_public_visibility(self):
         newer = self.post()
         older = self.post(age=5)
         with self.sessions() as db:
             with self.assertRaises(HTTPException): get_post(older, Response(), None, db)
-        with patch("moderation_worker.moderate_content", return_value=verdict()):
+        with patch("moderation.worker.moderate_content", return_value=verdict()):
             self.assertTrue(run_once(self.sessions))
         with self.sessions() as db:
             self.assertEqual(db.get(Post, newer).status, "pending")
@@ -117,8 +173,8 @@ class ModerationDatabaseTests(unittest.TestCase):
 
     def test_category_flag_blocks_all_images_and_stays_private(self):
         identity = self.post(images=2)
-        with (patch("moderation_worker.sign_moderation_image", side_effect=lambda key: f"https://private/{key}") as sign,
-              patch("moderation_worker.moderate_content", return_value=verdict(True, "illicit", overall=False)) as screen):
+        with (patch("moderation.worker.moderation_image_input", side_effect=lambda key: f"https://private/{key}") as sign,
+              patch("moderation.worker.moderate_content", return_value=verdict(True, "illicit", overall=False)) as screen):
             run_once(self.sessions)
         self.assertEqual(sign.call_count, 2)
         self.assertEqual(len(screen.call_args.args[1]), 2)
@@ -134,8 +190,8 @@ class ModerationDatabaseTests(unittest.TestCase):
         first = verdict(True)
         first.category_scores["violence"] = 0.42
         context = ContextAssessment(decision="allow", reason_code="media_reference")
-        with (patch("moderation_worker.moderate_content", return_value=first),
-              patch("moderation_worker.moderate_context", return_value=context)):
+        with (patch("moderation.worker.moderate_content", return_value=first),
+              patch("moderation.worker.moderate_context", return_value=context)):
             run_once(self.sessions, Settings(context_recheck_enabled=True))
         with self.sessions() as db:
             self.assertEqual(db.get(Post, identity).status, "approved")
@@ -151,8 +207,8 @@ class ModerationDatabaseTests(unittest.TestCase):
         first.categories["harassment"] = True
         first.category_scores.update(violence=0.426, harassment=0.568)
         context = ContextAssessment(decision="allow", reason_code="past_incident")
-        with (patch("moderation_worker.moderate_content", return_value=first),
-              patch("moderation_worker.moderate_context", return_value=context)):
+        with (patch("moderation.worker.moderate_content", return_value=first),
+              patch("moderation.worker.moderate_context", return_value=context)):
             run_once(self.sessions, Settings(context_recheck_enabled=True))
         with self.sessions() as db:
             self.assertEqual(db.get(Post, identity).status, "approved")
@@ -164,8 +220,8 @@ class ModerationDatabaseTests(unittest.TestCase):
         identity = self.post()
         first = verdict(True)
         first.category_scores["violence"] = 0.42
-        with (patch("moderation_worker.moderate_content", return_value=first),
-              patch("moderation_worker.moderate_context",
+        with (patch("moderation.worker.moderate_content", return_value=first),
+              patch("moderation.worker.moderate_context",
                     side_effect=ModerationError("Unavailable", code="context_provider"))):
             run_once(self.sessions, Settings(context_recheck_enabled=True))
         with self.sessions() as db:
@@ -176,9 +232,9 @@ class ModerationDatabaseTests(unittest.TestCase):
 
     def test_failure_retry_does_not_block_newer_post_and_exhausts(self):
         older, newer = self.post(age=5), self.post()
-        with patch("moderation_worker.moderate_content", side_effect=ModerationError("failure")):
+        with patch("moderation.worker.moderate_content", side_effect=ModerationError("failure")):
             run_once(self.sessions)
-        with patch("moderation_worker.moderate_content", return_value=verdict()):
+        with patch("moderation.worker.moderate_content", return_value=verdict()):
             run_once(self.sessions)
         with self.sessions() as db:
             self.assertEqual(db.get(Post, newer).status, "approved")
@@ -186,7 +242,7 @@ class ModerationDatabaseTests(unittest.TestCase):
         for _ in range(2):
             with self.sessions.begin() as db:
                 db.get(Post, older).moderation_next_attempt_at = self.now - timedelta(seconds=1)
-            with patch("moderation_worker.moderate_content", side_effect=ModerationError("failure")):
+            with patch("moderation.worker.moderate_content", side_effect=ModerationError("failure")):
                 run_once(self.sessions)
         with self.sessions() as db:
             post = db.get(Post, older)
@@ -245,8 +301,8 @@ class ModerationDatabaseTests(unittest.TestCase):
 
     def test_storage_failure_cannot_approve_from_text_alone(self):
         identity = self.post(images=1)
-        with (patch("moderation_worker.sign_moderation_image", side_effect=ModerationError("unavailable")),
-              patch("moderation_worker.moderate_content") as screen):
+        with (patch("moderation.worker.moderation_image_input", side_effect=ModerationError("unavailable")),
+              patch("moderation.worker.moderate_content") as screen):
             run_once(self.sessions)
         screen.assert_not_called()
         with self.sessions() as db:

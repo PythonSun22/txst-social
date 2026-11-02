@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import PostCard from "@/components/PostCard";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/api";
+import PostCard from "@/components/posts/PostCard";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 import { getSupabase } from "@/lib/supabase";
 import { fetchPosts, type FeedPost } from "@/lib/posts";
 

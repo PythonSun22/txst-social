@@ -2,9 +2,9 @@
 
 import unittest
 
-from moderation import TextModerationResult
-from moderation_context import VIOLENCE_CEILING, ContextAssessment, candidate_blocks, should_recheck
-from moderation_context_eval import load_cases, CASES_PATH
+from moderation.client import TextModerationResult
+from moderation.context import VIOLENCE_CEILING, ContextAssessment, candidate_blocks, should_recheck
+from moderation.evaluate import load_cases, CASES_PATH
 
 
 def first_result(flags: dict[str, bool], scores: dict[str, float], flagged=True):

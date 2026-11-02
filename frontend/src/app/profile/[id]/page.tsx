@@ -3,15 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import UserConnections from "@/components/UserConnections";
-import PostCard from "@/components/PostCard";
+import PostCard from "@/components/posts/PostCard";
 import { useParams, useRouter } from "next/navigation";
 import {
-  getCurrentProfile,
   getPublicProfile,
   setUserFollow,
-  type CurrentProfile,
   type PublicProfile,
 } from "@/lib/api";
+import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 import { getUserPosts, type FeedPost } from "@/lib/posts";
 
 export default function PublicProfilePage() {

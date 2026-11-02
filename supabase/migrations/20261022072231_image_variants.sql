@@ -1,4 +1,4 @@
--- FR-32/90–92: private source uploads -> trusted WebP variants -> screening.
+-- FR-32/90â€“92: private source uploads -> trusted WebP variants -> screening.
 -- Old originals remain available to their owner, but are not silently approved.
 alter table public.image_uploads
     add column purpose text not null default 'post' check (purpose in ('post','avatar','banner')),

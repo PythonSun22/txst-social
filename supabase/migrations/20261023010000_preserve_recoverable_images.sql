@@ -1,4 +1,4 @@
--- FR-32/90–92: service failures must not destroy the only recoverable input.
+-- FR-32/90â€“92: service failures must not destroy the only recoverable input.
 alter table public.image_uploads add column recovery_required boolean not null default false;
 update public.image_uploads set recovery_required=true, asset_cleanup_after=null
 where uploaded_at is not null and processing_status in ('pending','processing','failed')

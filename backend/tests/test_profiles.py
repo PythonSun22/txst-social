@@ -7,6 +7,7 @@ from unittest.mock import Mock
 from uuid import UUID, uuid4
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
+os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 
 from fastapi.testclient import TestClient
 
@@ -102,6 +103,7 @@ class ProfileTests(unittest.TestCase):
 
     def test_profile_update_accepts_catalog_major_and_owned_images(self):
         major_id, upload_id, college_id = uuid4(), uuid4(), uuid4()
+        banner_id = uuid4()
         self.profile.home_college_id = college_id
         major = Major(
             id=major_id,
@@ -122,7 +124,10 @@ class ProfileTests(unittest.TestCase):
             height=100,
             uploaded_at=datetime.now(timezone.utc),
         )
-        self.db.get.side_effect = lambda model, _: major if model is Major else upload
+        upload.purpose = "avatar"
+        upload.processing_status = "ready"
+        banner = ImageUpload(id=banner_id, owner_id=USER_ID, purpose="banner", processing_status="ready", uploaded_at=datetime.now(timezone.utc))
+        self.db.get.side_effect = lambda model, key: major if model is Major else banner if key == banner_id else upload
         self.db.execute.return_value.one_or_none.return_value = None
 
         response = self.client.patch("/auth/me", json={
@@ -131,7 +136,7 @@ class ProfileTests(unittest.TestCase):
             "major_id": str(major_id),
             "student_level": "senior",
             "profile_image_upload_id": str(upload_id),
-            "banner_image_upload_id": str(upload_id),
+            "banner_image_upload_id": str(banner_id),
         })
 
         self.assertEqual(response.status_code, 200)
@@ -139,7 +144,7 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(response.json()["bio"], "Bobcat studying design.")
         self.assertEqual(response.json()["major"], "Interior Design")
         self.assertEqual(response.json()["profile_image_upload_id"], str(upload_id))
-        self.assertEqual(response.json()["banner_image_upload_id"], str(upload_id))
+        self.assertEqual(response.json()["banner_image_upload_id"], str(banner_id))
         self.db.commit.assert_called_once()
 
     def test_profile_update_rejects_major_from_another_college(self):
@@ -189,6 +194,36 @@ class ProfileTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertIn("PATCH", response.headers["access-control-allow-methods"])
+
+    def test_processing_avatar_is_pending_and_keeps_current_photo(self):
+        old_id, new_id = uuid4(), uuid4()
+        self.profile.profile_image_upload_id = old_id
+        self.db.get.return_value = ImageUpload(id=new_id, owner_id=USER_ID, purpose="avatar",
+            processing_status="processing", uploaded_at=datetime.now(timezone.utc))
+        response = self.client.patch("/auth/me", json={"profile_image_upload_id": str(new_id)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["profile_image_upload_id"], str(old_id))
+        self.assertEqual(response.json()["pending_profile_image_upload_id"], str(new_id))
+        self.assertEqual(response.json()["profile_image_status"], "processing")
+
+    def test_banner_cannot_use_avatar_or_rejected_asset(self):
+        old_id, new_id = uuid4(), uuid4()
+        self.profile.banner_image_upload_id = old_id
+        for purpose, state in [("avatar", "ready"), ("banner", "blocked"), ("banner", "failed")]:
+            self.db.get.return_value = ImageUpload(id=new_id, owner_id=USER_ID, purpose=purpose,
+                processing_status=state, uploaded_at=datetime.now(timezone.utc))
+            response = self.client.patch("/auth/me", json={"banner_image_upload_id": str(new_id)})
+            self.assertEqual(response.status_code, 422)
+            self.assertEqual(self.profile.banner_image_upload_id, old_id)
+        self.db.commit.assert_not_called()
+
+    def test_removing_image_cancels_pending_replacement(self):
+        self.profile.profile_image_upload_id = uuid4()
+        self.profile.pending_profile_image_upload_id = uuid4()
+        response = self.client.patch("/auth/me", json={"profile_image_upload_id": None})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["profile_image_upload_id"])
+        self.assertIsNone(response.json()["pending_profile_image_upload_id"])
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from auth import get_current_profile, get_optional_profile, require_verified_profile
 from database import get_db
 from models import Profile, UserFollow
-from profile_schemas import ProfileResponse
+from profiles.schemas import ProfileResponse
 
 router = APIRouter(tags=["student discovery and follows"])
 

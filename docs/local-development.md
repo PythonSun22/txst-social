@@ -51,9 +51,9 @@ Use the local **publishable key** or legacy **anon key** for these Auth settings
 The moderation worker additionally needs a **backend-only** `SUPABASE_SECRET_KEY`
 (or legacy `SUPABASE_SERVICE_ROLE_KEY`) to sign pending images. Never put that
 secret in the frontend; see [moderation](moderation.md) for worker setup.
-Local image moderation currently passes a `127.0.0.1` signed URL to OpenAI,
-which cannot fetch it. Image posts may remain pending after retries; see
-[moderation](moderation.md). Text-post screening can still be tested locally.
+Image processing and post moderation send inline bytes to OpenAI, so loopback
+Storage works. Apply the image-variants migration and enable both workers; see
+[image processing](image-processing.md) for configuration and preset tuning.
 `.env.local` overrides frontend `.env`; check it when
 switching environments. Restart both apps after changing settings.
 

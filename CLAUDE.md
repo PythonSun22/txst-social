@@ -93,6 +93,8 @@ _Claude keeps this current — see above._
 **Working today:** health/profiles, Supabase existing-account login and identity,
 private image uploads with browser crop/resize, persistent General text/image/mixed
 posts, chronological cursor feed and authenticated persistent post likes/unlikes.
+College pages (`/colleges`, `/colleges/[slug]`) read per-college feeds via
+`GET /posts?space=<slug>`; posting to colleges is not built yet.
 ForAll moderation screens text/images in an opt-in background worker (FR-90–92).
 Image attachments are screened separately with the title/body; all must pass
 for publication, and the first flag blocks the whole post. Individual checks
@@ -140,12 +142,16 @@ context for next time. No match → add a new subsection (name from
 
 ### Daniel Pelley — daniel.pelley@outlook.com
 
-- **Working on:** frontend theme and feed UI on `feature/initial-ui-fyp`,
-  adapted from the Figma Make mockup the original `.make` design file in `work/cs4332/` (one
-  level above the repo). Maroon/gold tokens in `globals.css`; `Navbar`
-  replaced `Sidebar`; `PostCard`, `SortBar` and the ForAll page still use mock data. `/submit` +
-  `PostComposer` is the create-post form, not yet wired to an endpoint.
-- **Notes for Claude:** learning the stack, so wants short, plain explanations.
+- **Working on:** college pages on `frontend-college-page` (FR-13): banner grid,
+  `/colleges/[slug]` feed, and `?space=` filter on `GET /posts` — PR next. Next
+  task: posting into a college (`PostCreate` space field, `create_post`, composer
+  picker). The moderation worker's General-only filter is Misan's area; coordinate
+  first, and expect file moves from Adam's `fix/imagePipeline` PR.
+- **Notes for Claude:** learning the stack (Java/C++ background). Wants concise
+  numbered steps: name the file, one-line why, then the code. He writes the code;
+  Claude reviews. Personal learning log is in `LEARNING.md` one level above the repo.
+  The Figma mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for
+  the look only, never for product rules.
   The mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for the
   look only, never for product rules.
 
