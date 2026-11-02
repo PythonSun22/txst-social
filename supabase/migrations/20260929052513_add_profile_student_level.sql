@@ -6,6 +6,5 @@ create type profile_student_level as enum (
     'senior',
     'graduate'
 );
-
 alter table public.profiles
     add column student_level profile_student_level;

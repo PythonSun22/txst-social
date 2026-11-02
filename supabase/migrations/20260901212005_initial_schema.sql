@@ -27,8 +27,6 @@ create table public.profiles (
 
     updated_at timestamptz not null default now()
 );
-
-
 -- Enable Row Level Security
 alter table public.profiles
     enable row level security;
