@@ -13,7 +13,7 @@ export default function PostSearch({ defaultValue = "" }: { defaultValue?: strin
       <input
         type="search"
         name="q"
-        required
+        // Not `required`: an empty submit must reach /search?q= so old results clear.
         maxLength={100}
         defaultValue={defaultValue}
         placeholder="Search posts by title"

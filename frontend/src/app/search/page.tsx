@@ -74,10 +74,10 @@ function SearchResults() {
       </div>
       {/* key resets the uncontrolled input when the URL query changes (e.g. browser back). */}
       <PostSearch key={q} defaultValue={q} />
-      {!q && <p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">Type a word from a post title to search.</p>}
+      {!q && <p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">Type part of a post title to search.</p>}
       {loading && <p role="status">Searching…</p>}
       {error && <p role="alert" className="mb-3 text-sm text-red-700">{error}</p>}
-      {q && !loading && !error && !posts.length && (<p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">No posts match “{q}”. Search looks at whole words in titles — try a different word.</p>)}
+      {q && !loading && !error && !posts.length && (<p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground">No post titles match “{q}”. Try fewer or different letters.</p>)}
       <div className="space-y-3">
       {posts.map((post) => (<PostCard key={`${profile?.id ?? "guest"}:${post.id}`} post={post} profile={profile} onStatus={updateStatus} onDelete={(id) => setPosts((items) => items.filter((item) => item.id !== id))}
       onLike={(id, value) => setPosts((items) => items.map((item) => item.id === id ? { ...item, ...value } : item))}/>))}</div>

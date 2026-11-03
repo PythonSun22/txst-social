@@ -1,4 +1,4 @@
-"""FR-80/66: post title search keeps the feed's visibility rule and cursor."""
+"""FR-80/66: partial post title search keeps the feed's visibility rule and cursor."""
 import os
 import unittest
 from datetime import datetime, timezone
@@ -14,7 +14,7 @@ from database import get_db
 from main import app
 from models import Post, Profile
 from posts.routes import encode_cursor
-from search import search_posts
+from search import search_posts, title_matches
 
 class SearchTests(unittest.TestCase):
     def setUp(self):
@@ -29,12 +29,29 @@ class SearchTests(unittest.TestCase):
     def test_anonymous_search_sees_only_approved(self):
         search_posts(Response(),q='  calculus  ',cursor=None,limit=20,viewer=None,db=self.db)
         sql=self.sql()
-        for clause in ("posts.search_vector @@ websearch_to_tsquery('english', 'calculus')","posts.status = 'approved'",
+        for clause in ("posts.search_vector @@ to_tsquery('english', 'calculus:*')","posts.title ILIKE","posts.status = 'approved'",
                        'posts.deleted_at IS NULL','spaces.deleted_at IS NULL','posts.created_at DESC, posts.id DESC'):
             self.assertIn(clause,sql)
         self.assertNotIn('OR posts.author_id',sql)
         # Search spans every space; it must not inherit the feed's General-only filter.
         self.assertNotIn("spaces.slug = 'general'",sql)
+
+    def test_partial_words_match_by_prefix_and_substring(self):
+        # "calc tut" must find "Calculus tutoring": every word as a prefix, any order.
+        sql=str(title_matches('calc tut').compile(dialect=postgresql.dialect(),compile_kwargs={'literal_binds':True}))
+        self.assertIn("to_tsquery('english', 'calc:* & tut:*')",sql)
+        self.assertIn('posts.title ILIKE',sql)
+
+    def test_operator_characters_cannot_break_the_query(self):
+        # to_tsquery raises on stray operators; only letters/digits may reach it.
+        sql=str(title_matches('c++ & (calc)!:').compile(dialect=postgresql.dialect(),compile_kwargs={'literal_binds':True}))
+        self.assertIn("to_tsquery('english', 'c:* & calc:*')",sql)
+        # Symbol-only input skips the word index and falls back to substring search.
+        self.assertNotIn('to_tsquery',str(title_matches('&|!():').compile(dialect=postgresql.dialect())))
+
+    def test_like_wildcards_are_matched_literally(self):
+        params=title_matches('50%_off').compile(dialect=postgresql.dialect()).params
+        self.assertIn('%50\\%\\_off%',params.values())
 
     def test_author_also_finds_own_pending_posts(self):
         search_posts(Response(),q='calculus',cursor=None,limit=20,viewer=self.user,db=self.db)

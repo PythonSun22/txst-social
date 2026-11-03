@@ -17,8 +17,9 @@ so this pass is an endpoint and a page — no schema change.
 ### Steps
 
 1. **`backend/search.py`** — new router with `GET /search/posts?q=&cursor=&limit=`.
-   Parse `q` with `websearch_to_tsquery('english', …)` so user input can never
-   be a syntax error. Apply the same `visible_to()` rule as the feed (approved,
+   Match partially: every typed word as a prefix (`to_tsquery('english',
+   'calc:* & tut:*')`, existing index, letters/digits only so input can never
+   be a syntax error) OR the whole text as an escaped `ILIKE` substring. Apply the same `visible_to()` rule as the feed (approved,
    or the caller's own pending post); exclude tombstoned posts and spaces.
    Search every space, not only General, so college posts appear once they exist.
 2. Order newest first and reuse the feed's `(created_at, id)` cursor, so paging
@@ -29,7 +30,8 @@ so this pass is an endpoint and a page — no schema change.
 5. **Frontend:** `lib/search.ts`, a `/search?q=` page (results + Load more),
    and a `PostSearch` box above the ForAll feed and on the results page. The
    navbar is kept free for a future site-wide search.
-6. Update README endpoints, AGENTS.md §7 and CLAUDE.md status.
+6. An empty search submits and clears results (the box is not `required`).
+7. Update README endpoints, AGENTS.md §7 and CLAUDE.md status.
 
 **Constraints:** No migration. Same visibility rule as the feed — search must
 never reveal a pending/blocked post to anyone but its author. Query length
@@ -37,8 +39,8 @@ capped at 100 characters.
 
 **Non-goals (this pass):** Searching post bodies (needs a migration to widen
 `search_vector`), space-name search (FR-80, wait for the colleges work),
-comment search (FR-81), relevance ranking, prefix/typo matching
-("calc" will not match "calculus"), and search-as-you-type.
+comment search (FR-81), relevance ranking, typo tolerance and indexed
+substring search (both need a `pg_trgm` migration), and search-as-you-type.
 
 ---
 
