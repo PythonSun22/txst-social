@@ -19,6 +19,7 @@ export const fetchPosts = (cursor?: string, signal?: AbortSignal, space = "gener
 };
 export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
+export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[]; space: string; }) =>
 export const getUserPosts = (authorId: string, signal?: AbortSignal) =>
   apiRequest<FeedPost[]>(`/posts/user/${encodeURIComponent(authorId)}`, { signal }, true);
 export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[] }) =>
