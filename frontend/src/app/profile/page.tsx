@@ -6,6 +6,7 @@ import PostCard from "@/components/posts/PostCard";
 import PawIcon from "@/components/ui/PawIcon";
 import JoinedCommunitiesCard from "@/components/communities/JoinedCommunitiesCard";
 import EditProfileModal from "@/components/profiles/EditProfileModal";
+import UserConnections from "@/components/UserConnections";
 import ImageViewer from "@/components/images/ImageViewer";
 import ImageProcessingNotice from "@/components/images/ImageProcessingNotice";
 import SortBar, { type SortOrder } from "@/components/posts/SortBar";
@@ -254,6 +255,8 @@ export default function Profile() {
                   <dt className="text-sm text-muted-foreground">Spaces followed</dt>
                 </div>
               </dl>
+
+              <UserConnections profileId={profile.id} followerCount={profile.follower_count} followingCount={profile.following_count} ownProfile />
 
               <dl className="mt-4 flex flex-wrap gap-2">
                 <div className="flex items-baseline gap-2 rounded-full border border-border bg-secondary px-3 py-1.5">

@@ -17,7 +17,6 @@ $$;
 create trigger post_media_four_images before insert or update of position, post_id
     on public.post_media for each row
     execute function public.check_post_media_image_limit();
-
 -- The reservation endpoint locks the owner's profiles row before counting and
 -- inserting. Include tombstones: deleting an upload must not reset rate limits.
 create index image_uploads_owner_rate_idx

@@ -1,4 +1,4 @@
--- FR-32/90–92: private source uploads -> trusted WebP variants -> screening.
+-- FR-32/90â€“92: private source uploads -> trusted WebP variants -> screening.
 -- Old originals remain available to their owner, but are not silently approved.
 alter table public.image_uploads
     add column purpose text not null default 'post' check (purpose in ('post','avatar','banner')),
@@ -12,13 +12,11 @@ alter table public.image_uploads
     add column original_deleted_at timestamptz,
     add column original_cleanup_after timestamptz,
     add column original_cleanup_error text;
-
 create index image_processing_queue_idx on public.image_uploads (created_at, id)
     where uploaded_at is not null and deleted_at is null
       and processing_status in ('pending','processing');
 create index image_original_cleanup_idx on public.image_uploads (original_cleanup_after)
     where original_deleted_at is null and processing_status in ('ready','blocked');
-
 create table public.image_variants (
     image_upload_id uuid not null references public.image_uploads(id) on delete cascade,
     name text not null check (name in ('preview','expanded','avatar_small','avatar_large','banner')),
@@ -29,7 +27,6 @@ create table public.image_variants (
     content_type text not null default 'image/webp' check (content_type = 'image/webp'),
     primary key (image_upload_id, name)
 );
-
 -- Image verdicts have their own audit: post audits still screen title/body + media.
 create table public.image_processing_checks (
     id uuid primary key default gen_random_uuid(),
@@ -45,11 +42,9 @@ create table public.image_processing_checks (
 alter table public.image_variants enable row level security;
 alter table public.image_processing_checks enable row level security;
 grant select on public.image_variants to anon, authenticated;
-
 alter table public.profiles
     add column pending_profile_image_upload_id uuid references public.image_uploads(id) on delete set null,
     add column pending_banner_image_upload_id uuid references public.image_uploads(id) on delete set null;
-
 -- Retain legacy profile selections as pending, not as approved published assets.
 -- A source used in both roles becomes an avatar; its banner must be re-uploaded.
 update public.image_uploads u set purpose = 'banner'
@@ -65,7 +60,6 @@ update public.profiles p set
         where u.id = p.banner_image_upload_id and u.purpose = 'banner'),
     profile_image_upload_id = null, banner_image_upload_id = null,
     profile_image_url = null;
-
 -- Existing public image posts must also complete the new asset pipeline and
 -- re-screen title/body with generated media before they can be served again.
 update public.posts set status = 'pending', moderation_attempts = 0,
@@ -73,7 +67,6 @@ update public.posts set status = 'pending', moderation_attempts = 0,
     moderation_lease_until = null, moderation_exhausted_at = null,
     moderation_error = null
     where type = 'image' and status = 'approved' and deleted_at is null;
-
 -- SECURITY DEFINER avoids depending on owner-only image_uploads RLS for public
 -- post reads. Return only an access decision, with a fixed search path.
 create function public.can_read_image_variant(key text) returns boolean
@@ -98,7 +91,6 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke all on function public.can_read_image_variant(text) from public;
 grant execute on function public.can_read_image_variant(text) to anon, authenticated;
-
 -- Originals never become public through legacy post_media.object_key references.
 drop policy post_images_read_approved on storage.objects;
 create policy post_images_read_approved on storage.objects for select to anon, authenticated using (

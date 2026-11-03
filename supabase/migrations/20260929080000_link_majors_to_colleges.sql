@@ -3,7 +3,6 @@
 
 alter table public.majors
     add column college_id uuid;
-
 update public.majors as major
 set college_id = college.id
 from public.spaces as college
@@ -64,7 +63,6 @@ where college.kind = 'college'
         'Physics', 'Wildlife Biology'
     ) then 'science_engineering'
   end;
-
 do $$
 begin
     if exists (select 1 from public.majors where college_id is null) then
@@ -72,13 +70,11 @@ begin
     end if;
 end
 $$;
-
 alter table public.majors
     alter column college_id set not null,
     add constraint majors_college_id_fkey
         foreign key (college_id) references public.colleges(space_id)
         on delete restrict;
-
 create index majors_college_active_order_idx
     on public.majors (college_id, sort_order)
     where active;

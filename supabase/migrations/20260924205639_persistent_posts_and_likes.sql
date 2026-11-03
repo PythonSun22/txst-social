@@ -13,7 +13,6 @@ create index post_media_object_key_idx on public.post_media (object_key);
 -- Nullable upload/dimensions preserve legacy image keys without inventing metadata.
 insert into public.post_media (post_id, position, object_key)
 select id, 0, image_key from public.posts where image_key is not null;
-
 alter table public.posts drop constraint posts_body_matches_type;
 alter table public.posts drop column image_key;
 alter table public.posts add constraint posts_body_matches_type check (
@@ -25,7 +24,6 @@ alter table public.posts add constraint posts_body_matches_type check (
 alter table public.posts add column submission_id uuid;
 create unique index posts_submission_idx on public.posts (author_id, submission_id)
     where submission_id is not null;
-
 -- Cross-table content checks run at commit, after all attachments are inserted.
 create function public.check_post_media_content() returns trigger
 language plpgsql set search_path = '' as $$
@@ -61,7 +59,6 @@ create constraint trigger posts_media_content after insert or update on public.p
     deferrable initially deferred for each row execute function public.check_post_media_content();
 create constraint trigger post_media_content after insert or update or delete on public.post_media
     deferrable initially deferred for each row execute function public.check_post_media_content();
-
 alter table public.post_media enable row level security;
 grant select on public.post_media to anon, authenticated;
 create policy post_media_visible on public.post_media for select using (
@@ -79,7 +76,6 @@ create policy post_images_read_approved on storage.objects for select to anon, a
           and p.deleted_at is null and s.deleted_at is null
     )
 );
-
 -- FR-50/51: post likes now go through FastAPI so counters, karma and stored
 -- ranking are updated in the same transaction. No browser bypass of that path.
 drop policy post_likes_insert_own on public.post_likes;

@@ -65,6 +65,7 @@ txst-social/
 │   ├── images/                    # routes.py, schemas.py, processing.py,
 │   │                             # worker.py, storage.py, worker_storage.py
 │   ├── moderation/                # client.py, context.py, worker.py, evaluate.py
+│   ├── user_social.py              # Student search, public profiles and follows
 │   ├── tests/
 │   ├── scripts/
 │   ├── evals/
@@ -226,10 +227,19 @@ configuration/service failures return 503. Unverified active users can inspect
 their identity, but `require_verified_profile` rejects them for writes.
 Post and like routes additionally check space-specific bans.
 
+Public student discovery uses `GET /profiles/search?q=...` and
+`GET /profiles/{id}`. The profile page links its follower/following lists to
+`GET /profiles/{id}/followers` and `/following`. Verified active students can
+follow with `PUT /profiles/{id}/follow`; `DELETE` on that route unfollows.
+`GET /posts/user/{author_id}` supplies approved public posts for the profile.
+Search and profile reads expose public profile fields only. ForAll post author
+names link to these profile pages. The top-bar search currently searches
+students only.
+
 The existing backend database connection must be authorized to read profiles.
 It is a trusted server connection: passing a bearer token to FastAPI does not
 change its SQL role or set `auth.uid()`. Application authorization is enforced
-explicitly. No browser profile-read policy or database migration is added here.
+explicitly; no browser profile-read policy is needed.
 The migrations' signup trigger must have created the account's profile; the API
 does not create missing profiles or write mirrored email/verification fields.
 
@@ -390,7 +400,9 @@ http://127.0.0.1:8000/profiles
 
 This retrieves profiles from PostgreSQL through the SQLAlchemy `Profile` model.
 
-Profile creation, editing, and authenticated profile access are not implemented yet.
+Authenticated profile reads and edits use `GET` and `PATCH /auth/me`. Public
+profile lookup and student follow/search routes are described in the
+authentication section above.
 
 ```json
 []
@@ -544,7 +556,8 @@ Assembles the FastAPI application, middleware and feature routers. Profile route
 live in `profiles/routes.py`; image routes live in `images/routes.py`; post routes
 live in `posts/routes.py`. Each feature keeps its request/response contracts in
 its own `schemas.py`. The frontend shares HTTP/session handling in `lib/api.ts`
-and keeps profile contracts and requests in `lib/profiles.ts`.
+and keeps profile contracts and requests in `lib/profiles.ts`. Student search,
+public profiles and follows are registered from `user_social.py`.
 
 ## Current Development Pipeline
 

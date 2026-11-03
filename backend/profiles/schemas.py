@@ -99,6 +99,8 @@ class CurrentProfileResponse(ProfileResponse):
     home_college: HomeCollegeResponse | None = None
     followed_space_count: int = 0
     joined_community_count: int = 0
+    follower_count: int = 0
+    following_count: int = 0
     pending_profile_image_upload_id: UUID | None = None
     pending_banner_image_upload_id: UUID | None = None
     profile_image_status: str | None = None

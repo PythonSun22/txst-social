@@ -29,11 +29,11 @@ export default function CollegePage({ params }: { params: Promise<{ slug: string
 
   if (!college) return <main><h1>College not found</h1></main>;
 
-  return ( 
+  return (
     <main className="mx-auto max-w-4xl p-6">
         <Link href="/colleges" className="text-sm font-semibold text-primary hover:underline">← All colleges
         </Link>
-    
+
         <header className="mt-4 rounded-xl bg-primary p-10 text-primary-foreground">
             <h1 className="text-3xl font-bold">{college.name}</h1>
             <p className="mt-2 text-primary-foreground/80">{college.description}</p>
@@ -41,12 +41,12 @@ export default function CollegePage({ params }: { params: Promise<{ slug: string
 
         <section className="mt-6">
             <h2 className="text-xl font-bold">Posts</h2>
-             {loading && <p className="mt-3 text-muted-foreground"> Loading posts...</p>}   
+             {loading && <p className="mt-3 text-muted-foreground"> Loading posts...</p>}
              {!loading && posts.length === 0 && (<div className="mt-3 rounded-xl border border-border p-8 text-center text-muted-foreground">No posts yet. Posts for {college.name} will show here</div>)}
-            
+
             <div className="mt-3 space-y-3">
               {posts.map((post)=> (
-                <PostCard 
+                <PostCard
                   key={post.id}
                   post={post}
                   profile={profile}

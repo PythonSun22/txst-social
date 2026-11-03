@@ -1,5 +1,5 @@
 -- =========================================================================
--- TXST Lynx — core schema
+-- Boko Lynx — core schema
 --
 -- Builds on 20260901212005_initial_schema.sql. That migration established two
 -- things this one treats as settled:
@@ -38,8 +38,10 @@
 -- =========================================================================
 
 
-create extension if not exists citext;   -- case-insensitive slugs, usernames, emails
-create extension if not exists ltree;    -- comment tree paths
+create extension if not exists citext;
+-- case-insensitive slugs, usernames, emails
+create extension if not exists ltree;
+-- comment tree paths
 
 
 -- -------------------------------------------------------------------------
@@ -73,17 +75,14 @@ alter table public.profiles
     add column is_admin          boolean not null default false,    -- FR-96
     add column suspended_at      timestamptz,                       -- site-wide suspension (FR-96)
     add column deleted_at        timestamptz;
-
 -- `college` was free text. FR-11 makes a home college a reference to a real
 -- college space, so the directory, the crest navigation and "students in my
 -- college" all work off one identifier instead of whatever the user typed.
 -- `major` stays as text: there is no majors table and FR-05 only displays it.
 alter table public.profiles drop column college;
-
 -- username was `text`; FR-20-style handles are case-insensitive, so bobcatfan
 -- and BobcatFan must collide rather than coexist.
 alter table public.profiles alter column username type citext;
-
 alter table public.profiles
     -- Cast to text first. A regex against citext matches case-INSENSITIVELY, so
     -- `username ~ '^[a-z0-9_]+$'` would happily accept "BobcatFan". The cast is
@@ -97,8 +96,6 @@ alter table public.profiles
         check (email is null or email ~ '@txstate\.edu$'),
 
     add constraint profiles_email_unique unique (email);
-
-
 -- -------------------------------------------------------------------------
 -- spaces
 -- -------------------------------------------------------------------------
@@ -130,7 +127,6 @@ alter table public.profiles
 -- costs six tables and every feed query, so it is not a Week 9 decision.
 
 create type space_kind as enum ('campus', 'college', 'community');
-
 create table public.spaces (
     id             uuid primary key default gen_random_uuid(),
     kind           space_kind not null,
@@ -155,22 +151,17 @@ create table public.spaces (
     constraint spaces_authorship
         check (kind <> 'community' or created_by is not null)
 );
-
 -- Exactly one campus space can exist. It is the general Texas State feed (FR-60).
 create unique index spaces_single_campus_idx on public.spaces ((kind)) where kind = 'campus';
-
 -- FR-24 community directory and FR-13 college directory: same index, filtered by kind.
 create index spaces_directory_idx on public.spaces (kind, follower_count desc, id desc)
     where deleted_at is null;
 create index spaces_directory_new_idx on public.spaces (kind, created_at desc, id desc)
     where deleted_at is null;
-
 -- FR-80: space names are searchable alongside post titles.
 alter table public.spaces add column search_vector tsvector
     generated always as (to_tsvector('english', name)) stored;
 create index spaces_search_idx on public.spaces using gin (search_vector);
-
-
 -- -------------------------------------------------------------------------
 -- colleges
 -- -------------------------------------------------------------------------
@@ -188,13 +179,10 @@ create table public.colleges (
     constraint colleges_accent_format
         check (accent_hex is null or accent_hex ~ '^#[0-9a-fA-F]{6}$')
 );
-
 -- FR-11. Declared here rather than inline above because colleges did not exist yet.
 alter table public.profiles add constraint profiles_home_college_fk
     foreign key (home_college_id) references public.colleges(space_id) on delete set null;
 create index profiles_home_college_idx on public.profiles (home_college_id);
-
-
 -- -------------------------------------------------------------------------
 -- follows
 -- -------------------------------------------------------------------------
@@ -214,11 +202,8 @@ create table public.follows (
 
     primary key (user_id, space_id)                 -- FR-71
 );
-
 -- The PK serves the Following feed (FR-64). Follower lists need the other side.
 create index follows_space_idx on public.follows (space_id);
-
-
 -- -------------------------------------------------------------------------
 -- moderators
 -- -------------------------------------------------------------------------
@@ -235,10 +220,7 @@ create table public.moderators (
 
     primary key (space_id, user_id)
 );
-
 create index moderators_user_idx on public.moderators (user_id);
-
-
 -- -------------------------------------------------------------------------
 -- bans
 -- -------------------------------------------------------------------------
@@ -254,8 +236,6 @@ create table public.bans (
 
     primary key (space_id, user_id)
 );
-
-
 -- -------------------------------------------------------------------------
 -- moderation status
 -- -------------------------------------------------------------------------
@@ -269,9 +249,8 @@ create table public.bans (
 --   'blocked'   the classifier rejected it. Never published; the author is told.
 --   'removed'   a human moderator took it down after publication (FR-93).
 --
--- [D-4] WHAT HAPPENS WHEN THE CLASSIFIER DOES NOT ANSWER. UNDECIDED. Save the
--- post as 'pending' first, visible only to its author, then call the classifier.
--- FR-90 requires approval before public visibility. The model call can be
+-- [D-4] WHAT HAPPENS WHEN THE CLASSIFIER DOES NOT ANSWER. UNDECIDED. FR-90 puts
+-- a model call between "user pressed Post" and "post exists". That call can be
 -- slow, time out, or return 503 because the model service is asleep. The schema
 -- supports all three answers; the team must pick one and write it down, because
 -- the difference is invisible in code review and obvious in a demo.
@@ -300,14 +279,11 @@ create table public.bans (
 -- posting something clean and editing it afterwards.
 
 create type moderation_status as enum ('pending', 'approved', 'blocked', 'removed');
-
-
 -- -------------------------------------------------------------------------
 -- posts
 -- -------------------------------------------------------------------------
 
 create type post_type as enum ('text', 'link', 'image');
-
 create table public.posts (
     id            uuid primary key default gen_random_uuid(),
     space_id      uuid not null references public.spaces(id) on delete cascade,  -- FR-30, one FK thanks to [D-2]
@@ -335,7 +311,6 @@ create table public.posts (
         (type = 'image' and image_key is not null and body is null and url is null)
     )
 );
-
 -- Feed indexes (FR-61 through FR-65).
 --
 -- Two things in every one of these are load-bearing:
@@ -360,18 +335,19 @@ create index posts_space_hot_idx on public.posts (space_id, hot_rank desc, id de
 create index posts_space_new_idx on public.posts (space_id, created_at desc, id desc)
     where deleted_at is null and status = 'approved';
 create index posts_space_top_idx on public.posts (space_id, like_count desc, id desc)
-    where deleted_at is null and status = 'approved';           -- FR-61, FR-62, FR-63
+    where deleted_at is null and status = 'approved';
+-- FR-61, FR-62, FR-63
 
-create index posts_author_idx on public.posts (author_id, created_at desc);     -- FR-05
-create index posts_pending_idx on public.posts (created_at) where status = 'pending';  -- stuck-screening queue
+create index posts_author_idx on public.posts (author_id, created_at desc);
+-- FR-05
+create index posts_pending_idx on public.posts (created_at) where status = 'pending';
+-- stuck-screening queue
 
 -- FR-80: full-text search over titles. A generated column stays in sync by
 -- itself, so there is no trigger to forget.
 alter table public.posts add column search_vector tsvector
     generated always as (to_tsvector('english', title)) stored;
 create index posts_search_idx on public.posts using gin (search_vector);
-
-
 -- -------------------------------------------------------------------------
 -- comments
 -- -------------------------------------------------------------------------
@@ -407,21 +383,21 @@ create table public.comments (
 
     constraint comments_depth_limit check (depth between 0 and 12)  -- FR-41 needs >= 8
 );
-
-create index comments_post_path_idx on public.comments (post_id, path);   -- FR-35, one tree query
-create index comments_path_gist_idx on public.comments using gist (path); -- FR-44 subtree fetch
+create index comments_post_path_idx on public.comments (post_id, path);
+-- FR-35, one tree query
+create index comments_path_gist_idx on public.comments using gist (path);
+-- FR-44 subtree fetch
 create index comments_post_likes_idx on public.comments (post_id, like_count desc, id desc)
-    where deleted_at is null and status = 'approved';                     -- FR-45
-create index comments_author_idx on public.comments (author_id, created_at desc);  -- FR-05
+    where deleted_at is null and status = 'approved';
+-- FR-45
+create index comments_author_idx on public.comments (author_id, created_at desc);
+-- FR-05
 create index comments_pending_idx on public.comments (created_at) where status = 'pending';
-
 -- FR-81. A generated tsvector over comment bodies is cheap to add now and
 -- expensive to backfill across 50,000 rows later.
 alter table public.comments add column search_vector tsvector
     generated always as (to_tsvector('english', body)) stored;
 create index comments_search_idx on public.comments using gin (search_vector);
-
-
 -- -------------------------------------------------------------------------
 -- likes
 -- -------------------------------------------------------------------------
@@ -443,10 +419,8 @@ create table public.post_likes (
 
     primary key (user_id, post_id)                  -- FR-50
 );
-
 -- Answers "has THIS viewer liked any of these 25 posts" in one join (FR-53).
 create index post_likes_post_idx on public.post_likes (post_id);
-
 create table public.comment_likes (
     user_id    uuid not null references public.profiles(id) on delete cascade,
     comment_id uuid not null references public.comments(id) on delete cascade,
@@ -454,10 +428,7 @@ create table public.comment_likes (
 
     primary key (user_id, comment_id)               -- FR-50
 );
-
 create index comment_likes_comment_idx on public.comment_likes (comment_id);
-
-
 -- -------------------------------------------------------------------------
 -- moderation_checks
 -- -------------------------------------------------------------------------
@@ -479,7 +450,6 @@ create type moderation_label as enum (
     'clean', 'harassment', 'hate', 'sexual_content', 'violence', 'self_harm', 'spam'
 );
 create type moderation_decision as enum ('allow', 'block');
-
 create table public.moderation_checks (
     id            uuid primary key default gen_random_uuid(),
     post_id       uuid references public.posts(id) on delete cascade,
@@ -496,15 +466,11 @@ create table public.moderation_checks (
     constraint moderation_checks_one_target check (num_nonnulls(post_id, comment_id) = 1),
     constraint moderation_checks_score_range check (score >= 0 and score <= 1)
 );
-
 create index moderation_checks_post_idx    on public.moderation_checks (post_id)    where post_id is not null;
 create index moderation_checks_comment_idx on public.moderation_checks (comment_id) where comment_id is not null;
-
 -- The tuning query: everything the model blocked, newest first.
 create index moderation_checks_blocked_idx on public.moderation_checks (created_at desc)
     where decision = 'block';
-
-
 -- -------------------------------------------------------------------------
 -- reports
 -- -------------------------------------------------------------------------
@@ -531,7 +497,6 @@ create type report_reason as enum (
     'spam', 'harassment', 'hate', 'violence', 'sexual_content', 'misinformation', 'other'
 );
 create type report_status as enum ('open', 'resolved', 'dismissed');
-
 create table public.reports (
     id               uuid primary key default gen_random_uuid(),
     reporter_id      uuid not null references public.profiles(id) on delete cascade,
@@ -561,7 +526,6 @@ create table public.reports (
     -- a cheap way to clutter the admin queue.
     constraint reports_no_self_report check (reported_user_id is distinct from reporter_id)
 );
-
 -- space_id is copied here rather than reached through post -> space. A moderator
 -- queue filters by space on every load (FR-98), and for a comment that lookup is
 -- otherwise comment -> post -> space, two joins deep. It is denormalized, so it
@@ -573,7 +537,6 @@ create unique index reports_unique_post_idx
     on public.reports (reporter_id, post_id) where post_id is not null;
 create unique index reports_unique_comment_idx
     on public.reports (reporter_id, comment_id) where comment_id is not null;
-
 -- FR-99: one OPEN report per reporter per account, rather than one ever. A
 -- student reported in September who reoffends in November has to be reportable
 -- again — but one who is already in the queue should not be reportable ten more
@@ -581,23 +544,18 @@ create unique index reports_unique_comment_idx
 -- partial unique index says exactly that, and resolving the report releases it.
 create unique index reports_unique_user_idx on public.reports (reporter_id, reported_user_id)
     where reported_user_id is not null and status = 'open';
-
 -- FR-98: the queue itself — open reports for one space, oldest first.
 create index reports_open_queue_idx on public.reports (space_id, created_at)
     where status = 'open' and space_id is not null;
-
 -- FR-99: the admin queue — open account reports, oldest first. Separate index
 -- because no space filter applies and no moderator may read it.
 create index reports_open_admin_idx on public.reports (created_at)
     where status = 'open' and reported_user_id is not null;
-
 -- FR-99: "how many open complaints does this account have" — the number that
 -- decides whether a pattern exists. Without it that question is a sequential
 -- scan of the whole table.
 create index reports_reported_user_idx on public.reports (reported_user_id, created_at desc)
     where reported_user_id is not null;
-
-
 -- =========================================================================
 -- Keeping profiles in step with auth.users
 -- =========================================================================
@@ -621,18 +579,15 @@ set search_path = ''
 as $$
 begin
     if new.email is null or new.email !~ '@txstate\.edu$' then
-        raise exception 'TXST Lynx is limited to txstate.edu addresses (FR-01)'
+        raise exception 'Boko Lynx is limited to txstate.edu addresses (FR-01)'
             using errcode = 'check_violation';
     end if;
     return new;
 end;
 $$;
-
 create trigger enforce_txstate_email_trg
     before insert on auth.users
     for each row execute function public.enforce_txstate_email();
-
-
 -- Username is provisional: a signup has no username yet, so we derive one from
 -- the address and let the student change it later (FR-06). The loop is for the
 -- collision between two people whose addresses differ only outside [a-z0-9_].
@@ -669,12 +624,9 @@ begin
     return new;
 end;
 $$;
-
 create trigger handle_new_user_trg
     after insert on auth.users
     for each row execute function public.handle_new_user();
-
-
 -- FR-02. Verification happens minutes or days after signup, when the student
 -- clicks the emailed link. Supabase stamps auth.users.email_confirmed_at; this
 -- mirrors it so the gate on posting is a column read, not a cross-schema join.
@@ -693,12 +645,9 @@ begin
     return new;
 end;
 $$;
-
 create trigger sync_email_verified_trg
     after update of email_confirmed_at, email on auth.users
     for each row execute function public.sync_email_verified();
-
-
 -- =========================================================================
 -- Row Level Security
 -- =========================================================================
@@ -728,14 +677,11 @@ alter table public.post_likes        enable row level security;
 alter table public.comment_likes     enable row level security;
 alter table public.moderation_checks enable row level security;
 alter table public.reports           enable row level security;
-
 -- FR-04: signed-out visitors get read-only access to all public content.
 create policy spaces_public_read on public.spaces
     for select using (deleted_at is null);
-
 create policy colleges_public_read on public.colleges
     for select using (true);
-
 -- FR-90: 'pending' and 'blocked' content is visible to its author and nobody
 -- else. This is the policy that makes screening real rather than cosmetic.
 create policy posts_public_read on public.posts
@@ -743,28 +689,23 @@ create policy posts_public_read on public.posts
         (deleted_at is null and status = 'approved')
         or author_id = (select auth.uid())
     );
-
 create policy comments_public_read on public.comments
     for select using (
         status = 'approved'
         or author_id = (select auth.uid())
     );
-
 -- FR-52, FR-53: like counts are public, and a signed-in reader needs to know
 -- which of these 25 posts they have already liked.
 create policy post_likes_public_read on public.post_likes
     for select using (true);
 create policy comment_likes_public_read on public.comment_likes
     for select using (true);
-
 -- FR-73: follower counts and "do I follow this" are both public reads.
 create policy follows_public_read on public.follows
     for select using (true);
-
 -- FR-22: a community page lists its moderators.
 create policy moderators_public_read on public.moderators
     for select using (true);
-
 -- FR-50, FR-51: liking and unliking are the two writes a browser may do alone.
 -- The row must be the caller's own, and FR-02 requires a verified account.
 create policy post_likes_insert_own on public.post_likes
@@ -779,7 +720,6 @@ create policy post_likes_insert_own on public.post_likes
     );
 create policy post_likes_delete_own on public.post_likes
     for delete using (user_id = (select auth.uid()));
-
 create policy comment_likes_insert_own on public.comment_likes
     for insert with check (
         user_id = (select auth.uid())
@@ -792,12 +732,10 @@ create policy comment_likes_insert_own on public.comment_likes
     );
 create policy comment_likes_delete_own on public.comment_likes
     for delete using (user_id = (select auth.uid()));
-
 -- FR-70, FR-71, FR-72: following, unfollowing and muting are the user's own.
 create policy follows_write_own on public.follows
     for all using (user_id = (select auth.uid()))
     with check (user_id = (select auth.uid()));
-
 -- bans, moderation_checks and reports get RLS with NO read policy on purpose.
 -- A ban list, the classifier's verdicts and an open report queue are all
 -- moderator-facing, and they reach the moderator through FastAPI. RLS on with
@@ -823,7 +761,6 @@ create policy follows_write_own on public.follows
 insert into public.spaces (kind, slug, name, description) values
     ('campus', 'general', 'General',
      'Anything for the whole university. Not tied to a college or a community.');
-
 insert into public.spaces (kind, slug, name) values
     ('college', 'applied_arts',        'College of Applied Arts'),
     ('college', 'business',            'McCoy College of Business'),
@@ -835,15 +772,12 @@ insert into public.spaces (kind, slug, name) values
     ('college', 'university_college',  'University College'),
     ('college', 'honors',              'Honors College'),
     ('college', 'graduate',            'The Graduate College');
-
 insert into public.colleges (space_id, short_name, sort_order)
 select id,
        replace(replace(name, 'College of ', ''), 'McCoy College of ', ''),
        row_number() over (order by name)
 from public.spaces
 where kind = 'college';
-
-
 -- =========================================================================
 -- Notes carried forward
 -- =========================================================================
@@ -886,4 +820,4 @@ where kind = 'college';
 -- as 'clean' is a labelled false negative. Join reports to moderation_checks on
 -- the target and the team has a real evaluation set for the model, from the
 -- app's own users, at no extra cost. Build the join early even if nobody uses
--- it until Week 12.
+-- it until Week 12.;

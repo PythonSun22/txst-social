@@ -12,10 +12,8 @@ alter table public.image_storage_objects
     add column cleanup_error text;
 create index image_orphan_cleanup_idx on public.image_storage_objects(cleanup_after)
     where deleted_at is null and image_upload_id is null;
-
 -- Existing assets get at least one preview-URL lifetime before eligibility.
 update public.image_uploads set asset_cleanup_after=greatest(created_at+interval '24 hours',now()+interval '5 minutes');
-
 create function public.queue_image_cleanup(target uuid) returns void
 language sql set search_path = '' as $$
     update public.image_uploads set asset_cleanup_after=least(
@@ -23,7 +21,6 @@ language sql set search_path = '' as $$
     where id=target and files_deleted_at is null;
 $$;
 revoke all on function public.queue_image_cleanup(uuid) from public;
-
 create function public.guard_post_image_reference() returns trigger
 language plpgsql set search_path = '' as $$
 begin
@@ -42,7 +39,6 @@ end;
 $$;
 create trigger post_media_guard_image before insert or update of image_upload_id,object_key,post_id
     on public.post_media for each row execute function public.guard_post_image_reference();
-
 create function public.track_post_image_reference() returns trigger
 language plpgsql set search_path = '' as $$
 begin
@@ -57,7 +53,6 @@ end;
 $$;
 create trigger post_media_track_image after insert or delete or update of image_upload_id,post_id
     on public.post_media for each row execute function public.track_post_image_reference();
-
 create function public.track_post_image_deletion() returns trigger
 language plpgsql set search_path = '' as $$
 declare target uuid;
@@ -77,7 +72,6 @@ end;
 $$;
 create trigger posts_track_image_deletion after update of deleted_at on public.posts
     for each row execute function public.track_post_image_deletion();
-
 create function public.guard_profile_image_references() returns trigger
 language plpgsql set search_path = '' as $$
 declare target uuid;
@@ -96,7 +90,6 @@ $$;
 create trigger profiles_guard_image_references before update of profile_image_upload_id,banner_image_upload_id,
     pending_profile_image_upload_id,pending_banner_image_upload_id,deleted_at on public.profiles
     for each row execute function public.guard_profile_image_references();
-
 create function public.track_profile_image_references() returns trigger
 language plpgsql set search_path = '' as $$
 declare target uuid;
@@ -120,7 +113,6 @@ $$;
 create trigger profiles_track_image_references after update of profile_image_upload_id,banner_image_upload_id,
     pending_profile_image_upload_id,pending_banner_image_upload_id,deleted_at on public.profiles
     for each row execute function public.track_profile_image_references();
-
 create function public.queue_terminal_image_cleanup() returns trigger
 language plpgsql set search_path = '' as $$
 begin

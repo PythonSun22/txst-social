@@ -9,10 +9,8 @@ alter table public.image_uploads add constraint authenticated_image_size
     check (upload_method <> 'authenticated' or size_bytes <= 2000000);
 alter table public.image_uploads add constraint authenticated_image_deadline
     check (upload_method <> 'authenticated' or upload_expires_at is not null);
-
 -- No rewrite of existing ledger sizes: old originals may still contain 10 MB.
 update storage.buckets set file_size_limit=2000000 where id='post-images';
-
 create or replace function public.initialize_image_storage_reservation() returns trigger
 language plpgsql set search_path = '' as $$
 begin
@@ -29,7 +27,6 @@ begin
     return new;
 end;
 $$;
-
 create or replace function public.track_image_original() returns trigger
 language plpgsql set search_path = '' as $$
 begin
@@ -41,7 +38,6 @@ begin
     return null;
 end;
 $$;
-
 -- This function exposes only a boolean for one owner-scoped reservation.
 create function public.can_upload_reserved_image(bucket text, object_name text) returns boolean
 language sql volatile security definer set search_path = '' as $$
@@ -57,7 +53,6 @@ language sql volatile security definer set search_path = '' as $$
 $$;
 revoke all on function public.can_upload_reserved_image(text,text) from public;
 grant execute on function public.can_upload_reserved_image(text,text) to authenticated;
-
 drop policy post_images_insert_reserved on storage.objects;
 create policy post_images_insert_reserved on storage.objects
     for insert to authenticated with check (

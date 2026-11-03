@@ -14,6 +14,7 @@ from database import engine
 from images.routes import router as images_router
 from posts.routes import router as posts_router
 from profiles.routes import router as profile_router
+from user_social import router as user_social_router
 from moderation.worker import Settings, run_worker
 from images.worker import Settings as ImageSettings, run_worker as run_image_worker
 from health_schemas import DatabaseHealthResponse, HealthResponse
@@ -62,6 +63,7 @@ def worker_status(response: Response):
 app.include_router(images_router)
 app.include_router(posts_router)
 app.include_router(profile_router)
+app.include_router(user_social_router)
 app.include_router(comments_router)
 
 app.add_middleware(
