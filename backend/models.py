@@ -279,6 +279,22 @@ class Follow(Base):
     space_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("public.spaces.id", ondelete="CASCADE"), primary_key=True)
     muted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     followed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserFollow(Base):
+    """A student's follow relationship with another student."""
+
+    __tablename__ = "user_follows"
+    __table_args__ = {"schema": "public"}
+
+    follower_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    followed_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    followed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
 class PostLike(Base):
     __tablename__ = "post_likes"
     __table_args__ = {"schema": "public"}

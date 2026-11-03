@@ -1,9 +1,8 @@
--- FR-32/90–92: service failures must not destroy the only recoverable input.
+-- FR-32/90â€“92: service failures must not destroy the only recoverable input.
 alter table public.image_uploads add column recovery_required boolean not null default false;
 update public.image_uploads set recovery_required=true, asset_cleanup_after=null
 where uploaded_at is not null and processing_status in ('pending','processing','failed')
   and (processing_error is null or processing_error not in ('invalid_image','upload_expired','unused_image'));
-
 create or replace function public.queue_terminal_image_cleanup() returns trigger
 language plpgsql set search_path = '' as $$
 begin
@@ -19,7 +18,6 @@ begin
     return new;
 end;
 $$;
-
 -- Also guard the BEFORE DELETE event used by Storage, including service-role
 -- callers. Do not lock the upload here: the API worker holds that row lock while
 -- calling Storage on a separate connection. Read the committed lifecycle state.

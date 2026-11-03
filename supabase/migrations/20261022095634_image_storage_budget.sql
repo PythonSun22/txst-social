@@ -1,7 +1,6 @@
 -- FR-32: account storage counts object bytes and held capacity, never post references.
 alter table public.image_uploads add column processing_reserved_bytes bigint not null default 0
     check (processing_reserved_bytes >= 0);
-
 create table public.image_storage_objects (
     object_key text primary key,
     owner_id uuid not null references public.profiles(id) on delete restrict,
@@ -47,7 +46,6 @@ update public.image_uploads set processing_reserved_bytes = case purpose
 where processing_status in ('pending', 'processing') and deleted_at is null;
 update public.image_uploads set original_cleanup_after=created_at+interval '7500 seconds'
 where original_deleted_at is null and original_cleanup_after is null;
-
 -- Every new asset has a source-capacity record, including uncertain/failed transfers.
 -- Signed URLs permit the bucket's full 10 MB, regardless of the browser's declared size.
 create function public.initialize_image_storage_reservation() returns trigger

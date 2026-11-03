@@ -8,12 +8,12 @@ import Form from "next/form";
  */
 export default function PostSearch({ defaultValue = "" }: { defaultValue?: string }) {
   return (
-    // next/form turns this GET form into a client-side navigation to /search?q=….
-    <Form action="/search" role="search" className="mb-3 flex gap-2">
+    // next/form turns this GET form into a client-side navigation to /search/posts?q=….
+    <Form action="/search/posts" role="search" className="mb-3 flex gap-2">
       <input
         type="search"
         name="q"
-        // Not `required`: an empty submit must reach /search?q= so old results clear.
+        // Not `required`: an empty submit must reach /search/posts?q= so old results clear.
         maxLength={100}
         defaultValue={defaultValue}
         placeholder="Search posts by title"

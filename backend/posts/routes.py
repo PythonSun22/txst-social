@@ -82,7 +82,7 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
         name = (author.display_name or author.username) if author and author.deleted_at is None else "Former student"
         state, retry = processing_state(post, assets.get(post.id, []), control.paused.is_set())
         result.append(PostResponse(
-            id=post.id, author=name, title=post.title, body=post.body, url=post.url,
+            id=post.id, author=name, author_id=post.author_id, title=post.title, body=post.body, url=post.url,
             can_delete=bool(viewer and viewer.id == post.author_id and viewer.email_verified_at),
             type=post.type, status=post.status, created_at=post.created_at,
             moderation_failed=post.moderation_exhausted_at is not None,
@@ -146,6 +146,34 @@ def get_my_posts(
         .order_by(Post.created_at.desc())
     ).all()
     return serialize_posts(db, list(posts), profile)
+
+
+@router.get("/user/{author_id}", response_model=list[PostResponse])
+def get_user_posts(
+    author_id: UUID,
+    response: Response,
+    viewer: Profile | None = Depends(get_optional_profile),
+    db: Session = Depends(get_db),
+) -> list[PostResponse]:
+    """List a student's public, approved posts for their profile page."""
+    author = db.scalar(select(Profile).where(
+        Profile.id == author_id,
+        Profile.deleted_at.is_(None),
+        Profile.suspended_at.is_(None),
+    ))
+    if author is None:
+        raise HTTPException(404, "Profile not found.")
+    response.headers["Cache-Control"] = "no-store"
+    posts = db.scalars(
+        select(Post)
+        .where(
+            Post.author_id == author_id,
+            Post.deleted_at.is_(None),
+            Post.status == "approved",
+        )
+        .order_by(Post.created_at.desc(), Post.id.desc())
+    ).all()
+    return serialize_posts(db, list(posts), viewer)
 
 
 @router.post("", response_model=PostResponse, status_code=201)

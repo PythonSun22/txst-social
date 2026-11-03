@@ -9,19 +9,15 @@ create table public.majors (
     active      boolean not null default true,
     unique (name, degree)
 );
-
 alter table public.majors enable row level security;
-
 create policy majors_public_read on public.majors
     for select using (active);
-
 alter table public.profiles
     add column major_id uuid references public.majors(id) on delete set null,
     add column profile_image_upload_id uuid
         references public.image_uploads(id) on delete set null,
     add column banner_image_upload_id uuid
         references public.image_uploads(id) on delete set null;
-
 insert into public.majors (name, degree, sort_order)
 select name, degree, row_number() over (order by name, degree)
 from (values
@@ -146,7 +142,6 @@ from (values
     ('Theatre', 'B.F.A.'),
     ('Wildlife Biology', 'B.S.')
 ) as catalog(name, degree);
-
 -- Preserve existing free-text profile data when it exactly matches a catalog major.
 update public.profiles as profile
 set major_id = (

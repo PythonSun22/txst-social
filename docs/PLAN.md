@@ -27,7 +27,7 @@ so this pass is an endpoint and a page — no schema change.
 3. Return the existing `FeedResponse`, so results render with `PostCard`.
 4. Wire `search_router` into `main.py`; add offline tests in
    `backend/tests/test_search.py` mirroring `test_posts.py`.
-5. **Frontend:** `lib/search.ts`, a `/search?q=` page (results + Load more),
+5. **Frontend:** `lib/search.ts`, a `/search/posts?q=` page (results + Load more; `/search` is student search),
    and a `PostSearch` box above the ForAll feed and on the results page. The
    navbar is kept free for a future site-wide search.
 6. An empty search submits and clears results (the box is not `required`).

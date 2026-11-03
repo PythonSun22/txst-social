@@ -390,7 +390,7 @@ footer {
     <h2>Entity relationships</h2>
     <figure>
       <div class="scroller">
-        <svg viewBox="0 0 1180 1020" role="img" aria-label="Entity relationship diagram of the TXST Lynx database: Supabase auth.users feeds profiles; profiles and spaces are joined by follows, moderators and bans; spaces contain posts, which contain comments; post_likes and comment_likes hang off each; moderation_checks and reports reference both posts and comments.">
+        <svg viewBox="0 0 1180 1020" role="img" aria-label="Entity relationship diagram of the TXST Lynx database: Supabase auth.users feeds profiles; profiles and spaces are joined by follows, user_follows, moderators and bans; spaces contain posts, which contain comments; post_likes and comment_likes hang off each; moderation_checks and reports reference both posts and comments.">
           <defs>
             <marker id="mk-m" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
               <polygon points="0,0 8,3 0,6" class="mk-m"/>
@@ -424,6 +424,12 @@ footer {
           <text x="292" y="413" class="elabel" text-anchor="middle">user_id</text>
           <path d="M515,419 L574,419" class="edge" marker-end="url(#mk-m)"/>
           <text x="545" y="413" class="elabel" text-anchor="middle">space_id</text>
+
+          <!-- student-to-student follows: both keys reference profiles -->
+          <path d="M200,426 L200,490 L324,490" class="edge" marker-end="url(#mk-m)"/>
+          <text x="261" y="484" class="elabel" text-anchor="middle">follower_id</text>
+          <path d="M230,426 L230,520 L324,520" class="edge" marker-end="url(#mk-m)"/>
+          <text x="278" y="514" class="elabel" text-anchor="middle">followed_id</text>
 
           <!-- spaces -> colleges -->
           <path d="M805,270 L874,270" class="edge" marker-end="url(#mk-m)"/>
@@ -529,6 +535,14 @@ footer {
           <text x="342" y="414" class="col key">space_id</text><text x="503" y="414" class="tag" text-anchor="end">PK</text>
           <text x="342" y="430" class="col key">user_id</text><text x="503" y="430" class="tag" text-anchor="end">PK</text>
           <text x="342" y="446" class="col">expires_at</text><text x="503" y="446" class="tag" text-anchor="end">FR-95</text>
+
+          <!-- student follows -->
+          <rect x="330" y="466" width="185" height="86" rx="4" class="ent"/>
+          <text x="342" y="484" class="ent-name">user_follows</text>
+          <line x1="330" y1="492" x2="515" y2="492" class="ent-rule"/>
+          <text x="342" y="504" class="col key">follower_id</text><text x="503" y="504" class="tag" text-anchor="end">PK &middot; FK</text>
+          <text x="342" y="520" class="col key">followed_id</text><text x="503" y="520" class="tag" text-anchor="end">PK &middot; FK</text>
+          <text x="342" y="536" class="col">followed_at</text><text x="503" y="536" class="tag" text-anchor="end">tstz</text>
 
           <!-- spaces -->
           <rect x="580" y="196" width="225" height="230" rx="4" class="ent-hub"/>
@@ -636,7 +650,7 @@ footer {
         </svg>
       </div>
 
-      <figcaption>Every post belongs to exactly one <code>space</code>, and General is one of those spaces rather than a blend of the others &mdash; which is why <code>posts.space_id</code> is a single plain foreign key instead of three nullable ones. That is decision <strong>[D-2]</strong>, and it is what makes <code>follows</code>, <code>moderators</code> and <code>bans</code> one table each rather than two.</figcaption>
+    <figcaption>Every post belongs to exactly one <code>space</code>, and General is one of those spaces rather than a blend of the others &mdash; which is why <code>posts.space_id</code> is a single plain foreign key instead of three nullable ones. That is decision <strong>[D-2]</strong>. Space follows and student follows remain separate relationships.</figcaption>
 
       <ul class="legend">
         <li>
@@ -674,6 +688,7 @@ footer {
         <ul>
           <li><b>spaces</b> General, a college, or a student-made community. One table, one <code>kind</code>.</li>
           <li><b>follows</b> Who follows what, and whether they've muted it.</li>
+          <li><b>user_follows</b> One-way follows between student profiles; self-follows are forbidden.</li>
           <li><b>moderators</b> Who may remove things, and only inside their own space.</li>
           <li><b>bans</b> Who may not post there, and until when.</li>
         </ul>

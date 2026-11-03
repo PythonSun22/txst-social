@@ -102,7 +102,7 @@ are retained by attachment position in the existing JSON audit.
 Posts start private/pending, then approve or block automatically; failed screening
 retries with a persisted limit and an author-facing exhaustion notice. Threaded
 comments and comment likes work and publish unscreened; reports remain schema
-only. Basic post-title search (`GET /search/posts`, `/search`, FR-80) is on
+only. Basic post-title search (`GET /search/posts`, page `/search/posts`, FR-80) is on
 `feature/search`. Apply the new moderation migration and configure
 the backend Storage secret and explicitly enable the worker before use; no
 shared deployment has occurred. See
@@ -139,7 +139,7 @@ context for next time. No match → add a new subsection (name from
 ### Sachin Pandey — xachin300@gmail.com
 
 - **Working on:** basic post search on `feature/search` (FR-80) — endpoint,
-  `/search` page and a `PostSearch` box above the ForAll feed; pushed, PR into
+  `/search/posts` page and a `PostSearch` box above the ForAll feed; pushed, PR into
   `dev` pending. The navbar is reserved for a later site-wide search. Also repo tooling
   and assistant context (`CLAUDE.md`, `AGENTS.md`).
 - **Notes for Claude:** a teammate owns the colleges/spaces work — don't touch

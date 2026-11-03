@@ -1,6 +1,6 @@
 import { apiRequest } from "./api";
 export interface FeedPost {
-  id: string; author: string; title: string; body: string | null; url: string | null;
+  id: string; author: string; author_id: string | null; title: string; body: string | null; url: string | null;
   can_delete: boolean;
   author_avatar_upload_id?: string | null;
   type: "text" | "image" | "link";
@@ -15,10 +15,12 @@ export interface FeedPage { items: FeedPost[]; next_cursor: string | null }
 export const fetchPosts = (cursor?: string, signal?: AbortSignal, space = "general") => {
   const params = new URLSearchParams({ space });
   if(cursor) params.set("cursor", cursor);
-  return apiRequest<FeedPage>(`/posts?${params}`, { signal}, true); 
+  return apiRequest<FeedPage>(`/posts?${params}`, { signal}, true);
 };
 export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
+export const getUserPosts = (authorId: string, signal?: AbortSignal) =>
+  apiRequest<FeedPost[]>(`/posts/user/${encodeURIComponent(authorId)}`, { signal }, true);
 export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[] }) =>
   apiRequest<FeedPost>("/posts", { method: "POST", body: JSON.stringify(payload) });
 export const fetchPost = (id: string, signal?: AbortSignal) =>

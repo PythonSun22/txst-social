@@ -39,6 +39,8 @@ export interface CurrentProfile {
   followed_space_count: number;
   joined_community_count: number;
   email_verified: boolean;
+  follower_count: number;
+  following_count: number;
 }
 
 export interface MajorOption {
