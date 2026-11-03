@@ -16,14 +16,14 @@ const links = [
 
 /**
  * Site-wide top bar on application pages, with the gold accent stripe beneath.
- * The account entry page uses its own branding and does not need this header.
+ * Account pages use their own branding and do not need this header.
  */
 export default function Navbar() {
-  const isLoginPage = usePathname() === "/login";
+  const isAccountPage = ["/login", "/choose-username"].includes(usePathname());
   const [profile, setProfile] = useState<CurrentProfile | null>(null);
 
   useEffect(() => {
-    if (isLoginPage) return;
+    if (isAccountPage) return;
     let active = true;
     let request: AbortController | undefined;
     async function refresh() {
@@ -43,9 +43,9 @@ export default function Navbar() {
     });
     void refresh();
     return () => { active = false; request?.abort(); data.subscription.unsubscribe(); };
-  }, [isLoginPage]);
+  }, [isAccountPage]);
 
-  if (isLoginPage) return null;
+  if (isAccountPage) return null;
 
   return (
     <header className="sticky top-0 z-50">

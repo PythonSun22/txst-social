@@ -254,6 +254,12 @@ Working endpoints today are `GET /health`, `GET /db-health`, `GET /profiles`,
 `GET /auth/me`, `PATCH /auth/me`, and `GET /profile/options`. `/login` signs
 existing users in through Supabase Auth and sends authenticated students to
 the ForAll feed at `/` after sign-in or email-code confirmation (FR-01/02).
+New accounts instead open `/choose-username` after email confirmation. They must
+choose a unique public username before continuing to `/profile`; the ordinary
+profile editor cannot change it later (FR-06). The signup trigger assigns an
+unrelated random provisional handle before this choice. Apply
+`20261103000000_private_signup_usernames.sql` locally before running this flow;
+shared deployment remains subject to review.
 FastAPI validates bearer tokens with the project's Auth server, then loads the
 matching profile. Inactive accounts are rejected (FR-96); a reusable write
 dependency requires verified email (FR-02). Post routes derive `author_id` from
