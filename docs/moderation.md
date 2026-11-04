@@ -13,7 +13,7 @@ inline image bytes, so loopback signed URLs are no longer a blocker.
 without FastAPI or a database connection. The API now starts
 `backend/moderation/worker.py` in a background thread (FR-90–92).
 
-`POST /posts` currently saves General/ForAll posts as author-visible `pending`.
+`POST /posts` saves General/ForAll and college posts as author-visible `pending`.
 The committed post row is its durable queue entry. The worker screens eligible
 posts, including the existing pending backlog, and saves `approved` or `blocked`
 plus a moderation audit in one transaction. By default, any overall or category
@@ -30,8 +30,8 @@ current college-project scope must not depend on a staffed platform admin or
 human-review queue. This baseline supersedes the human-review recommendations
 in the historical suggestions below for the current scope.
 
-**Current scope:** screening and publication for the existing General/ForAll
-feed, including its backlog of pending posts. Automated user-report handling
+**Current scope:** screening and publication for the General/ForAll and college
+feeds, including their backlog of pending posts. Automated user-report handling
 is recorded here for later work.
 College/subcommunity workflows and human moderation tools are outside this
 immediate slice. Posts with images require screening of their attachments as
