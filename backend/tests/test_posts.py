@@ -51,7 +51,7 @@ class PostTests(unittest.TestCase):
 
     def test_my_posts_uses_feed_post_contract(self):
         rows=[]
-        for values in ([self.post],[self.user],[],[]):
+        for values in ([self.post],[self.user],[self.space],[], []):
             result=Mock(); result.all.return_value=values; rows.append(result)
         self.db.scalars.side_effect=rows
         app.dependency_overrides[get_db]=lambda:self.db
@@ -74,6 +74,7 @@ class PostTests(unittest.TestCase):
                                  (Profile(id=uuid4(), email_verified_at=self.user.email_verified_at), False),
                                  (Profile(id=self.user.id), False)):
             with self.subTest(expected=expected, viewer=viewer):
+                self.db.scalars.side_effect=[Mock(all=Mock(return_value=v)) for v in ([], [self.space], [], [])]
                 self.assertEqual(serialize_posts(self.db, [self.post], viewer)[0].can_delete, expected)
 
     def test_processing_notice_prioritizes_rejection_and_unrecoverable_inputs(self):

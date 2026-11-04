@@ -50,6 +50,7 @@ class PostResponse(BaseModel):
     liked: bool
     media: list[PostMediaResponse]
     author_avatar_upload_id: UUID | None = None
+    space_name: str
 
 
 class FeedResponse(BaseModel):

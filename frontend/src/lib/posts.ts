@@ -10,6 +10,7 @@ export interface FeedPost {
   can_retry: boolean;
   created_at: string; like_count: number; comment_count: number; liked: boolean;
   media: { position: number; width: number | null; height: number | null }[];
+  space_name: string;
 }
 export interface FeedPage { items: FeedPost[]; next_cursor: string | null }
 export const fetchPosts = (cursor?: string, signal?: AbortSignal, space = "general") => {

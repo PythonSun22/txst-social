@@ -61,8 +61,9 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
         return []
     ids = [p.id for p in posts]
     authors = {p.id: p for p in db.scalars(select(Profile).where(Profile.id.in_(
-        {p.author_id for p in posts if p.author_id}
-    ))).all()}
+          {p.author_id for p in posts if p.author_id}
+      ))).all()}
+    spaces = {s.id: s.name for s in db.scalars(select(Space).where(Space.id.in_({p.space_id for p in posts}))).all()}
     attachments: dict[UUID, list[PostMediaResponse]] = {pid: [] for pid in ids}
     for media in db.scalars(select(PostMedia).where(PostMedia.post_id.in_(ids)).order_by(PostMedia.position)).all():
         attachments[media.post_id].append(PostMediaResponse(position=media.position, width=media.width, height=media.height))
@@ -89,7 +90,7 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
             processing_state=state, can_retry=bool(retry and viewer and viewer.id == post.author_id),
             like_count=post.like_count, comment_count=post.comment_count,
             liked=post.id in liked, media=attachments[post.id],
-            author_avatar_upload_id=author.profile_image_upload_id if author and author.deleted_at is None and author.suspended_at is None else None,
+            author_avatar_upload_id=author.profile_image_upload_id if author and author.deleted_at is None and author.suspended_at is None else None, space_name=spaces[post.space_id]
         ))
     return result
 
