@@ -96,6 +96,7 @@ txst-social/
 │   ├── comments/              # routes.py and schemas.py
 │   ├── images/                # routes, schemas, processing, worker,
 │   │                          # caller Storage signing and worker byte transfers
+│   ├── search.py              # GET /search/posts — title search (FR-80)
 │   ├── moderation/            # client, context, worker and offline evaluation
 │   └── user_social.py         # student search, public profiles and follows
 ├── supabase/migrations/
@@ -258,7 +259,11 @@ that profile and check bans for the target space (FR-95).
 Application queries still use the server's SQLAlchemy connection, not the
 browser's Supabase client. Auth does not automatically apply viewer RLS to SQL.
 General posts, ordered images, chronological feed reads and post likes now work
-through `/posts`. Comments and reports remain **schema only**.
+through `/posts`. Threaded comments and comment likes work through
+`/posts/{id}/comments` and publish unscreened. `GET /search/posts` searches
+post titles with the feed's visibility rule and cursor (FR-80, FR-66); the
+box above the ForAll feed opens `/search/posts?q=…` (`/search` is student search). Bodies, space names and comments are not searched
+yet. Reports remain **schema only**.
 `GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
 shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
 seed) linking to `/colleges/[slug]` feeds (FR-13). Creating posts and the

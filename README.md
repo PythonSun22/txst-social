@@ -347,6 +347,22 @@ and routes post-like writes through FastAPI. The shared development database
 already has this and the branding migration under the explicitly authorized
 2026-09-24 exception; the two-approval merge rule still applies.
 
+### Search (FR-80, FR-66)
+
+`GET /search/posts?q=<text>&cursor=&limit=` matches partial text in post
+**titles** across every space, newest first, with no migration. A title matches
+when either every typed word starts a word in it ("calc tut" finds "Calculus
+tutoring", using the existing `posts.search_vector` index and stemming), or it
+contains the typed text anywhere (`ILIKE`, so "ulus" also finds it). Only
+letters and digits reach the word index, and `%`/`_` are matched literally, so
+no input causes an error. The substring part scans titles; a `pg_trgm` index
+(a migration) is the upgrade path if that becomes slow. Typos are not matched.
+Visibility is the same as the feed: approved posts, plus the caller's own
+pending posts. The response is the feed's `{ items, next_cursor }` shape.
+
+A search box above the ForAll feed opens `/search/posts?q=…` (`/search` is student search); an empty search clears results. Post bodies, space names, comments,
+typo tolerance and relevance ranking are not supported yet; see `docs/PLAN.md`.
+
 ### Health Check
 
 ```text
