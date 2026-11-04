@@ -80,7 +80,7 @@ class WorkerUnitTests(unittest.TestCase):
 
     def test_claim_sql_scopes_queue_and_skips_locks(self):
         sql = str(eligible_posts(datetime.now(timezone.utc)).compile(dialect=postgresql.dialect()))
-        for clause in ("spaces.kind =", "spaces.slug =", "spaces.deleted_at IS NULL",
+        for clause in ("spaces.kind IN", "spaces.deleted_at IS NULL",
                        "posts.moderation_exhausted_at IS NULL", "posts.moderation_next_attempt_at <=",
                        "ORDER BY public.posts.created_at, public.posts.id", "FOR UPDATE OF posts SKIP LOCKED"):
             self.assertIn(clause, sql)
