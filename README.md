@@ -215,8 +215,14 @@ belongs in these Auth settings; never put a service-role or secret key in a
 Open `/login` and sign in with an existing Texas State email/password account.
 The login page uses its own account branding and does not show the site navigation
 header; other pages retain that header. Successful sign-in or email-code
-confirmation opens the ForAll feed at `/`; an existing signed-in visitor to
-`/login` is redirected there too.
+confirmation opens the ForAll feed at `/` for completed profiles. Newly confirmed
+accounts open `/choose-username` first (FR-06). They must choose a unique public
+`@username` there; the random handle assigned at signup is only provisional.
+After saving, they open `/profile` without its editor. The ordinary profile
+editor cannot change the username. An existing signed-in visitor to `/login`
+follows the same completed/incomplete routing.
+Apply `20261103000000_private_signup_usernames.sql` to the local stack before
+testing new signups. Shared migration deployment requires review and coordination.
 Supabase's browser SDK manages session persistence and refresh. Passwords go
 directly to Supabase Auth. The browser uses Supabase for Auth and authenticated image
 transfers; application records continue through FastAPI. Account creation and
@@ -244,7 +250,7 @@ students only.
 The existing backend database connection must be authorized to read profiles.
 It is a trusted server connection: passing a bearer token to FastAPI does not
 change its SQL role or set `auth.uid()`. Application authorization is enforced
-explicitly; no browser profile-read policy is needed.
+explicitly. No browser profile-read policy is added here.
 The migrations' signup trigger must have created the account's profile; the API
 does not create missing profiles or write mirrored email/verification fields.
 
@@ -262,9 +268,10 @@ Run the isolated backend tests from `backend/`:
 uv run python -m unittest discover -s tests -v
 ```
 
-These tests mock Supabase Auth and database access. For a live smoke test, sign
-in, confirm the redirect to ForAll, refresh the feed, then open `/profile` to
-check the account and sign out.
+These tests mock Supabase Auth and database access. For a live smoke test, create
+a new account, confirm its email, choose a unique username on the dedicated
+page, and check that `/profile` opens without the editor. Existing completed
+accounts still open ForAll.
 Persistent posts, images and likes are described below.
 
 ### Image upload test (FR-02, FR-32, FR-90)

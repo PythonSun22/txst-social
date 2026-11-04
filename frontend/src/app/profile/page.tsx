@@ -80,8 +80,14 @@ export default function Profile() {
     let active = true;
 
     async function loadProfile() {
+      let redirecting = false;
       try {
         const data = await getCurrentProfile();
+        if (data && !data.username_chosen) {
+          redirecting = true;
+          router.replace("/choose-username");
+          return;
+        }
         const userPosts = data ? await getMyPosts() : [];
 
         if (active) {
@@ -97,7 +103,7 @@ export default function Profile() {
           );
         }
       } finally {
-        if (active) {
+        if (active && !redirecting) {
           setLoading(false);
         }
       }
@@ -109,7 +115,7 @@ export default function Profile() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
 
   async function signOut() {
     setSigningOut(true);

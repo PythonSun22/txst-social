@@ -95,6 +95,9 @@ private image uploads with browser crop/resize, persistent General text/image/mi
 posts, chronological cursor feed and authenticated persistent post likes/unlikes.
 Successful login and email-code confirmation open the ForAll feed; authenticated
 visitors to `/login` are redirected there (FR-01/02).
+After the private-username migration, newly confirmed accounts open a dedicated
+`/choose-username` page, then `/profile` after making their one permanent choice.
+The ordinary profile editor cannot change usernames (FR-06).
 College pages (`/colleges`, `/colleges/[slug]`) read per-college feeds via
 `GET /posts?space=<slug>`; posting to colleges is not built yet.
 ForAll moderation screens text/images in an opt-in background worker (FR-90–92).
@@ -165,6 +168,6 @@ context for next time. No match → add a new subsection (name from
 
 ### Misan Parajuli — bgg66@txstate.edu
 
-- **Current focus:** multiple-image General/ForAll moderation (FR-32, FR-90–92): separate text-plus-one-image requests, whole-post decision, and per-image audit results. Validate with a fresh multi-image post after deploying the code; exhausted posts require a deliberate retry. Local loopback image handoff and representative contextual evaluation remain separate work.
-- **Latest session:** offline tests cover safe attachments, later-image flags/failures, audit privacy and worker state transitions. No live provider calls, shared database operations, configuration changes or exhausted-post resets were performed.
+- **Current focus:** one-time private signup usernames (FR-06). The migration assigns unrelated provisional handles and preserves existing developer profiles; newly confirmed users choose a permanent handle on `/choose-username` before opening `/profile`. Apply and test the migration locally before review. Shared deployment is pending.
+- **Latest session:** replaced the earlier profile-editor/cooldown proposal with a dedicated page and one-time API action. Twenty-seven auth/profile backend tests, frontend lint, TypeScript, and 25 frontend tests passed. Docker was unavailable, so the new migration and live signup flow remain untested. Existing frontend package changes and generated `.next/` are unrelated and remain unstaged.
 - **Session context:** no staffed platform admin or human-review dependency. The worker screens text/images oldest first; default policy blocks any flag, while an experimental backend setting rechecks lone lower-score text `violence` or a low-score `violence`/`harassment` pair when context identifies a past incident or ordinary animal context. The current local violence ceiling is 0.7; the harassment ceiling is 0.65. Failures remain pending with 3 total attempts by default (30s/120s delays). State and audits persist; pending cards poll for results. The earlier lone-violence synthetic trial reduced false blocks from 6 to 0 across 20 harmless examples while both rules blocked 20 harmful examples; this does not evaluate the newer combined-flag or animal rule or establish production safety. The ignored local backend `.env` has the option enabled against loopback Supabase, and a fresh post is required because blocked posts are not reprocessed. Local signed image URLs caused OpenAI HTTP 400; a one-off Base64 data-URL test succeeded, but the temporary Python adapter was reverted at the user's request. The new migration is not applied to the shared database; pending images require a backend Storage secret. Setup and report safeguards are in `docs/moderation.md`.

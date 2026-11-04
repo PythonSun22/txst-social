@@ -28,6 +28,7 @@ class Profile(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     username: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
+    username_chosen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)

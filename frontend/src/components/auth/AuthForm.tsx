@@ -79,7 +79,7 @@ export default function AuthForm() {
   }, []);
 
   useEffect(() => {
-    if (profile) router.replace("/");
+    if (profile) router.replace(profile.username_chosen ? "/" : "/choose-username");
   }, [profile, router]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -155,7 +155,7 @@ export default function AuthForm() {
       {loading || profile ? (
         <div role="status" className="flex min-h-44 items-center gap-3 text-sm text-muted-foreground">
           <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-          {profile ? "Opening ForAll…" : "Loading your account…"}
+          {profile ? (profile.username_chosen ? "Opening ForAll…" : "Opening username setup…") : "Loading your account…"}
         </div>
       ) : mode === "confirm" ? (
         <form onSubmit={submit} className="space-y-6">

@@ -1,5 +1,7 @@
 """Pydantic contracts for public and current-user profile APIs."""
 
+import re
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -71,7 +73,7 @@ class ProfileOptionsResponse(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    """Fields students may edit; identity and counters are never accepted."""
+    """Editable public fields; account identity and counters stay server-owned."""
 
     display_name: str | None = Field(default=None, max_length=80)
     bio: str | None = Field(default=None, max_length=500)
@@ -92,10 +94,26 @@ class ProfileUpdate(BaseModel):
         return value or None
 
 
+class UsernameChoice(BaseModel):
+    """The one-time public handle selection after email verification (FR-06)."""
+
+    username: str = Field(max_length=20)
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"[a-z0-9_]{3,20}", value):
+            raise ValueError("Use 3–20 letters, numbers, or underscores.")
+        return value
+
+
 class CurrentProfileResponse(ProfileResponse):
     """The caller's profile and verification state, without private fields."""
 
     email_verified: bool
+    username_chosen: bool = False
     home_college: HomeCollegeResponse | None = None
     followed_space_count: int = 0
     joined_community_count: int = 0

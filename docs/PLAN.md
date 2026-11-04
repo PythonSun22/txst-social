@@ -8,6 +8,31 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ---
 
+## One-time signup username (FR-01, FR-02, FR-06)
+
+Implemented in the checkout. Auth/profile tests, frontend lint, TypeScript,
+and frontend tests pass. Local migration and live signup checks await Docker.
+
+1. Keep the neutral random provisional username on new Auth accounts. Record
+   whether a username was chosen; mark existing developer profiles as complete.
+2. Add a verified-account endpoint that accepts one nonblank unique username,
+   commits it atomically, and rejects a second choice. Remove username edits
+   from the ordinary profile update API.
+3. Send newly confirmed accounts to a dedicated `/choose-username` page with
+   the signup background, the requested heading and permanent-choice reminder.
+   After success, open `/profile` without its editor. Completed sign-ins open
+   ForAll as before.
+4. Hide the application header on the choice page, update feature documentation,
+   and run focused backend/frontend checks.
+
+**Constraints:** Supabase Auth owns identity, profile IDs remain stable, and
+the existing database uniqueness/format rules remain authoritative. Browser
+profile writes go through FastAPI. Keep existing developer usernames unchanged.
+**Non-goals:** Profile editor redesign, existing-account migration, moderation,
+posts, or shared database deployment.
+
+---
+
 ## Basic post search (`feature/search`, FR-80)
 
 Sprint 5 asks to "begin basic search". The core migration already maintains

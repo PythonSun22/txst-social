@@ -1,8 +1,10 @@
 """Profile reads, selectable metadata, and current-user edits (FR-05/06/11)."""
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,7 @@ from profiles.schemas import (
     ProfileOptionsResponse,
     ProfileResponse,
     ProfileUpdate,
+    UsernameChoice,
 )
 
 router = APIRouter(tags=["profiles"])
@@ -96,6 +99,7 @@ def current_profile_response(db: Session, profile: Profile) -> CurrentProfileRes
     return CurrentProfileResponse(
         **ProfileResponse.model_validate(profile).model_dump(),
         email_verified=profile.email_verified_at is not None,
+        username_chosen=profile.username_chosen_at is not None,
         home_college=home_college,
         followed_space_count=followed_space_count,
         joined_community_count=joined_community_count,
@@ -114,6 +118,33 @@ def current_profile(
     profile: Profile = Depends(get_current_profile),
     db: Session = Depends(get_db),
 ) -> CurrentProfileResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return current_profile_response(db, profile)
+
+
+@router.post("/auth/me/username", response_model=CurrentProfileResponse)
+def choose_username(
+    payload: UsernameChoice,
+    response: Response,
+    profile: Profile = Depends(require_verified_profile),
+    db: Session = Depends(get_db),
+) -> CurrentProfileResponse:
+    """Choose one public username after verification (FR-02, FR-06)."""
+    db.execute(select(Profile.id).where(Profile.id == profile.id).with_for_update())
+    db.refresh(profile)
+    if profile.username_chosen_at is not None:
+        raise HTTPException(409, "Your username is already set and cannot be changed.")
+
+    profile.username = payload.username
+    profile.username_chosen_at = datetime.now(timezone.utc)
+    try:
+        db.commit()
+    except IntegrityError as cause:
+        db.rollback()
+        if getattr(getattr(cause.orig, "diag", None), "constraint_name", None) == "profiles_username_key":
+            raise HTTPException(409, "That username is already taken. Choose another.") from None
+        raise
+    db.refresh(profile)
     response.headers["Cache-Control"] = "no-store"
     return current_profile_response(db, profile)
 

@@ -167,6 +167,11 @@ class AuthTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertFalse(response.json()["email_verified"])
             self.assertEqual(client.post("/write", headers=headers).status_code, 403)
+            self.assertEqual(
+                self.client.post("/auth/me/username", json={"username": "bobcat2"}, headers=headers).status_code,
+                403,
+            )
+            self.db.commit.assert_not_called()
 
     def test_cors_allows_configured_frontend_authorization_header(self):
         headers = {

@@ -39,6 +39,7 @@ export interface CurrentProfile {
   followed_space_count: number;
   joined_community_count: number;
   email_verified: boolean;
+  username_chosen: boolean;
   follower_count: number;
   following_count: number;
 }
@@ -84,4 +85,11 @@ export const updateCurrentProfile = (updates: ProfileUpdate) =>
   apiRequest<CurrentProfile>("/auth/me", {
     method: "PATCH",
     body: JSON.stringify(updates),
+  });
+
+/** Choose the account's one permanent public username (FR-06). */
+export const chooseUsername = (username: string) =>
+  apiRequest<CurrentProfile>("/auth/me/username", {
+    method: "POST",
+    body: JSON.stringify({ username }),
   });

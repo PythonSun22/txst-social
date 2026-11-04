@@ -57,6 +57,7 @@ revisit one — several were argued through and closed deliberately.
 | **One `spaces` table** | Campus, colleges and communities are one table with a `kind` enum, not three parallel tables. This is decision `[D-2]` and reversing it costs six tables and every feed query. |
 | **Supabase Auth owns identity** | We store no passwords. `public.profiles.id` **is** `auth.users.id`. |
 | **`txstate.edu` only** | Enforced in the database by a trigger on `auth.users`, not only in application code. |
+| **Private NetIDs** | New accounts receive a random provisional handle unrelated to the university email prefix. After verification, students choose their public username once on a dedicated page; the application does not permit later changes (FR-06). |
 | **Screening precedes publication** | A post exists as `pending` and is invisible to everyone but its author until the classifier approves it. Comments are not screened; they are created `approved`. |
 | **ForAll moderation is automatic** | By default, any overall/category flag blocks publication. An experimental backend-only local opt-in can recheck lower-score text `violence`, alone or paired with `harassment`, for a confirmed past-incident or ordinary animal context; it is off by default. Screening failures stay pending with bounded retries; no human-review dependency at this feed level (FR-90–92). |
 | **Colleges are seeded** | Ten of them, inserted by migration. Users cannot create a college. |
@@ -133,8 +134,9 @@ full provider audits; it has not been applied to the shared database.
 Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
-- `profiles` — a student. `id` is `auth.users.id`. Holds username, bio, a
-  normalized major selection, optional academic level, home college, avatar and
+- `profiles` — a student. `id` is `auth.users.id`. Holds username, the timestamp
+  of its one-time choice, bio, a normalized major selection,
+  optional academic level, home college, avatar and
   banner upload references, karma totals, admin flag, and suspension. `email` and
   `email_verified_at` are **mirrored from `auth.users` by trigger** — never
   write them from application code.
@@ -252,6 +254,12 @@ Working endpoints today are `GET /health`, `GET /db-health`, `GET /profiles`,
 `GET /auth/me`, `PATCH /auth/me`, and `GET /profile/options`. `/login` signs
 existing users in through Supabase Auth and sends authenticated students to
 the ForAll feed at `/` after sign-in or email-code confirmation (FR-01/02).
+New accounts instead open `/choose-username` after email confirmation. They must
+choose a unique public username before continuing to `/profile`; the ordinary
+profile editor cannot change it later (FR-06). The signup trigger assigns an
+unrelated random provisional handle before this choice. Apply
+`20261103000000_private_signup_usernames.sql` locally before running this flow;
+shared deployment remains subject to review.
 FastAPI validates bearer tokens with the project's Auth server, then loads the
 matching profile. Inactive accounts are rejected (FR-96); a reusable write
 dependency requires verified email (FR-02). Post routes derive `author_id` from

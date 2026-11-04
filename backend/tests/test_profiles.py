@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from unittest.mock import Mock
 from uuid import UUID, uuid4
 
+from sqlalchemy.exc import IntegrityError
+
 os.environ["DATABASE_URL"] = "postgresql+psycopg://test:test@localhost/test"
 os.environ["IMAGE_PROCESSING_ENABLED"] = "false"
 
@@ -60,6 +62,7 @@ class ProfileTests(unittest.TestCase):
         response = self.client.get("/auth/me")
 
         self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["username_chosen"])
         self.assertEqual(response.json()["home_college"], {
             "id": str(college_id),
             "name": "College of Science and Engineering",
@@ -146,6 +149,68 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(response.json()["profile_image_upload_id"], str(upload_id))
         self.assertEqual(response.json()["banner_image_upload_id"], str(banner_id))
         self.db.commit.assert_called_once()
+
+    def test_first_username_choice_sets_permanent_handle(self):
+        response = self.client.post("/auth/me/username", json={"username": "  New_Bobcat  "})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["username"], "new_bobcat")
+        self.assertTrue(response.json()["username_chosen"])
+        self.assertIsNotNone(self.profile.username_chosen_at)
+
+    def test_blank_username_cannot_complete_choice(self):
+        self.profile.username = "lynx_123456789abcdef"
+
+        for username in (None, "", "  "):
+            with self.subTest(username=username):
+                response = self.client.post("/auth/me/username", json={"username": username})
+                self.assertEqual(response.status_code, 422)
+        self.assertEqual(self.profile.username, "lynx_123456789abcdef")
+        self.db.commit.assert_not_called()
+
+    def test_second_username_choice_is_rejected(self):
+        self.profile.username_chosen_at = datetime.now(timezone.utc)
+
+        response = self.client.post("/auth/me/username", json={"username": "another_bobcat"})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.profile.username, "bobcat")
+        self.db.commit.assert_not_called()
+
+    def test_username_is_not_editable_through_profile_patch(self):
+        response = self.client.patch("/auth/me", json={"username": "another_bobcat"})
+
+        self.assertEqual(response.status_code, 422)
+        self.db.commit.assert_not_called()
+
+    def test_other_profile_edits_work_after_username_choice(self):
+        self.profile.username_chosen_at = datetime.now(timezone.utc)
+
+        response = self.client.patch("/auth/me", json={
+            "display_name": "Bobcat Student",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["display_name"], "Bobcat Student")
+        self.assertEqual(self.profile.username, "bobcat")
+
+    def test_invalid_username_is_rejected(self):
+        for username in ("ab", "bad-name", "a" * 21):
+            with self.subTest(username=username):
+                response = self.client.post("/auth/me/username", json={"username": username})
+                self.assertEqual(response.status_code, 422)
+        self.db.commit.assert_not_called()
+
+    def test_taken_username_is_reported(self):
+        original = Mock()
+        original.diag.constraint_name = "profiles_username_key"
+        self.db.commit.side_effect = IntegrityError("update", {}, original)
+
+        response = self.client.post("/auth/me/username", json={"username": "taken"})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("already taken", response.json()["detail"])
+        self.db.rollback.assert_called_once()
 
     def test_profile_update_rejects_major_from_another_college(self):
         major_id, selected_college_id = uuid4(), uuid4()
