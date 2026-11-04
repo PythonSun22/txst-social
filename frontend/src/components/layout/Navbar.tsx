@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import PawIcon from "@/components/ui/PawIcon";
 import { getSupabase } from "@/lib/supabase";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
@@ -14,13 +15,15 @@ const links = [
 ];
 
 /**
- * Site-wide top bar: logo, main navigation and the account link, with the gold
- * accent stripe underneath. Replaces the old left Sidebar.
+ * Site-wide top bar on application pages, with the gold accent stripe beneath.
+ * The account entry page uses its own branding and does not need this header.
  */
 export default function Navbar() {
+  const isLoginPage = usePathname() === "/login";
   const [profile, setProfile] = useState<CurrentProfile | null>(null);
 
   useEffect(() => {
+    if (isLoginPage) return;
     let active = true;
     let request: AbortController | undefined;
     async function refresh() {
@@ -40,7 +43,9 @@ export default function Navbar() {
     });
     void refresh();
     return () => { active = false; request?.abort(); data.subscription.unsubscribe(); };
-  }, []);
+  }, [isLoginPage]);
+
+  if (isLoginPage) return null;
 
   return (
     <header className="sticky top-0 z-50">

@@ -93,6 +93,8 @@ _Claude keeps this current — see above._
 **Working today:** health/profiles, Supabase existing-account login and identity,
 private image uploads with browser crop/resize, persistent General text/image/mixed
 posts, chronological cursor feed and authenticated persistent post likes/unlikes.
+Successful login and email-code confirmation open the ForAll feed; authenticated
+visitors to `/login` are redirected there (FR-01/02).
 College pages (`/colleges`, `/colleges/[slug]`) read per-college feeds via
 `GET /posts?space=<slug>`; posting to colleges is not built yet.
 ForAll moderation screens text/images in an opt-in background worker (FR-90–92).
