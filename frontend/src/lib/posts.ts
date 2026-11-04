@@ -20,10 +20,9 @@ export const fetchPosts = (cursor?: string, signal?: AbortSignal, space = "gener
 export const getMyPosts = (signal?: AbortSignal) =>
   apiRequest<FeedPost[]>("/posts/me", { signal });
 export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[]; space: string; }) =>
+    apiRequest<FeedPost>("/posts", { method: "POST", body: JSON.stringify(payload) });
 export const getUserPosts = (authorId: string, signal?: AbortSignal) =>
   apiRequest<FeedPost[]>(`/posts/user/${encodeURIComponent(authorId)}`, { signal }, true);
-export const createPost = (payload: { submission_id: string; title: string; body: string | null; image_ids: string[] }) =>
-  apiRequest<FeedPost>("/posts", { method: "POST", body: JSON.stringify(payload) });
 export const fetchPost = (id: string, signal?: AbortSignal) =>
   apiRequest<FeedPost>(`/posts/${id}`, { signal }, true);
 export const setPostLike = (id: string, liked: boolean) => apiRequest<{ liked: boolean; like_count: number }>(
