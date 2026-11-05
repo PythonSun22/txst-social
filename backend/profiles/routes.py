@@ -54,10 +54,7 @@ def validate_profile_image(
     return upload
 
 
-def current_profile_response(db: Session, profile: Profile) -> CurrentProfileResponse:
-    pending_avatar = db.get(ImageUpload, profile.pending_profile_image_upload_id) if profile.pending_profile_image_upload_id else None
-    pending_banner = db.get(ImageUpload, profile.pending_banner_image_upload_id) if profile.pending_banner_image_upload_id else None
-    home_college = None
+def get_home_college(db: Session, profile: Profile) -> HomeCollegeResponse | None:
     if profile.home_college_id is not None:
         college_row = db.execute(
             select(Space, College)
@@ -69,9 +66,13 @@ def current_profile_response(db: Session, profile: Profile) -> CurrentProfileRes
             )
         ).one_or_none()
         if college_row is not None:
-            home_college = college_response(college_row)
+            return college_response(college_row)
+    return None
 
-    followed_space_count, joined_community_count = db.execute(
+
+def profile_space_counts(db: Session, profile_id: UUID) -> tuple[int, int]:
+    """One shared count definition for own and public profiles (FR-05/70–73)."""
+    followed, communities = db.execute(
         select(
             func.count(Follow.space_id),
             func.count(Follow.space_id).filter(Space.kind == "community"),
@@ -79,11 +80,19 @@ def current_profile_response(db: Session, profile: Profile) -> CurrentProfileRes
         .select_from(Follow)
         .join(Space, Space.id == Follow.space_id)
         .where(
-            Follow.user_id == profile.id,
+            Follow.user_id == profile_id,
             Space.kind.in_(["college", "community"]),
             Space.deleted_at.is_(None),
         )
     ).one()
+    return followed, communities
+
+
+def current_profile_response(db: Session, profile: Profile) -> CurrentProfileResponse:
+    pending_avatar = db.get(ImageUpload, profile.pending_profile_image_upload_id) if profile.pending_profile_image_upload_id else None
+    pending_banner = db.get(ImageUpload, profile.pending_banner_image_upload_id) if profile.pending_banner_image_upload_id else None
+    home_college = get_home_college(db, profile)
+    followed_space_count, joined_community_count = profile_space_counts(db, profile.id)
 
     user_follows_ready = db.scalar(text("select to_regclass('public.user_follows') is not null")) is True
     follower_count = 0

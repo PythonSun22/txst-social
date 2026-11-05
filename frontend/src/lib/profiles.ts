@@ -17,7 +17,8 @@ export type StudentLevel =
   | "senior"
   | "graduate";
 
-export interface CurrentProfile {
+/** Display-safe data shared by own and public profile views. */
+export interface ProfileDetails {
   id: string;
   username: string;
   display_name: string | null;
@@ -28,21 +29,30 @@ export interface CurrentProfile {
   profile_image_url: string | null;
   profile_image_upload_id: string | null;
   banner_image_upload_id: string | null;
-  pending_profile_image_upload_id: string | null;
-  pending_banner_image_upload_id: string | null;
-  profile_image_status: string | null;
-  banner_image_status: string | null;
   home_college_id: string | null;
   home_college: HomeCollege | null;
   post_karma: number;
   comment_karma: number;
   followed_space_count: number;
   joined_community_count: number;
-  email_verified: boolean;
-  username_chosen: boolean;
   follower_count: number;
   following_count: number;
 }
+
+export interface CurrentProfile extends ProfileDetails {
+  email_verified: boolean;
+  username_chosen: boolean;
+  pending_profile_image_upload_id: string | null;
+  pending_banner_image_upload_id: string | null;
+  profile_image_status: string | null;
+  banner_image_status: string | null;
+}
+
+export const profileImagePath = (id: string, variant: "avatar_large" | "banner", ownProfile: boolean) =>
+  `/images/${encodeURIComponent(id)}/${ownProfile ? "preview" : "published-preview"}?variant=${variant}`;
+
+export const getProfileImage = (id: string, variant: "avatar_large" | "banner", ownProfile: boolean, signal?: AbortSignal) =>
+  apiRequest<{ url: string }>(profileImagePath(id, variant, ownProfile), { signal }, !ownProfile);
 
 export interface MajorOption {
   id: string;

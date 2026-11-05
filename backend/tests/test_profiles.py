@@ -22,6 +22,31 @@ USER_ID = UUID("11111111-1111-4111-8111-111111111111")
 
 
 class ProfileTests(unittest.TestCase):
+    def test_public_profile_exposes_shared_display_fields_without_private_state(self):
+        avatar_id, banner_id = uuid4(), uuid4()
+        self.profile.profile_image_upload_id = avatar_id
+        self.profile.banner_image_upload_id = banner_id
+        self.profile.pending_profile_image_upload_id = uuid4()
+        self.db.scalar.side_effect = [True, self.profile, 2, 3]
+        self.db.execute.return_value.one.return_value = (4, 3)
+
+        response = self.client.get(f"/profiles/{USER_ID}")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["profile_image_upload_id"], str(avatar_id))
+        self.assertEqual(data["banner_image_upload_id"], str(banner_id))
+        self.assertEqual((data["followed_space_count"], data["joined_community_count"]), (4, 3))
+        self.assertEqual((data["follower_count"], data["following_count"]), (2, 3))
+        for private in ("email", "email_verified", "email_verified_at", "pending_profile_image_upload_id",
+                        "pending_banner_image_upload_id", "profile_image_status", "banner_image_status"):
+            self.assertNotIn(private, data)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_public_profile_does_not_render_an_unavailable_student(self):
+        self.db.scalar.side_effect = [True, None]
+        self.assertEqual(self.client.get(f"/profiles/{USER_ID}").status_code, 404)
+
     def setUp(self):
         self.profile = Profile(
             id=USER_ID,

@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from auth import get_current_profile, get_optional_profile, require_verified_profile
 from database import get_db
 from models import Profile, UserFollow
-from profiles.schemas import ProfileResponse
+from profiles.schemas import HomeCollegeResponse, ProfileResponse
+from profiles.routes import get_home_college, profile_space_counts
 
 router = APIRouter(tags=["student discovery and follows"])
 
@@ -40,6 +41,9 @@ class PublicProfileResponse(ProfileResponse):
     follower_count: int = 0
     following_count: int = 0
     is_following: bool = False
+    home_college: HomeCollegeResponse | None = None
+    followed_space_count: int = 0
+    joined_community_count: int = 0
 
 
 class UserFollowResponse(BaseModel):
@@ -79,8 +83,12 @@ def get_public_profile(
     if profile is None:
         raise HTTPException(404, "Profile not found.")
     response.headers["Cache-Control"] = "no-store"
+    followed_space_count, joined_community_count = profile_space_counts(db, profile.id)
     return PublicProfileResponse(
         **ProfileResponse.model_validate(profile).model_dump(),
+        home_college=get_home_college(db, profile),
+        followed_space_count=followed_space_count,
+        joined_community_count=joined_community_count,
         follower_count=db.scalar(select(func.count()).select_from(UserFollow).where(UserFollow.followed_id == profile.id)) or 0,
         following_count=db.scalar(select(func.count()).select_from(UserFollow).where(UserFollow.follower_id == profile.id)) or 0,
         is_following=bool(viewer and db.get(UserFollow, (viewer.id, profile.id))),

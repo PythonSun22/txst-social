@@ -32,7 +32,8 @@ there are three kinds:
 - **Colleges** — a fixed, seeded set. Students do not create these. A student
   declares one home college.
 - **Communities** — created and run by students, for a club, a course, a dorm,
-  an interest.
+  an interest. Eight built-in starter communities are marked `is_seeded`; those
+  do not require a student creator or a fabricated Auth account.
 
 A student posts into exactly one space. Others like it and reply in threaded
 comments. Likes plus age produce a ranking, and each space has Hot, New and Top
@@ -117,6 +118,15 @@ SQLAlchemy models stay at the backend root. Frontend components are grouped unde
 and API calls live in `frontend/src/lib/profiles.ts`. Image API helpers remain
 in `frontend/src/lib/images/`. Run moderation CLIs from `backend/` with
 `uv run python -m moderation.client` or `uv run python -m moderation.evaluate`.
+Own and public profile routes both render `components/profiles/ProfileContainer.tsx`.
+It owns loading, Auth refresh, cancellation, editing/sign-out and user follows;
+`ProfileView.tsx` owns the shared banner/avatar, gold accents, metadata, sorted
+posts and joined-space layout. Shared display fields are `ProfileDetails`;
+private/pending-image fields stay on `CurrentProfile`. Public profile responses
+include the same college and joined-space counts but no private processing state.
+Public images use `/images/{id}/published-preview`; own images use owner-only
+`/preview`. Profile links/search retain `/profile/{id}`, with own IDs redirecting
+to `/profile`. Empty-state copy uses you/your for owners and they/their for others.
 
 **`supabase/migrations/20260910200000_lynx_core.sql` and subsequent migrations
 are the source of truth for the data model.** Read the core migration first;
@@ -147,6 +157,8 @@ Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Places**
 - `spaces` — General, colleges and communities, discriminated by `kind`.
+  `is_seeded` explicitly permits built-in communities without `created_by`;
+  other communities still require a creator.
 - `follows` — `(user_id, space_id)` plus `muted`. Composite PK, so following
   twice is impossible rather than merely handled.
 - `user_follows` — `(follower_id, followed_id)` plus `followed_at`. A separate
@@ -277,12 +289,31 @@ shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
 seed) linking to `/colleges/[slug]` feeds (FR-13). `POST /posts` takes an optional
 `space` slug (default `general`); a college page's Create post button opens
 `/submit?space=<slug>`. Post responses include `space_name`. The moderation worker
-screens General and college posts; communities are not screened yet.
+screens General, college and community posts with the same publication rules.
 ForAll and college pages share `frontend/src/components/posts/SpaceFeed.tsx`.
 Pass a space slug to reuse its chronological loading, cursor pagination, error
 retries, Auth refresh and post-card actions (FR-13/60/66). Pages own headings,
 banners and Create post links; changing spaces resets the feed and cancels stale
 requests. This frontend refactor does not change stored post destinations.
+`/spaces` lists database-backed communities and colleges. `/spaces/[slug]`
+renders community feeds; existing college URLs remain `/colleges/[slug]`.
+`AppShell.tsx` replaces the narrow root wrapper on feed routes with a left
+`SpacesSidebar`, sticky on wide screens and collapsible above the feed below
+1280px. Equal outer grid columns keep the original 42rem feed wrapper centered
+in the viewport independently of the left sidebar.
+`SpacesProvider` shares viewer-specific follow state across navigation, moves
+followed spaces above suggestions, and clears pending reads/writes on account
+changes. Own and public profile pages show persisted joined spaces.
+`GET /spaces`, `GET /spaces/{slug}` and `GET /profiles/{id}/spaces` provide the
+metadata; `PUT`/`DELETE /spaces/{slug}/follow` use the authenticated profile ID.
+Follow requires verified email; unfollow requires an active account. General is
+not followable. Existing `follows` rows are the source of membership; no profile
+array or second membership table is added (FR-24/70–73).
+Apply `20261105000000_starter_spaces.sql` locally before running this checkout.
+It seeds Study Groups, Campus Events, Gaming, Art, San Marcos Life, Technology,
+Cooking and Sports, removes direct browser follow writes, and maintains follower
+counts transactionally with a database trigger, including cascade deletes.
+This slice adds no community creation/moderation-management UI or uploaded banners.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
@@ -516,8 +547,10 @@ on existing databases; it was applied under the explicit exception above.
 browser INSERT/DELETE policies on `post_likes`, ensuring counters cannot be
 bypassed. The user-follow migration allows direct writes only for the caller's
 own verified account, but the frontend uses FastAPI so account and target checks
-stay consistent. Older direct-write policies for comment likes and space follows
-still exist; reconcile those when implementing those features. Auth and signed
+stay consistent. Space follows now write through FastAPI; the starter-spaces
+migration removes the old browser write policy and adds transactional counters.
+Older direct-write policies for comment likes still exist; reconcile those when
+extending that feature. Auth and signed
 Storage transfers remain intentional browser integrations.
 
 ---

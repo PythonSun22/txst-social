@@ -247,6 +247,14 @@ Search and profile reads expose public profile fields only. ForAll post author
 names link to these profile pages. The top-bar search currently searches
 students only.
 
+`/profile` and `/profile/{id}` share `ProfileContainer` and `ProfileView`, so both
+use the same banner, avatar, gold accents, metadata, post sorting and joined-space
+layout. Own profiles retain editing, sign-out and private image-processing notices;
+other profiles show follow controls and approved public posts. Public avatar/banner
+previews use the existing published-preview route, including the expanded avatar
+viewer. Counts use the same backend queries for both views. Empty-state text changes
+between you/your and they/their. No profile URLs or search behavior change.
+
 The existing backend database connection must be authorized to read profiles.
 It is a trusted server connection: passing a bearer token to FastAPI does not
 change its SQL role or set `auth.uid()`. Application authorization is enforced
@@ -353,6 +361,29 @@ workflow for a new environment. It adds `post_media`, replaces `posts.image_key`
 and routes post-like writes through FastAPI. The shared development database
 already has this and the branding migration under the explicitly authorized
 2026-09-24 exception; the two-approval merge rule still applies.
+
+### Spaces and persistent follows (FR-24, FR-70–73)
+
+The left sidebar appears on ForAll, college/community feeds and post-search
+results. The feed keeps its original centered width, with the sidebar in a
+separate left column; below 1280px the sidebar collapses above the feed. Followed spaces appear under
+**Your Spaces**, above **Suggested Spaces**; `/spaces` lists all communities and
+colleges. Membership persists in `follows` under the signed-in profile and is
+displayed on own and public profile pages. Follow/unfollow controls update the
+shared state after the backend confirms the write.
+
+Apply `20261105000000_starter_spaces.sql` locally. It seeds Study Groups, Campus
+Events, Gaming, Art, San Marcos Life, Technology, Cooking and Sports. Built-in
+communities are explicitly marked `is_seeded`; student-created communities still
+require a creator. No fake user accounts are added. Shared deployment follows
+the usual review process.
+
+Read metadata through `GET /spaces`, `GET /spaces/{slug}` and
+`GET /profiles/{id}/spaces`. `PUT /spaces/{slug}/follow` requires a verified active
+account; `DELETE` on that route unfollows for the active caller. Counts are
+maintained by database triggers, and browser writes to `follows` are disabled.
+General remains its own destination and is not followable. Community posts use
+the existing automatic screening rules; new posts remain private until approved.
 
 ### Search (FR-80, FR-66)
 
