@@ -61,8 +61,9 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
         return []
     ids = [p.id for p in posts]
     authors = {p.id: p for p in db.scalars(select(Profile).where(Profile.id.in_(
-        {p.author_id for p in posts if p.author_id}
-    ))).all()}
+          {p.author_id for p in posts if p.author_id}
+      ))).all()}
+    spaces = {s.id: s.name for s in db.scalars(select(Space).where(Space.id.in_({p.space_id for p in posts}))).all()}
     attachments: dict[UUID, list[PostMediaResponse]] = {pid: [] for pid in ids}
     for media in db.scalars(select(PostMedia).where(PostMedia.post_id.in_(ids)).order_by(PostMedia.position)).all():
         attachments[media.post_id].append(PostMediaResponse(position=media.position, width=media.width, height=media.height))
@@ -89,7 +90,7 @@ def serialize_posts(db: Session, posts: list[Post], viewer: Profile | None) -> l
             processing_state=state, can_retry=bool(retry and viewer and viewer.id == post.author_id),
             like_count=post.like_count, comment_count=post.comment_count,
             liked=post.id in liked, media=attachments[post.id],
-            author_avatar_upload_id=author.profile_image_upload_id if author and author.deleted_at is None and author.suspended_at is None else None,
+            author_avatar_upload_id=author.profile_image_upload_id if author and author.deleted_at is None and author.suspended_at is None else None, space_name=spaces[post.space_id]
         ))
     return result
 
@@ -187,13 +188,13 @@ def create_post(
     existing = db.scalar(select(Post).where(Post.author_id == profile.id, Post.submission_id == payload.submission_id))
     if existing:
         ids = list(db.scalars(select(PostMedia.image_upload_id).where(PostMedia.post_id == existing.id).order_by(PostMedia.position)).all())
-        if existing.title != payload.title or existing.body != payload.body or ids != payload.image_ids or existing.deleted_at:
+        if (existing.title != payload.title or existing.body != payload.body or ids != payload.image_ids or existing.deleted_at or db.get(Space, existing.space_id).slug != payload.space):
             raise HTTPException(409, "This submission was already saved with different content. Reload before creating another post.")
         response.headers["Cache-Control"] = "no-store"
         return serialize_posts(db, [existing], profile)[0]
-    space = db.scalar(select(Space).where(Space.kind == "campus", Space.slug == "general", Space.deleted_at.is_(None)))
+    space = db.scalar(select(Space).where(Space.slug == payload.space, Space.deleted_at.is_(None)))
     if space is None:
-        raise HTTPException(503, "The General space is unavailable.")
+        raise HTTPException(404, "This space is not found.")
     check_ban(db, profile, space.id)
     uploads = list(db.scalars(select(ImageUpload).where(
         ImageUpload.id.in_(payload.image_ids), ImageUpload.owner_id == profile.id,

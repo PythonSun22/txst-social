@@ -41,7 +41,10 @@ export default function CollegePage({ params }: { params: Promise<{ slug: string
 
         <section className="mt-6">
             <h2 className="text-xl font-bold">Posts</h2>
-             {loading && <p className="mt-3 text-muted-foreground"> Loading posts...</p>}
+            <Link href={`/submit?space=${slug}`} className="mt-3 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
+                Create post
+              </Link>
+             {loading && <p className="mt-3 text-muted-foreground"> Loading posts...</p>}   
              {!loading && posts.length === 0 && (<div className="mt-3 rounded-xl border border-border p-8 text-center text-muted-foreground">No posts yet. Posts for {college.name} will show here</div>)}
 
             <div className="mt-3 space-y-3">

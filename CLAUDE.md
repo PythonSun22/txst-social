@@ -99,7 +99,8 @@ After the private-username migration, newly confirmed accounts open a dedicated
 `/choose-username` page, then `/profile` after making their one permanent choice.
 The ordinary profile editor cannot change usernames (FR-06).
 College pages (`/colleges`, `/colleges/[slug]`) read per-college feeds via
-`GET /posts?space=<slug>`; posting to colleges is not built yet.
+`GET /posts?space=<slug>`; students can post into a college (`/submit?space=<slug>`),
+and the moderation worker screens General and college posts.
 ForAll moderation screens text/images in an opt-in background worker (FR-90–92).
 Image attachments are screened separately with the title/body; all must pass
 for publication, and the first flag blocks the whole post. Individual checks
@@ -153,18 +154,15 @@ context for next time. No match → add a new subsection (name from
 
 ### Daniel Pelley — daniel.pelley@outlook.com
 
-- **Working on:** college pages on `frontend-college-page` (FR-13): banner grid,
-  `/colleges/[slug]` feed, and `?space=` filter on `GET /posts` — PR next. Next
-  task: posting into a college (`PostCreate` space field, `create_post`, composer
-  picker). The moderation worker's General-only filter is Misan's area; coordinate
-  first, and expect file moves from Adam's `fix/imagePipeline` PR.
+- **Working on:** posting into colleges on `feature/post-to-college-backend` (FR-13):
+  `PostCreate.space`, `create_post`, `/submit?space=`, `space_name` on post cards,
+  and the moderation worker accepting college posts (Misan's file; let them know). PR
+  into `dev` next. Image posts were verified on local Supabase only.
 - **Notes for Claude:** learning the stack (Java/C++ background). Wants concise
   numbered steps: name the file, one-line why, then the code. He writes the code;
   Claude reviews. Personal learning log is in `LEARNING.md` one level above the repo.
   The Figma mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for
   the look only, never for product rules.
-  The mockup is Reddit-shaped (downvotes, Rising, flair, Save); use it for the
-  look only, never for product rules.
 
 ### Misan Parajuli — bgg66@txstate.edu
 

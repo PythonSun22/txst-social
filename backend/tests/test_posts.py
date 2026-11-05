@@ -39,19 +39,19 @@ class PostTests(unittest.TestCase):
         self.assertEqual(len(PostCreate(submission_id=uuid4(), title='T', image_ids=[uuid4() for _ in range(4)]).image_ids), 4)
 
     def test_anonymous_feed_visibility_and_order(self):
-        self.assertEqual(list_posts(Response(),cursor=None,limit=20,viewer=None,db=self.db).items,[])
+        self.assertEqual(list_posts(Response(),cursor=None, space="general", limit=20,viewer=None,db=self.db).items,[])
         sql=str(self.db.scalars.call_args.args[0].compile(dialect=postgresql.dialect(),compile_kwargs={'literal_binds':True})).replace('public.', '')
         for clause in ("posts.status = 'approved'",'posts.deleted_at IS NULL',"spaces.slug = 'general'",'posts.created_at DESC, posts.id DESC'): self.assertIn(clause,sql)
         self.assertNotIn('OR posts.author_id',sql)
 
     def test_owner_feed_visibility(self):
-        list_posts(Response(),cursor=None,limit=20,viewer=self.user,db=self.db)
+        list_posts(Response(),cursor=None, space="general",     limit=20 ,viewer=self.user,db=self.db)
         sql=str(self.db.scalars.call_args.args[0].compile(dialect=postgresql.dialect(),compile_kwargs={'literal_binds':True})).replace('public.', '')
         self.assertIn(f"OR posts.author_id = '{self.user.id}'",sql)
 
     def test_my_posts_uses_feed_post_contract(self):
         rows=[]
-        for values in ([self.post],[self.user],[],[]):
+        for values in ([self.post],[self.user],[self.space],[], []):
             result=Mock(); result.all.return_value=values; rows.append(result)
         self.db.scalars.side_effect=rows
         app.dependency_overrides[get_db]=lambda:self.db
@@ -74,6 +74,7 @@ class PostTests(unittest.TestCase):
                                  (Profile(id=uuid4(), email_verified_at=self.user.email_verified_at), False),
                                  (Profile(id=self.user.id), False)):
             with self.subTest(expected=expected, viewer=viewer):
+                self.db.scalars.side_effect=[Mock(all=Mock(return_value=v)) for v in ([], [self.space], [], [])]
                 self.assertEqual(serialize_posts(self.db, [self.post], viewer)[0].can_delete, expected)
 
     def test_processing_notice_prioritizes_rejection_and_unrecoverable_inputs(self):
@@ -175,6 +176,7 @@ class PostTests(unittest.TestCase):
         self.db.commit.assert_called_once()
 
     def test_submission_retry(self):
+        self.db.get.return_value = self.space
         with patch('posts.routes.serialize_posts',return_value=[Mock()]): create_post(PostCreate(submission_id=uuid4(),title='Test',body='Body'),Response(),self.user,self.db)
         self.db.add.assert_not_called(); self.db.commit.assert_not_called()
         with self.assertRaises(HTTPException) as error: create_post(PostCreate(submission_id=uuid4(),title='Changed',body='Body'),Response(),self.user,self.db)

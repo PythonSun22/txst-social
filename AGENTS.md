@@ -274,8 +274,10 @@ box above the ForAll feed opens `/search/posts?q=…` (`/search` is student sear
 yet. Reports remain **schema only**.
 `GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
 shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
-seed) linking to `/colleges/[slug]` feeds (FR-13). Creating posts and the
-moderation worker are still General-only, so college feeds stay empty for now.
+seed) linking to `/colleges/[slug]` feeds (FR-13). `POST /posts` takes an optional
+`space` slug (default `general`); a college page's Create post button opens
+`/submit?space=<slug>`. Post responses include `space_name`. The moderation worker
+screens General and college posts; communities are not screened yet.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens

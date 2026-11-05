@@ -13,6 +13,7 @@ class PostCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     body: str | None = Field(default=None, max_length=20000)
     image_ids: list[UUID] = Field(default_factory=list, max_length=MAX_POST_IMAGES)
+    space: str = Field(default="general", min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def content(self):
@@ -49,6 +50,7 @@ class PostResponse(BaseModel):
     liked: bool
     media: list[PostMediaResponse]
     author_avatar_upload_id: UUID | None = None
+    space_name: str
 
 
 class FeedResponse(BaseModel):

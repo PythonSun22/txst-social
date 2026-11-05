@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import {use, useEffect, useState } from "react";
 import Link from "next/link";
 import PostComposer from "@/components/posts/PostComposer";
 import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
@@ -10,7 +10,8 @@ import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
  * Only signed-in students with a verified email may post (FR-02); the backend
  * will enforce this too; checking here just avoids showing a form that can't work.
  */
-export default function SubmitPage() {
+export default function SubmitPage({searchParams}: {searchParams: Promise<{space?: string}>}) {
+  const {space} = use(searchParams);
   const [profile, setProfile] = useState<CurrentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,8 +47,7 @@ export default function SubmitPage() {
       )}
 
       {profile && !profile.email_verified && <p>Verify your Texas State email before posting.</p>}
-
-      {profile?.email_verified && <PostComposer />}
+      {profile?.email_verified && <PostComposer space={space} />}
     </section>
   );
 }

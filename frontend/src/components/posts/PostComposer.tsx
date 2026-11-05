@@ -9,11 +9,12 @@ import { getImagePolicy, getStorageBudget, ImageTransferError, reserveImages, up
   type UploadTicket, type StorageBudget } from "@/lib/images/image-api";
 import { formatBytes } from "@/lib/images/image-policy";
 import { createPost } from "@/lib/posts";
+import {colleges} from "@/lib/colleges";
 
 interface Attachment { key: string; image: SelectedImage | null }
 
 /** Owns post orchestration only. Selection/editing and transfers remain reusable image modules. */
-export default function PostComposer() {
+export default function PostComposer({space = "general"}: {space?: string }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -72,8 +73,8 @@ export default function PostComposer() {
         }
       }
       setNotice("Saving post…");
-      await createPost({ submission_id: submissionId.current, title: title.trim(), body: body.trim() || null, image_ids: ids });
-      router.push("/");
+      await createPost({ submission_id: submissionId.current, title: title.trim(), body: body.trim() || null, image_ids: ids, space});
+      router.push(space === "general" ? "/"  : `/colleges/${space}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save your post.");
       setNotice(""); setBusy(false); sending.current = false;
@@ -90,7 +91,7 @@ export default function PostComposer() {
   }
 
   return <form onSubmit={submit} className="space-y-4 rounded-card border border-border bg-card p-4">
-    <p className="text-xs font-semibold text-muted-foreground">Posting to <span className="text-primary">General</span></p>
+    <p className="text-xs font-semibold text-muted-foreground">Posting to <span className="text-primary">{colleges.find((c)=> c.slug === space)?.name ?? "General"}</span></p>
     <fieldset disabled={busy} className="space-y-4">
       <label className="block text-sm font-semibold">Title
         <input required maxLength={300} value={title} onChange={(event) => setTitle(event.target.value)}
