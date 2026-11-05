@@ -15,6 +15,10 @@ import { getUserPosts, type FeedPost } from "@/lib/posts";
 
 export default function PublicProfilePage() {
   const { id } = useParams<{ id: string }>();
+  return <PublicProfileContent key={id} id={id} />;
+}
+
+function PublicProfileContent({ id }: { id: string }) {
   const router = useRouter();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [viewer, setViewer] = useState<CurrentProfile | null>(null);
@@ -35,11 +39,6 @@ export default function PublicProfilePage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError("");
-    setPostsLoading(true);
-    setPostsError("");
-    setPosts([]);
     Promise.all([
       getPublicProfile(id),
       getCurrentProfile().catch(() => null),
