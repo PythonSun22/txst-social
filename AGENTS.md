@@ -273,8 +273,14 @@ post titles with the feed's visibility rule and cursor (FR-80, FR-66); the
 box above the ForAll feed opens `/search/posts?q=…` (`/search` is student search). Bodies, space names and comments are not searched
 yet. Reports remain **schema only**.
 `GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
-shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
-seed) linking to `/colleges/[slug]` feeds (FR-13). `POST /posts` takes an optional
+shows an animated 2D college carousel linking to `/colleges/[slug]` feeds (FR-13).
+College feed names and slugs remain in `frontend/src/lib/colleges.ts`; presentation copy, themes,
+tags, PNG paths and per-character transforms live in `frontend/src/lib/college-carousel.ts`.
+Artwork is served from `frontend/public/colleges/`. Browsing does not change the
+student’s home college; the confirmation action opens the selected feed. The
+carousel ports `references/colleges/` palettes, layout and GSAP choreography; its
+DM Sans and Space Grotesk fonts and copied styles are scoped to this page.
+It supports keyboard navigation, reduced motion and an explicit feed action. `POST /posts` takes an optional
 `space` slug (default `general`); a college page's Create post button opens
 `/submit?space=<slug>`. Post responses include `space_name`. The moderation worker
 screens General and college posts; communities are not screened yet.

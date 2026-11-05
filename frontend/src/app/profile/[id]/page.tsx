@@ -10,13 +10,14 @@ import {
   setUserFollow,
   type PublicProfile,
 } from "@/lib/api";
-import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
+import { getCurrentProfile, getProfileOptions, type CurrentProfile, type HomeCollege } from "@/lib/profiles";
 import { getUserPosts, type FeedPost } from "@/lib/posts";
 
 export default function PublicProfilePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [collegeOptions, setCollegeOptions] = useState<HomeCollege[]>([]);
   const [viewer, setViewer] = useState<CurrentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,6 +63,15 @@ export default function PublicProfilePage() {
   }, [id]);
 
   useEffect(() => {
+    if (!profile?.home_college_id) return;
+    let active = true;
+    getProfileOptions()
+      .then((options) => { if (active) setCollegeOptions(options.colleges); })
+      .catch(() => { if (active) setCollegeOptions([]); });
+    return () => { active = false; };
+  }, [profile?.home_college_id]);
+
+  useEffect(() => {
     if (!loading && profile && viewer?.id === profile.id) {
       router.replace("/profile");
     }
@@ -85,6 +95,7 @@ export default function PublicProfilePage() {
   if (viewer?.id === profile.id) return <p role="status">Opening your profile…</p>;
 
   const name = profile.display_name || profile.username;
+  const homeCollege = collegeOptions.find((college) => college.id === profile.home_college_id);
   return <section className="mx-auto max-w-4xl space-y-5">
     <article className="overflow-hidden rounded-card border border-border bg-card shadow-sm">
       <div className="h-32 bg-primary" />
@@ -105,7 +116,7 @@ export default function PublicProfilePage() {
         <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <div><dt className="sr-only">Major</dt><dd>{profile.major || "Major not specified"}</dd></div>
           <div><dt className="sr-only">Student level</dt><dd className="capitalize">{profile.student_level || "Level not specified"}</dd></div>
-          <div><dt className="sr-only">Home college</dt><dd>{profile.home_college?.short_name || "College not selected"}</dd></div>
+          <div><dt className="sr-only">Home college</dt><dd>{homeCollege?.short_name || homeCollege?.name || (profile.home_college_id ? "College unavailable" : "College not selected")}</dd></div>
         </dl>
         <UserConnections profileId={profile.id} followerCount={profile.follower_count} followingCount={profile.following_count} />
       </div>

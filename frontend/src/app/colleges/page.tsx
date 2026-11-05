@@ -1,22 +1,9 @@
-import Link from "next/link";
-import { colleges } from "@/lib/colleges";
+import { DM_Sans, Space_Grotesk } from "next/font/google";
+import CollegeCarousel from "@/components/colleges/CollegeCarousel";
 
-
-
-
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-college-body" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-college-heading" });
 
 export default function Colleges() {
-    return (
-        <main className ="mx-auto max-w-4xl p-6">
-            <h1>Colleges</h1>
-            <ul className="grid gap-4 sm:grid-cols-2">
-                {colleges.map((college)=> (
-                    <li key = {college.slug}>
-                        <Link href = {`/colleges/${college.slug}`} className="block rounded-xl bg-primary p-8 text-xl font-bold text-primary-foreground hover:opacity-90
-                        ">{college.name}</Link>
-                    </li>
-                ))}
-            </ul>
-        </main>
-    );
+  return <div className={`${dmSans.variable} ${spaceGrotesk.variable}`}><CollegeCarousel /></div>;
 }
