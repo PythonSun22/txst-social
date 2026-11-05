@@ -109,11 +109,21 @@ class UsernameChoice(BaseModel):
         return value
 
 
+class AcademicSetup(BaseModel):
+    """Required academic selections for the final signup step."""
+
+    home_college_id: UUID
+    major_id: UUID
+    student_level: StudentLevel
+    model_config = ConfigDict(extra="forbid")
+
+
 class CurrentProfileResponse(ProfileResponse):
     """The caller's profile and verification state, without private fields."""
 
     email_verified: bool
     username_chosen: bool = False
+    academic_setup_completed: bool = False
     home_college: HomeCollegeResponse | None = None
     followed_space_count: int = 0
     joined_community_count: int = 0

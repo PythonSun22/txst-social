@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase";
+import type { ProfileDetails } from "./profiles";
 
 /** Call FastAPI using the current Supabase session. */
 export async function apiRequest<T>(
@@ -60,22 +61,7 @@ export interface ProfileListItem {
 }
 
 /** Public profile data plus the viewer-specific follow state. */
-export interface PublicProfile {
-  id: string;
-  username: string;
-  display_name: string | null;
-  bio: string | null;
-  major: string | null;
-  major_id: string | null;
-  student_level: string | null;
-  profile_image_url: string | null;
-  profile_image_upload_id: string | null;
-  banner_image_upload_id: string | null;
-  home_college_id: string | null;
-  post_karma: number;
-  comment_karma: number;
-  follower_count: number;
-  following_count: number;
+export interface PublicProfile extends ProfileDetails {
   is_following: boolean;
 }
 
@@ -109,8 +95,8 @@ export const getProfileConnections = (
   );
 
 /** Follow or unfollow a student through FastAPI. */
-export const setUserFollow = (id: string, following: boolean) =>
+export const setUserFollow = (id: string, following: boolean, signal?: AbortSignal) =>
   apiRequest<UserFollowResult>(
     `/profiles/${encodeURIComponent(id)}/follow`,
-    { method: following ? "PUT" : "DELETE" }
+    { method: following ? "PUT" : "DELETE", signal }
   );

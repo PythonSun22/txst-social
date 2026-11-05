@@ -106,7 +106,10 @@ supabase db reset --local
 **Reset deletes local database data, including test accounts.** Recreate them
 afterward. Do not add `--linked` or a remote `--db-url`. The repository currently
 has no `supabase/seed.sql`; a missing-seed warning means there are no extra fixtures.
-General and college rows are already seeded by migrations.
+General, college rows and the eight built-in starter communities are already
+seeded by migrations. Apply `20261105000000_starter_spaces.sql` for the Spaces
+sidebar and persistent follows. If an older merged migration is missing, use
+`supabase migration up --local --include-all` to include it.
 
 Use `supabase stop` when finished and `supabase start` to resume. Each teammate's
 machine is independent; multiple checkouts on one machine share the configured

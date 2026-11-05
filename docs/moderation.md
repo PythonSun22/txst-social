@@ -30,11 +30,11 @@ current college-project scope must not depend on a staffed platform admin or
 human-review queue. This baseline supersedes the human-review recommendations
 in the historical suggestions below for the current scope.
 
-**Current scope:** screening and publication for the General/ForAll and college
+**Current scope:** screening and publication for General/ForAll, college and community
 feeds, including their backlog of pending posts. Automated user-report handling
 is recorded here for later work.
-College/subcommunity workflows and human moderation tools are outside this
-immediate slice. Posts with images require screening of their attachments as
+Community feeds now share the existing post-screening worker. Human moderation
+tools remain outside this slice. Posts with images require screening of their attachments as
 well as text before approval. Each attachment is screened in a separate,
 sequential request containing the title/body and that one image (FR-32/90).
 Text-only posts still use one text request. Approval requires every image to

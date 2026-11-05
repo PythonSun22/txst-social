@@ -86,7 +86,7 @@ def content_snapshot(db, post: Post) -> tuple[str, tuple[str, ...]]:
 
 def eligible_posts(now: datetime):
     """Retry delay and lease expiry determine eligibility, independently of age."""
-    return select(Post).join(Space, Post.space_id == Space.id).where(Space.kind.in_(("campus", "college")), Space.deleted_at.is_(None),
+    return select(Post).join(Space, Post.space_id == Space.id).where(Space.kind.in_(("campus", "college", "community")), Space.deleted_at.is_(None),
         Post.status == "pending", Post.deleted_at.is_(None),
         Post.moderation_exhausted_at.is_(None), Post.moderation_next_attempt_at <= now,
         or_(Post.moderation_lease_until.is_(None), Post.moderation_lease_until <= now),
@@ -177,7 +177,7 @@ def finish_work(session_factory, settings: Settings, work: Work,
             return  # An expired worker cannot publish, even before another claim.
         space = db.get(Space, post.space_id)
         if (post.status != "pending" or post.deleted_at is not None or space is None
-                or space.deleted_at is not None or space.kind not in ("campus", "college")):
+                or space.deleted_at is not None or space.kind not in ("campus", "college", "community")):
             post.moderation_claim = None
             post.moderation_lease_until = None
             db.commit()

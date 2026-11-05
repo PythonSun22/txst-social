@@ -10,8 +10,11 @@ starting. Cite `FR-` numbers (top of that migration) in commits and PRs.
 
 ## One-time signup username (FR-01, FR-02, FR-06)
 
-Implemented in the checkout. Auth/profile tests, frontend lint, TypeScript,
-and frontend tests pass. Local migration and live signup checks await Docker.
+Implemented in the checkout, including the college/major step. Auth/profile tests,
+frontend tests, lint, TypeScript and the production build pass. The academic
+migration and atomic membership flow pass in a disposable local database.
+`20261105010000_academic_onboarding.sql` is also applied to the local Supabase
+app database at the user's request; remote deployment remains pending.
 
 1. Keep the neutral random provisional username on new Auth accounts. Record
    whether a username was chosen; mark existing developer profiles as complete.
@@ -20,8 +23,10 @@ and frontend tests pass. Local migration and live signup checks await Docker.
    from the ordinary profile update API.
 3. Send newly confirmed accounts to a dedicated `/choose-username` page with
    the signup background, the requested heading and permanent-choice reminder.
-   After success, open `/profile` without its editor. Completed sign-ins open
-   ForAll as before.
+   After success, open `/choose-college`, a separate component sharing the same
+   setup background. Save required college, major and student level choices and
+   join its college in one transaction, then open `/profile`. All three fields remain editable.
+   Incomplete sign-ins resume the appropriate step; completed sign-ins open ForAll.
 4. Hide the application header on the choice page, update feature documentation,
    and run focused backend/frontend checks.
 

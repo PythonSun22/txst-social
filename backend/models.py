@@ -29,6 +29,7 @@ class Profile(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     username: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
     username_chosen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    academic_setup_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -90,6 +91,10 @@ class Space(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     rules: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     kind: Mapped[str] = mapped_column(ENUM("campus", "college", "community", name="space_kind", create_type=False), nullable=False)
+    is_seeded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    icon_image_upload_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("public.image_uploads.id", ondelete="SET NULL"), nullable=True,
+    )
 
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("public.profiles.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
