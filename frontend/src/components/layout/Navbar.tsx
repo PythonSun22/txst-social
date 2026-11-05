@@ -10,6 +10,7 @@ import { getCurrentProfile, type CurrentProfile } from "@/lib/profiles";
 const links = [
   { href: "/", label: "ForAll" },
   { href: "/colleges", label: "Colleges" },
+  { href: "/spaces", label: "Spaces" },
   { href: "/profile", label: "Profile" },
   { href: "/upload-test", label: "Upload test" },
 ];

@@ -23,7 +23,8 @@ in [moderation](moderation.md).
 | Post orchestration | `components/posts/PostComposer.tsx`, `lib/posts.ts` | Own title, body, attachment order and submission retry ID. Upload selected files, then send completed image IDs to `/posts`. |
 | Image API | `backend/images/routes.py`, `backend/images/storage.py`, `backend/images/schemas.py` | Own upload policy, authorization, reservations, completion and Storage signing. |
 | Post API | `backend/posts/routes.py`, `backend/posts/schemas.py` | Validate content, derive author from Auth, check bans and attachment ownership/completion, save post and ordered references atomically. |
-| Feed presentation | `app/page.tsx`, `components/posts/PostCard.tsx` | Fetch chronological pages, authorized image previews and persistent likes. No mock post data. |
+| Space feed | `components/posts/SpaceFeed.tsx` | Shared ForAll/college loading, empty/error states, reload, cursor pagination and Auth refresh. Accepts a space slug and optional empty message; pages own headings and navigation. Cancels stale requests when the space/viewer changes; pagination retries retain loaded posts. |
+| Post presentation | `components/posts/PostCard.tsx` | Authorized image previews, screening polling, persistent likes and deletion, with callbacks updating the shared feed. No mock post data. |
 
 For another image use case (for example a community cover), reuse the selector,
 editor and transfer functions. Add that feature's own association and permission

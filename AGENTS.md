@@ -278,6 +278,11 @@ seed) linking to `/colleges/[slug]` feeds (FR-13). `POST /posts` takes an option
 `space` slug (default `general`); a college page's Create post button opens
 `/submit?space=<slug>`. Post responses include `space_name`. The moderation worker
 screens General and college posts; communities are not screened yet.
+ForAll and college pages share `frontend/src/components/posts/SpaceFeed.tsx`.
+Pass a space slug to reuse its chronological loading, cursor pagination, error
+retries, Auth refresh and post-card actions (FR-13/60/66). Pages own headings,
+banners and Create post links; changing spaces resets the feed and cancels stale
+requests. This frontend refactor does not change stored post destinations.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
