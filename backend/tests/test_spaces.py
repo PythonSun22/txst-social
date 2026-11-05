@@ -39,6 +39,29 @@ class SpaceTests(unittest.TestCase):
         self.assertIn("'college', 'community'", sql)
         self.assertNotIn("'campus'", sql)
 
+    def test_search_filters_kind_and_matches_only_space_names_and_slugs(self):
+        self.db.scalars.return_value.all.return_value = []
+        response = self.client.get("/spaces", params={"q": "  gaming  ", "kind": "community"})
+        self.assertEqual(response.status_code, 200)
+        query = self.db.scalars.call_args.args[0]
+        sql = str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+        for clause in ("spaces.deleted_at IS NULL", "spaces.kind = 'community'", "spaces.name ILIKE",
+                       "spaces.slug ILIKE", "%gaming%", "LIMIT 25"):
+            self.assertIn(clause, sql)
+        self.assertNotIn("spaces.description ILIKE", sql)
+
+    def test_search_escapes_wildcards_and_rejects_invalid_filters(self):
+        self.db.scalars.return_value.all.return_value = []
+        self.assertEqual(self.client.get("/spaces", params={"q": "50%_off", "kind": "college"}).status_code, 200)
+        params = self.db.scalars.call_args.args[0].compile().params
+        self.assertIn(r"%50\%\_off%", params.values())
+        self.assertEqual(self.client.get("/spaces", params={"kind": "students"}).status_code, 422)
+        self.assertEqual(self.client.get("/spaces", params={"q": "x" * 51}).status_code, 422)
+
+    def test_blank_search_does_not_return_the_whole_directory(self):
+        self.assertEqual(self.client.get("/spaces", params={"q": "  "}).json(), [])
+        self.db.scalars.assert_not_called()
+
     def test_follow_state_is_viewer_specific(self):
         self.db.scalars.return_value.all.return_value = [self.space.id]
         self.assertTrue(serialize_spaces(self.db, [self.space], self.profile)[0].is_following)

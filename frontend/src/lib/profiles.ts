@@ -42,11 +42,20 @@ export interface ProfileDetails {
 export interface CurrentProfile extends ProfileDetails {
   email_verified: boolean;
   username_chosen: boolean;
+  academic_setup_completed: boolean;
   pending_profile_image_upload_id: string | null;
   pending_banner_image_upload_id: string | null;
   profile_image_status: string | null;
   banner_image_status: string | null;
 }
+
+export const getProfileSetupPath = (profile: Pick<CurrentProfile, "username_chosen" | "academic_setup_completed">) =>
+  !profile.username_chosen ? "/choose-username" : !profile.academic_setup_completed ? "/choose-college" : null;
+
+export const completeAcademicSetup = (home_college_id: string, major_id: string, student_level: StudentLevel, signal?: AbortSignal) =>
+  apiRequest<CurrentProfile>("/auth/me/academics", {
+    method: "POST", body: JSON.stringify({ home_college_id, major_id, student_level }), signal,
+  });
 
 export const profileImagePath = (id: string, variant: "avatar_large" | "banner", ownProfile: boolean) =>
   `/images/${encodeURIComponent(id)}/${ownProfile ? "preview" : "published-preview"}?variant=${variant}`;

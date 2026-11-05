@@ -1,8 +1,9 @@
 """Discover spaces and persist follows against the authenticated profile."""
 from uuid import UUID
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import delete, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import delete, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -27,9 +28,21 @@ def serialize_spaces(db: Session, rows: list[Space], viewer: Profile | None) -> 
 
 @router.get("/spaces", response_model=list[SpaceResponse])
 def list_spaces(response: Response, viewer: Profile | None = Depends(get_optional_profile),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db),
+                q: Annotated[str | None, Query(max_length=50)] = None,
+                kind: Literal["college", "community"] | None = None):
     response.headers["Cache-Control"] = "no-store"
-    rows = list(db.scalars(available_spaces().order_by(Space.kind.desc(), Space.name)).all())
+    query = available_spaces()
+    if kind:
+        query = query.where(Space.kind == kind)
+    if q is not None:
+        term = q.strip()
+        if not term:
+            return []
+        pattern = "%" + term.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_") + "%"
+        query = query.where(or_(Space.name.ilike(pattern, escape="\\"),
+                               Space.slug.ilike(pattern, escape="\\"))).limit(25)
+    rows = list(db.scalars(query.order_by(Space.kind.desc(), Space.name)).all())
     return serialize_spaces(db, rows, viewer)
 
 
@@ -56,6 +69,8 @@ def profile_spaces(profile_id: UUID, response: Response,
 
 
 def change_follow(slug: str, following: bool, profile: Profile, response: Response, db: Session):
+    # Match signup's account-before-space lock order, including FK checks.
+    db.execute(select(Profile.id).where(Profile.id == profile.id).with_for_update())
     space = db.scalar(available_spaces().where(Space.slug == slug).with_for_update())
     if space is None:
         raise HTTPException(404, "Space not found.")

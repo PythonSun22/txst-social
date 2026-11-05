@@ -145,7 +145,7 @@ Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, the timestamp
-  of its one-time choice, bio, a normalized major selection,
+  of its one-time choice, an academic-setup completion timestamp, bio, a normalized major selection,
   optional academic level, home college, avatar and
   banner upload references, karma totals, admin flag, and suspension. `email` and
   `email_verified_at` are **mirrored from `auth.users` by trigger** — never
@@ -267,11 +267,21 @@ Working endpoints today are `GET /health`, `GET /db-health`, `GET /profiles`,
 existing users in through Supabase Auth and sends authenticated students to
 the ForAll feed at `/` after sign-in or email-code confirmation (FR-01/02).
 New accounts instead open `/choose-username` after email confirmation. They must
-choose a unique public username before continuing to `/profile`; the ordinary
-profile editor cannot change it later (FR-06). The signup trigger assigns an
-unrelated random provisional handle before this choice. Apply
-`20261103000000_private_signup_usernames.sql` locally before running this flow;
-shared deployment remains subject to review.
+choose a unique public username, then select college, major and student level on `/choose-college`
+before continuing to `/profile`. The two components share `AccountSetupCard` for
+the same background. `POST /auth/me/academics` validates both catalog choices and the student level,
+atomically saves them, marks `academic_setup_completed_at`, and inserts the college
+follow (FR-11/70). Retries cannot duplicate membership or rejoin after an unfollow.
+College, major and student level remain editable through the existing profile editor, independently
+of follows; usernames cannot change later (FR-06). Sign-in and the own-profile page
+resume the first unfinished step. Signup lists only colleges with active catalog
+majors; the existing undergraduate catalog does not cover all ten college spaces.
+The signup trigger assigns an unrelated random provisional handle before this
+choice. Apply `20261103000000_private_signup_usernames.sql`, the starter-spaces
+migration and `20261105010000_academic_onboarding.sql` locally before running this
+flow. The academic migration backfills already-chosen usernames as complete to
+preserve existing accounts; new/provisional accounts must complete the new step.
+Shared deployment remains subject to review.
 FastAPI validates bearer tokens with the project's Auth server, then loads the
 matching profile. Inactive accounts are rejected (FR-96); a reusable write
 dependency requires verified email (FR-02). Post routes derive `author_id` from
@@ -282,8 +292,16 @@ General posts, ordered images, chronological feed reads and post likes now work
 through `/posts`. Threaded comments and comment likes work through
 `/posts/{id}/comments` and publish unscreened. `GET /search/posts` searches
 post titles with the feed's visibility rule and cursor (FR-80, FR-66); the
-box above the ForAll feed opens `/search/posts?q=…` (`/search` is student search). Bodies, space names and comments are not searched
-yet. Reports remain **schema only**.
+box above the ForAll feed opens `/search/posts?q=…`. Post search still covers
+titles only; bodies and comments are not searched. `/search` is discovery search:
+typing searches students, colleges and community spaces, with an All/Students/
+Colleges/Spaces dropdown to narrow the query. Student results retain profile links;
+space results retain college/community URLs. Requests are debounced and canceled
+on query/category changes; category failures preserve other successful results.
+`GET /spaces?q=&kind=college|community` searches active space names and slugs
+with a 25-result cap; descriptions are excluded and unfiltered directory reads are unchanged.
+Search terms are capped at 50 characters and LIKE wildcards are matched literally.
+No additional search migration is required. Reports remain **schema only**.
 `GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
 shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
 seed) linking to `/colleges/[slug]` feeds (FR-13). `POST /posts` takes an optional
@@ -297,10 +315,11 @@ banners and Create post links; changing spaces resets the feed and cancels stale
 requests. This frontend refactor does not change stored post destinations.
 `/spaces` lists database-backed communities and colleges. `/spaces/[slug]`
 renders community feeds; existing college URLs remain `/colleges/[slug]`.
-`AppShell.tsx` replaces the narrow root wrapper on feed routes with a left
+`AppShell.tsx` replaces the narrow root wrapper on ForAll and post-search results with a left
 `SpacesSidebar`, sticky on wide screens and collapsible above the feed below
 1280px. Equal outer grid columns keep the original 42rem feed wrapper centered
 in the viewport independently of the left sidebar.
+Individual college and space pages keep the centered wrapper without this sidebar.
 `SpacesProvider` shares viewer-specific follow state across navigation, moves
 followed spaces above suggestions, and clears pending reads/writes on account
 changes. Own and public profile pages show persisted joined spaces.

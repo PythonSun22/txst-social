@@ -60,10 +60,11 @@ def search_profiles(
     term = q.strip()
     if not term:
         return []
+    pattern = "%" + term.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_") + "%"
     return list(db.scalars(
         select(Profile).where(
             Profile.deleted_at.is_(None), Profile.suspended_at.is_(None),
-            Profile.username.ilike(f"%{term}%") | Profile.display_name.ilike(f"%{term}%"),
+            Profile.username.ilike(pattern, escape="\\") | Profile.display_name.ilike(pattern, escape="\\"),
         ).order_by(Profile.username).limit(25)
     ).all())
 

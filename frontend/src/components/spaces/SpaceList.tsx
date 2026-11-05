@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import PawIcon from "@/components/ui/PawIcon";
+import SpaceIcon from "./SpaceIcon";
 import { spaceHref, type Space } from "@/lib/spaces";
 import { useSpaces } from "./SpacesProvider";
 
@@ -10,7 +10,7 @@ export default function SpaceList({ spaces, readOnly = false }: { spaces: Space[
   return <ul className="divide-y divide-border">
     {spaces.map((space) => <li key={space.id} className="flex items-center gap-3 py-4 first:pt-0 last:pb-0">
       <Link href={spaceHref(space.slug)} className="flex min-w-0 flex-1 items-center gap-3">
-        <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${space.kind === "college" ? "bg-accent text-primary" : "bg-primary text-white"}`}><PawIcon size={18} /></span>
+        <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${space.kind === "college" ? "bg-accent text-primary" : "bg-primary text-accent"}`}><SpaceIcon slug={space.slug} /></span>
         <span className="min-w-0">
           <span className="block text-sm font-bold text-primary hover:underline">{space.name}</span>
           <span className="mt-1 block text-xs text-muted-foreground">{space.follower_count.toLocaleString()} {space.follower_count === 1 ? "follower" : "followers"} · {space.kind === "college" ? "College" : "Community"}</span>

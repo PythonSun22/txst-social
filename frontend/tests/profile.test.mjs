@@ -82,7 +82,9 @@ const profile = (id) => ({ id, username: id, display_name: `Student ${id}`, bio:
   major: "Computer Science", profile_image_upload_id: `${id}-avatar`, banner_image_upload_id: `${id}-banner`,
   home_college: { short_name: "Science", accent_hex: "#501214" }, followed_space_count: 2, joined_community_count: 1,
   follower_count: 3, following_count: 4, post_karma: 5, comment_karma: 6 });
-const account = { ...profile("owner"), username_chosen: true, email_verified: true };
+const account = { ...profile("owner"), username_chosen: true, academic_setup_completed: true, email_verified: true };
+const getProfileSetupPath = (profile) => !profile.username_chosen ? "/choose-username"
+  : !profile.academic_setup_completed ? "/choose-college" : null;
 
 async function containerHarness(props, overrides = {}) {
   const listeners = new Set();
@@ -95,7 +97,7 @@ async function containerHarness(props, overrides = {}) {
       getPublicProfile: async (id) => { calls.publicProfiles.push(id); return { ...profile(id), is_following: false }; },
       setUserFollow: async (...args) => { calls.follows.push(args); return { following: true, follower_count: 4 }; },
     },
-    "@/lib/profiles": { getCurrentProfile: async () => account },
+    "@/lib/profiles": { getCurrentProfile: async () => account, getProfileSetupPath },
     "@/lib/posts": {
       getMyPosts: async () => { calls.ownPosts++; return [{ id: "own-pending", status: "pending" }]; },
       getUserPosts: async (id) => { calls.publicPosts.push(id); return [{ id: `${id}-public`, status: "approved" }]; },
@@ -109,6 +111,7 @@ async function containerHarness(props, overrides = {}) {
     "@/components/images/ImageProcessingNotice": stub("ImageProcessingNotice"),
     ...overrides,
   };
+  if (overrides["@/lib/profiles"]) modules["@/lib/profiles"].getProfileSetupPath = getProfileSetupPath;
   return { ...await harness("components/profiles/ProfileContainer.tsx", modules, props, true), calls, navigation,
     authChanged: () => listeners.forEach((callback) => callback()) };
 }

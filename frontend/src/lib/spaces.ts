@@ -16,6 +16,8 @@ export const spaceHref = (slug: string) => slug === "general" ? "/"
   : `/${colleges.some((college) => college.slug === slug) ? "colleges" : "spaces"}/${encodeURIComponent(slug)}`;
 
 export const listSpaces = (signal?: AbortSignal) => apiRequest<Space[]>("/spaces", { signal }, true);
+export const searchSpaces = (q: string, kind: Space["kind"], signal?: AbortSignal) =>
+  apiRequest<Space[]>(`/spaces?${new URLSearchParams({ q, kind })}`, { signal }, true);
 export const getSpace = (slug: string, signal?: AbortSignal) =>
   apiRequest<Space>(`/spaces/${encodeURIComponent(slug)}`, { signal }, true);
 export const getProfileSpaces = (id: string, signal?: AbortSignal) =>

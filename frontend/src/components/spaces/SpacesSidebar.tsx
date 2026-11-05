@@ -7,7 +7,7 @@ import { useSpaces } from "./SpacesProvider";
 function SidebarSections() {
   const { spaces, loading, error, reload } = useSpaces();
   const joined = spaces.filter((space) => space.is_following);
-  const suggested = spaces.filter((space) => !space.is_following).slice(0, 6);
+  const suggested = spaces.filter((space) => !space.is_following).slice(0, 2);
   return <div className="space-y-5">
     {joined.length > 0 && <section className="rounded-card border border-border border-t-4 border-t-accent bg-card p-4 shadow-sm">
       <h2 className="mb-4 font-serif text-xl font-bold text-primary">Your Spaces</h2>
@@ -20,7 +20,7 @@ function SidebarSections() {
       {error && <p role="alert" className="mb-3 text-sm text-red-700">{error} <button type="button" onClick={reload} className="underline">Retry</button></p>}
       {!loading && !error && !suggested.length && <p className="text-sm text-muted-foreground">You’re following all available spaces.</p>}
       <SpaceList spaces={suggested} />
-      <Link href="/spaces" className="mt-5 block rounded-full bg-primary px-4 py-2.5 text-center text-sm font-bold text-white hover:bg-primary/90">Explore Spaces →</Link>
+      <Link href="/spaces" className="mt-5 block rounded-full bg-primary px-4 py-2.5 text-center text-sm font-bold text-white hover:bg-primary/90">Explore more →</Link>
     </section>
   </div>;
 }

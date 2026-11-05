@@ -218,11 +218,19 @@ header; other pages retain that header. Successful sign-in or email-code
 confirmation opens the ForAll feed at `/` for completed profiles. Newly confirmed
 accounts open `/choose-username` first (FR-06). They must choose a unique public
 `@username` there; the random handle assigned at signup is only provisional.
-After saving, they open `/profile` without its editor. The ordinary profile
-editor cannot change the username. An existing signed-in visitor to `/login`
-follows the same completed/incomplete routing.
-Apply `20261103000000_private_signup_usernames.sql` to the local stack before
-testing new signups. Shared migration deployment requires review and coordination.
+After saving, `/choose-college` uses the same background for a separate college
+and major form, including a student level dropdown (freshman through graduate).
+Majors are filtered by college using the existing active catalog;
+only colleges with catalog majors appear in this signup form. Saving through
+`POST /auth/me/academics` sets all three profile fields and follows the selected college
+in one transaction, then opens `/profile`. All three selections remain editable there;
+later edits do not change memberships automatically. The ordinary profile editor
+cannot change the username. Sign-in resumes the first unfinished setup step.
+Apply `20261103000000_private_signup_usernames.sql`, the starter-spaces migration,
+and `20261105010000_academic_onboarding.sql` to the local stack before testing new
+signups. The academic migration marks existing accounts that already chose a
+username as complete; new accounts must finish both steps. Shared migration
+deployment requires review and coordination.
 Supabase's browser SDK manages session persistence and refresh. Passwords go
 directly to Supabase Auth. The browser uses Supabase for Auth and authenticated image
 transfers; application records continue through FastAPI. Account creation and
@@ -244,8 +252,14 @@ Public student discovery uses `GET /profiles/search?q=...` and
 follow with `PUT /profiles/{id}/follow`; `DELETE` on that route unfollows.
 `GET /posts/user/{author_id}` supplies approved public posts for the profile.
 Search and profile reads expose public profile fields only. ForAll post author
-names link to these profile pages. The top-bar search currently searches
-students only.
+names link to these profile pages. The top-bar search opens `/search`, where typing
+searches students, colleges and community spaces together. Its dropdown defaults
+to **All** and can restrict results to **Students**, **Colleges** or **Spaces**.
+Queries update after a short typing delay or immediately on submission; changing
+category reruns the current query. Space matches use `GET /spaces?q=&kind=` to
+search active names and slugs, excluding descriptions; student matches use the existing
+profile search. Each category returns up to 25 results, keeps its existing links,
+and reports failures without hiding successful results from other categories.
 
 `/profile` and `/profile/{id}` share `ProfileContainer` and `ProfileView`, so both
 use the same banner, avatar, gold accents, metadata, post sorting and joined-space
@@ -278,8 +292,9 @@ uv run python -m unittest discover -s tests -v
 
 These tests mock Supabase Auth and database access. For a live smoke test, create
 a new account, confirm its email, choose a unique username on the dedicated
-page, and check that `/profile` opens without the editor. Existing completed
-accounts still open ForAll.
+page, then select college, major and student level on `/choose-college`. Check that
+`/profile` opens with all three selections and its college appears in joined spaces.
+Existing completed accounts still open ForAll.
 Persistent posts, images and likes are described below.
 
 ### Image upload test (FR-02, FR-32, FR-90)
@@ -364,8 +379,8 @@ already has this and the branding migration under the explicitly authorized
 
 ### Spaces and persistent follows (FR-24, FR-70–73)
 
-The left sidebar appears on ForAll, college/community feeds and post-search
-results. The feed keeps its original centered width, with the sidebar in a
+The left sidebar appears on ForAll and post-search results; individual college
+and space pages do not show it. The feed keeps its original centered width, with the sidebar in a
 separate left column; below 1280px the sidebar collapses above the feed. Followed spaces appear under
 **Your Spaces**, above **Suggested Spaces**; `/spaces` lists all communities and
 colleges. Membership persists in `follows` under the signed-in profile and is
@@ -398,7 +413,7 @@ no input causes an error. The substring part scans titles; a `pg_trgm` index
 Visibility is the same as the feed: approved posts, plus the caller's own
 pending posts. The response is the feed's `{ items, next_cursor }` shape.
 
-A search box above the ForAll feed opens `/search/posts?q=…` (`/search` is student search); an empty search clears results. Post bodies, space names, comments,
+A search box above the ForAll feed opens `/search/posts?q=…` (`/search` searches students, colleges and spaces); an empty search clears results. Post bodies, space names, comments,
 typo tolerance and relevance ranking are not supported yet; see `docs/PLAN.md`.
 
 ### Health Check

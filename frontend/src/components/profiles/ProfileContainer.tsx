@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getPublicProfile, setUserFollow } from "@/lib/api";
-import { getCurrentProfile, type CurrentProfile, type ProfileDetails } from "@/lib/profiles";
+import { getCurrentProfile, getProfileSetupPath, type CurrentProfile, type ProfileDetails } from "@/lib/profiles";
 import { getMyPosts, getUserPosts, type FeedPost } from "@/lib/posts";
 import { getSupabase } from "@/lib/supabase";
 import EditProfileModal from "./EditProfileModal";
@@ -61,9 +61,10 @@ function ProfileContent({ profileId }: { profileId?: string }) {
           router.replace("/profile");
           return;
         }
-        if (!profileId && viewer && !viewer.username_chosen) {
+        const setupPath = viewer ? getProfileSetupPath(viewer) : null;
+        if (!profileId && setupPath) {
           redirecting = true;
-          router.replace("/choose-username");
+          router.replace(setupPath);
           return;
         }
         const publicProfile = profileId ? await getPublicProfile(profileId, current.signal) : null;
