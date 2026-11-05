@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
-const gaming = { id: "gaming", slug: "gaming", name: "Gaming", kind: "community", follower_count: 0, is_following: false };
+const gaming = { id: "gaming", slug: "gaming", name: "Gaming", kind: "community", is_seeded: true, follower_count: 0, is_following: false };
 const deferred = () => {
   let resolve;
   const promise = new Promise((done) => { resolve = done; });
@@ -147,4 +147,166 @@ test("the sidebar shows suggestions first, then puts joined spaces above them", 
   assert.deepEqual(headings(desktop()), ["Suggested Spaces"]);
   spaces = [{ ...gaming, is_following: true }];
   assert.deepEqual(headings(desktop()), ["Your Spaces", "Suggested Spaces"]);
+});
+
+test("Your Spaces keeps every joined community available while limiting the visible rows to five", async () => {
+  const spaces = Array.from({ length: 7 }, (_, index) => ({ ...gaming, id: `joined-${index}`, is_following: true }));
+  spaces.push({ ...gaming, id: "college", kind: "college", is_following: true });
+  spaces.push(...Array.from({ length: 3 }, (_, index) => ({ ...gaming, id: `suggested-${index}` })));
+  const render = (type, props) => typeof type === "function" ? type(props) : { type, props };
+  const sidebar = await compile("../src/components/spaces/SpacesSidebar.tsx", {
+    "react/jsx-runtime": { jsx: render, jsxs: render }, "next/link": { __esModule: true, default: "Link" },
+    "./SpaceList": { __esModule: true, default: "SpaceList" },
+    "./SpacesProvider": { useSpaces: () => ({ spaces, loading: false, error: "", reload() {} }) },
+  });
+  const lists = descendants(sidebar.default().props.children[0]).filter((node) => node.type === "SpaceList");
+  assert.equal(lists[0].props.visibleRows, 5);
+  assert.equal(lists[0].props.spaces.length, 7);
+  assert.ok(lists[0].props.spaces.every((space) => space.kind === "community"));
+  assert.equal(lists[1].props.spaces.length, 2);
+
+  const list = await compile("../src/components/spaces/SpaceList.tsx", {
+    "react/jsx-runtime": { jsx, jsxs: jsx }, "next/link": { __esModule: true, default: "Link" },
+    "./SpaceAvatar": { __esModule: true, default: "SpaceAvatar" },
+    "@/lib/spaces": { spaceHref: (slug) => `/spaces/${slug}` },
+    "./SpacesProvider": { useSpaces: () => ({ profile: null, busy: null, follow() {} }) },
+  });
+  const tree = list.default(lists[0].props);
+  assert.equal(tree.props.style.maxHeight, "15rem");
+  assert.equal(tree.props.tabIndex, 0);
+  assert.equal(tree.props.children.length, 7);
+});
+
+test("college sidebar promotes the profile's home college and keeps other follows separate", async () => {
+  const business = { ...gaming, id: "business", slug: "business", name: "McCoy College of Business", kind: "college", is_following: true };
+  const education = { ...business, id: "education", slug: "education", name: "College of Education" };
+  const state = { spaces: [business, education, gaming, { ...business, id: "not-joined", is_following: false }],
+    profile: { home_college: business }, loading: false, error: "", reload() {} };
+  const render = (type, props) => typeof type === "function" ? type(props) : { type, props };
+  const component = await compile("../src/components/spaces/CollegesSidebar.tsx", {
+    "react/jsx-runtime": { jsx: render, jsxs: render, Fragment: "fragment" },
+    "next/link": { __esModule: true, default: "Link" }, "./SpaceIcon": { __esModule: true, default: "SpaceIcon" },
+    "./SpaceList": { __esModule: true, default: "SpaceList" }, "./SpacesProvider": { useSpaces: () => state },
+  });
+  const desktop = () => component.default().props.children[0];
+  const otherList = () => descendants(desktop()).find((node) => node.type === "SpaceList");
+  assert.ok(descendants(desktop()).some((node) => node.type === "h3" && node.props.children === business.name));
+  assert.ok(descendants(desktop()).some((node) => node.type === "Link" && node.props.href === "/colleges/business"));
+  assert.deepEqual(otherList().props.spaces.map((space) => space.id), ["education"]);
+  assert.equal(otherList().props.visibleRows, 3);
+  state.profile = { home_college: education };
+  assert.deepEqual(otherList().props.spaces.map((space) => space.id), ["business"]);
+  state.profile = { home_college: null };
+  assert.ok(descendants(desktop()).some((node) => node.type === "Link" && node.props.href === "/profile"));
+  state.profile = null;
+  assert.equal(otherList(), undefined);
+  assert.ok(descendants(desktop()).some((node) => node.type === "Link" && node.props.href === "/login"));
+});
+
+async function directoryHarness(t, initialSpaces = [gaming], reducedMotion = false) {
+  let spaces = initialSpaces, cursor = 0, resize, disconnected = false;
+  const hooks = [], effects = [], scrolls = [];
+  const element = { scrollLeft: 0, clientWidth: 600, scrollWidth: 1000,
+    firstElementChild: {}, scrollBy: (options) => scrolls.push(options) };
+  const previousObserver = globalThis.ResizeObserver, previousWindow = globalThis.window;
+  globalThis.ResizeObserver = class {
+    constructor(callback) { resize = callback; }
+    observe() {}
+    disconnect() { disconnected = true; }
+  };
+  globalThis.window = { matchMedia: () => ({ matches: reducedMotion }) };
+  const same = (a, b) => a && b.every((value, index) => Object.is(value, a[index]));
+  const runtime = {
+    useRef() { return hooks[cursor++] ??= { current: element }; },
+    useState(initial) {
+      const hook = hooks[cursor++] ??= { value: initial };
+      return [hook.value, (next) => { hook.value = typeof next === "function" ? next(hook.value) : next; }];
+    },
+    useCallback(callback, dependencies) {
+      const index = cursor++;
+      if (!same(hooks[index]?.dependencies, dependencies)) hooks[index] = { callback, dependencies };
+      return hooks[index].callback;
+    },
+    useEffect(effect, dependencies) {
+      const index = cursor++;
+      if (same(hooks[index]?.dependencies, dependencies)) return;
+      hooks[index]?.cleanup?.();
+      const hook = hooks[index] = { dependencies };
+      effects.push(() => { hook.cleanup = effect(); });
+    },
+  };
+  const component = await compile("../src/components/spaces/SpaceSection.tsx", {
+    react: runtime, "react/jsx-runtime": { jsx, jsxs: jsx },
+    "./SpaceList": { __esModule: true, default: "SpaceList" },
+  });
+  function unmount() { hooks.forEach((hook) => hook.cleanup?.()); }
+  t.after(() => { unmount(); globalThis.ResizeObserver = previousObserver; globalThis.window = previousWindow; });
+  return { element, scrolls, resize: () => resize(), unmount, disconnected: () => disconnected,
+    setSpaces(next) { spaces = next; },
+    render() {
+      cursor = 0;
+      const tree = component.default({ id: "general-spaces", title: "General spaces", description: "Explore communities", spaces });
+      effects.splice(0).forEach((effect) => effect());
+      return tree;
+    },
+  };
+}
+function descendants(tree) {
+  if (Array.isArray(tree)) return tree.flatMap(descendants);
+  return tree && typeof tree === "object" ? [tree, ...descendants(tree.props?.children)] : [];
+}
+const scrollButton = (tree, direction) => descendants(tree).find((node) => node.props?.["aria-label"] === `Scroll general spaces ${direction}`);
+
+test("directory arrows scroll the viewport and disable at the ends and after resizing", async (t) => {
+  const h = await directoryHarness(t);
+  h.render(); h.resize();
+  assert.equal(scrollButton(h.render(), "left").props.disabled, true);
+  assert.equal(scrollButton(h.render(), "right").props.disabled, false);
+  scrollButton(h.render(), "right").props.onClick();
+  assert.deepEqual(h.scrolls, [{ left: 480, behavior: "smooth" }]);
+  h.element.scrollLeft = 400;
+  descendants(h.render()).find((node) => node.props?.id === "general-spaces").props.onScroll();
+  assert.equal(scrollButton(h.render(), "left").props.disabled, false);
+  assert.equal(scrollButton(h.render(), "right").props.disabled, true);
+  h.element.scrollLeft = 0; h.element.clientWidth = 1200; h.resize();
+  assert.equal(scrollButton(h.render(), "left").props.disabled, true);
+  assert.equal(scrollButton(h.render(), "right").props.disabled, true);
+  h.unmount(); assert.equal(h.disconnected(), true);
+});
+
+test("directory scrolling respects reduced-motion preferences", async (t) => {
+  const h = await directoryHarness(t, [gaming], true);
+  h.render(); h.element.scrollLeft = 200; h.resize();
+  scrollButton(h.render(), "left").props.onClick();
+  assert.deepEqual(h.scrolls, [{ left: -480, behavior: "auto" }]);
+});
+
+test("reusable sections keep spaces sorted by followers without mutating shared data", async (t) => {
+  const spaces = [{ ...gaming, follower_count: 2 }, { ...gaming, id: "music", name: "Music", follower_count: 4 },
+    { ...gaming, id: "art", name: "Art", follower_count: 4 }];
+  const h = await directoryHarness(t, spaces);
+  const listed = () => descendants(h.render()).find((node) => node.type === "SpaceList").props.spaces;
+  assert.deepEqual(listed().map((space) => space.id), ["art", "music", "gaming"]);
+  assert.deepEqual(spaces.map((space) => space.id), ["gaming", "music", "art"]);
+  h.setSpaces(spaces.map((space) => space.id === "gaming" ? { ...space, follower_count: 5 } : space));
+  assert.deepEqual(listed().map((space) => space.id), ["gaming", "art", "music"]);
+});
+
+test("directory separates seeded General spaces from User Spaces and accepts future data", async () => {
+  let spaces = [gaming, { ...gaming, id: "pets", slug: "pets", name: "Pets" }, { ...gaming, id: "college", kind: "college" }];
+  const component = await compile("../src/app/spaces/page.tsx", {
+    "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+    "next/link": { __esModule: true, default: "Link" },
+    "@/components/spaces/SpaceSection": { __esModule: true, default: "SpaceSection" },
+    "@/components/spaces/SpacesProvider": { useSpaces: () => ({ spaces, loading: false, error: "", reload() {} }) },
+  });
+  const sections = () => descendants(component.default()).filter((node) => node.type === "SpaceSection");
+  const [general, user] = sections();
+  assert.deepEqual([general.props.title, user.props.title], ["General spaces", "User Spaces"]);
+  assert.deepEqual(general.props.spaces.map((space) => space.id), ["gaming", "pets"]);
+  assert.deepEqual(user.props.spaces, []);
+  assert.equal(user.props.emptyMessage, "User-created spaces will appear here.");
+  assert.notEqual(general.props.id, user.props.id);
+  spaces = [...spaces, { ...gaming, id: "club", name: "Student Club", is_seeded: false }];
+  assert.deepEqual(sections()[1].props.spaces.map((space) => space.id), ["club"]);
 });

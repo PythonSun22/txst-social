@@ -4,7 +4,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link";
 import { searchProfiles, type ProfileListItem } from "@/lib/api";
 import { searchSpaces, spaceHref, type Space } from "@/lib/spaces";
-import SpaceIcon from "@/components/spaces/SpaceIcon";
+import SpaceAvatar from "@/components/spaces/SpaceAvatar";
 
 type Scope = "all" | "students" | "colleges" | "spaces";
 interface SearchResults {
@@ -21,7 +21,7 @@ function SpaceResults({ title, spaces }: { title: string; spaces: Space[] }) {
     <ul className="divide-y divide-border">
       {spaces.map((space) => <li key={space.id} className="py-3">
         <Link href={spaceHref(space.slug)} className="flex items-center gap-3 text-primary hover:underline">
-          <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-accent"><SpaceIcon slug={space.slug} /></span>
+          <SpaceAvatar space={space} />
           <span className="font-semibold">{space.name}</span>
         </Link>
         {space.description && <p className="mt-2 text-sm text-muted-foreground">{space.description}</p>}

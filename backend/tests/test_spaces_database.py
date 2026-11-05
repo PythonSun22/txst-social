@@ -20,7 +20,7 @@ class SpaceDatabaseTests(ImageDatabaseFixture):
         with self.sessions() as db:
             seeded = db.scalars(select(Space).where(Space.is_seeded.is_(True))).all()
             self.assertEqual({s.name for s in seeded}, {"Study Groups", "Campus Events", "Gaming", "Art",
-                "San Marcos Life", "Technology", "Cooking", "Sports"})
+                "San Marcos Life", "Technology", "Cooking", "Sports", "Music", "Pets"})
             self.assertTrue(all(s.created_by is None and s.kind == "community" for s in seeded))
 
     def test_follow_is_persistent_idempotent_and_visible_on_profile(self):

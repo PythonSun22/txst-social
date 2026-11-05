@@ -32,7 +32,7 @@ there are three kinds:
 - **Colleges** — a fixed, seeded set. Students do not create these. A student
   declares one home college.
 - **Communities** — created and run by students, for a club, a course, a dorm,
-  an interest. Eight built-in starter communities are marked `is_seeded`; those
+  an interest. Ten built-in starter communities are marked `is_seeded`; those
   do not require a student creator or a fabricated Auth account.
 
 A student posts into exactly one space. Others like it and reply in threaded
@@ -313,13 +313,45 @@ Pass a space slug to reuse its chronological loading, cursor pagination, error
 retries, Auth refresh and post-card actions (FR-13/60/66). Pages own headings,
 banners and Create post links; changing spaces resets the feed and cancels stale
 requests. This frontend refactor does not change stored post destinations.
-`/spaces` lists database-backed communities and colleges. `/spaces/[slug]`
+`/spaces` shows General spaces ordered by follower count (highest first, name breaks ties)
+in two horizontally scrolling rows of compact cards, with icons, names,
+descriptions and the shared follow controls. Left/right arrows scroll both rows,
+disable at either end, and respect reduced-motion preferences. Native touch and
+keyboard scrolling remain available. Colleges keep their own directory.
+General spaces contains seeded communities; User Spaces below it contains
+non-seeded communities and shows an empty table state until data exists.
+Both groups use `components/spaces/SpaceSection.tsx` for independent scrolling,
+follower sorting, headings and empty states. Space API responses expose the
+existing `is_seeded` flag. Create Space opens `/spaces/create`; verified accounts
+submit name, unique 3–21-character lowercase URL handle, description, optional
+rules and an optional approved icon through `POST /spaces` (FR-20/21/24).
+The server sets community kind, creator and `is_seeded=false`, then atomically
+inserts the space, creator moderator and creator follow. Exact retries return
+the existing space; handles used by other content return 409. `create` is reserved.
+The shared provider reloads and opens `/spaces/[slug]`; search, posts, sidebar
+and profile membership reuse existing endpoints. Creation forms clear on account
+changes. No owner management/moderator controls are added in this slice.
+`/spaces/[slug]`
 renders community feeds; existing college URLs remain `/colleges/[slug]`.
 `AppShell.tsx` replaces the narrow root wrapper on ForAll and post-search results with a left
 `SpacesSidebar`, sticky on wide screens and collapsible above the feed below
-1280px. Equal outer grid columns keep the original 42rem feed wrapper centered
+1280px. Equal outer grid columns keep the 48rem feed wrapper centered
 in the viewport independently of the left sidebar.
+The desktop sidebar is anchored to the left page padding with a 224px maximum
+width and compact spacing; it does not move the centered feed.
+ForAll and post-search also have a right `CollegesSidebar`, using the same white
+card/gold top. The profile's home college has a large shared icon and serif name;
+other followed colleges appear in a smaller independently scrolling list.
+Community-only Your Spaces on the left shows five rows before scrolling; college
+follows live on the right. Both sidebars collapse above the feed on smaller screens.
+All ten colleges have distinct shared SVG icons, also shown on `/colleges` and
+college follow rows. College pages expose the shared follow control; editing a
+profile reloads sidebar data so a changed home college appears immediately.
+ForAll, post-search, college and individual community feeds share the wider
+48rem maximum width; college pages do not add a second padded width wrapper.
 Individual college and space pages keep the centered wrapper without this sidebar.
+Sidebar lists use `SpaceList`'s compact variant: linked icon and name only,
+without follower counts or follow/unfollow controls.
 `SpacesProvider` shares viewer-specific follow state across navigation, moves
 followed spaces above suggestions, and clears pending reads/writes on account
 changes. Own and public profile pages show persisted joined spaces.
@@ -332,7 +364,19 @@ Apply `20261105000000_starter_spaces.sql` locally before running this checkout.
 It seeds Study Groups, Campus Events, Gaming, Art, San Marcos Life, Technology,
 Cooking and Sports, removes direct browser follow writes, and maintains follower
 counts transactionally with a database trigger, including cascade deletes.
-This slice adds no community creation/moderation-management UI or uploaded banners.
+`20261105020000_music_space.sql` adds Music as the ninth starter community,
+including its own music-note icon through the shared `SpaceIcon` component.
+`20261105030000_pets_space.sql` adds Pets as the tenth starter community,
+using the shared paw icon.
+`20261105040000_user_space_icons.sql` adds `spaces.icon_image_upload_id` and
+reference guards/cleanup tracking. Icons reuse avatar compression, quotas and
+moderation; only the creator's ready avatar-purpose upload can be attached.
+The form waits for screening; rejected/failed photos must be removed, replaced
+or retried using the existing image controls. Public preview/Storage policies
+permit approved icons on undeleted spaces; originals remain private. Cleanup
+protects live space references and queues detached/deleted-space icons.
+`SpaceAvatar` displays approved photos across cards, feeds, search and profile lists,
+falling back to built-in symbols. This slice adds no uploaded space banners.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens

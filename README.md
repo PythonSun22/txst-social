@@ -380,16 +380,40 @@ already has this and the branding migration under the explicitly authorized
 ### Spaces and persistent follows (FR-24, FR-70–73)
 
 The left sidebar appears on ForAll and post-search results; individual college
-and space pages do not show it. The feed keeps its original centered width, with the sidebar in a
-separate left column; below 1280px the sidebar collapses above the feed. Followed spaces appear under
-**Your Spaces**, above **Suggested Spaces**; `/spaces` lists all communities and
-colleges. Membership persists in `follows` under the signed-in profile and is
+and space pages do not show it. The feed keeps its centered 48rem maximum width,
+with the sidebar in a separate left column. **Your Spaces** appears above
+**Suggested Spaces**, with up to five joined community rows visible before scrolling. A matching
+right sidebar highlights the profile's main college with a large icon and serif
+name; other followed colleges appear below in a smaller scrollable list. College
+icons are shared with `/colleges` and college follow controls. Both sidebars
+collapse above the feed below 1280px. `/spaces` shows **General spaces**
+as two horizontally scrolling rows of narrower cards with icons, titles,
+descriptions and follow controls. Arrow buttons scroll both rows and disable at
+the ends; touch and keyboard scrolling are also supported. **User Spaces** below
+it uses the same reusable component for student-created communities and shows
+an empty table state until records exist. `is_seeded` separates the two groups.
+**Create Space** opens `/spaces/create`. Verified students can enter a name,
+unique URL handle, description, optional rules and an optional photo. Upload the
+photo and wait for screening before creating the space, or use the default paw.
+The creator automatically follows the space and becomes its first moderator;
+the space opens its existing feed and appears in search, User Spaces, joined
+profile spaces and the sidebar. Moderator/owner management controls are future work.
+Colleges remain under
+`/colleges`. Membership persists in `follows` under the signed-in profile and is
 displayed on own and public profile pages. Follow/unfollow controls update the
 shared state after the backend confirms the write.
 
 Apply `20261105000000_starter_spaces.sql` locally. It seeds Study Groups, Campus
-Events, Gaming, Art, San Marcos Life, Technology, Cooking and Sports. Built-in
-communities are explicitly marked `is_seeded`; student-created communities still
+Events, Gaming, Art, San Marcos Life, Technology, Cooking and Sports.
+Apply `20261105020000_music_space.sql` for Music, the ninth starter space.
+Apply `20261105030000_pets_space.sql` for Pets, the tenth starter space.
+Apply `20261105040000_user_space_icons.sql` before using creation/photos. Icons
+reuse the avatar compression and moderation pipeline, including account storage
+and upload limits. Only approved creator-owned uploads may become space icons.
+Image workers must be running to approve a newly uploaded photo. The migration
+also extends public variant access and protects active icons from cleanup.
+This migration is applied locally; shared deployment remains pending review.
+Built-in communities are explicitly marked `is_seeded`; student-created communities still
 require a creator. No fake user accounts are added. Shared deployment follows
 the usual review process.
 

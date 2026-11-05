@@ -90,7 +90,7 @@ async function containerHarness(props, overrides = {}) {
   const listeners = new Set();
   const navigation = [];
   const router = { replace: (path) => navigation.push(path) };
-  const calls = { ownPosts: 0, publicPosts: [], publicProfiles: [], follows: [] };
+  const calls = { ownPosts: 0, publicPosts: [], publicProfiles: [], follows: [], spaceReloads: 0 };
   const modules = {
     "next/navigation": { useRouter: () => router },
     "@/lib/api": {
@@ -107,6 +107,7 @@ async function containerHarness(props, overrides = {}) {
       return { data: { subscription: { unsubscribe: () => listeners.delete(callback) } } };
     } } }) },
     "./EditProfileModal": stub("EditProfileModal"),
+    "@/components/spaces/SpacesProvider": { useSpaces: () => ({ reload: () => calls.spaceReloads++ }) },
     "./ProfileView": stub("ProfileView"),
     "@/components/images/ImageProcessingNotice": stub("ImageProcessingNotice"),
     ...overrides,
@@ -127,6 +128,17 @@ test("own profile keeps owner actions and pending posts in the shared view", asy
   assert.match(content(view.actions), /Edit Profile.*Sign Out/);
   assert.equal(h.calls.ownPosts, 1);
   assert.deepEqual(h.calls.publicProfiles, []);
+});
+
+test("editing a home college refreshes the shared sidebar profile", async (t) => {
+  const h = await containerHarness({}); t.after(h.unmount);
+  h.render(); await settle();
+  const view = byType(h.render(), "ProfileView")[0].props;
+  byType(view.actions, "button").find((button) => content(button) === "Edit Profile").props.onClick();
+  const updated = { ...account, home_college: { id: "business", name: "College of Business", slug: "business" } };
+  byType(h.render(), "EditProfileModal")[0].props.onSaved(updated);
+  assert.equal(h.calls.spaceReloads, 1);
+  assert.equal(byType(h.render(), "ProfileView")[0].props.profile.home_college.id, "business");
 });
 
 test("another student's profile uses their data with viewer-owned actions", async (t) => {

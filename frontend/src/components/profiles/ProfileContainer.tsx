@@ -8,6 +8,7 @@ import { getCurrentProfile, getProfileSetupPath, type CurrentProfile, type Profi
 import { getMyPosts, getUserPosts, type FeedPost } from "@/lib/posts";
 import { getSupabase } from "@/lib/supabase";
 import EditProfileModal from "./EditProfileModal";
+import { useSpaces } from "@/components/spaces/SpacesProvider";
 import ProfileView from "./ProfileView";
 import ImageProcessingNotice from "@/components/images/ImageProcessingNotice";
 
@@ -24,6 +25,7 @@ export default function ProfileContainer({ profileId }: { profileId?: string }) 
 }
 
 function ProfileContent({ profileId }: { profileId?: string }) {
+  const { reload: reloadSpaces } = useSpaces();
   const router = useRouter();
   const [data, setData] = useState<LoadedProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +175,6 @@ function ProfileContent({ profileId }: { profileId?: string }) {
         </div>
       )} />
     {owner && editing && <EditProfileModal profile={owner} onClose={() => setEditing(false)}
-      onSaved={(updated) => { updateOwner(updated); setEditing(false); }} />}
+      onSaved={(updated) => { updateOwner(updated); setEditing(false); reloadSpaces(); }} />}
   </>;
 }

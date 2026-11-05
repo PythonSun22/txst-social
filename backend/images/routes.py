@@ -20,7 +20,7 @@ from images.schemas import (
 from images import storage as image_storage
 from images.limits import reserve_upload_slot
 from images.budget import check_capacity, expire_unfinished, storage_budget
-from models import ImageStorageObject, ImageUpload, ImageVariant, Profile
+from models import ImageStorageObject, ImageUpload, ImageVariant, Profile, Space
 from images.lifecycle import can_retry_image, image_processing_state
 from images.recovery import retry_image
 from worker_control import control
@@ -211,14 +211,18 @@ def abandon_upload(upload_id: UUID, profile: Profile = Depends(require_verified_
 def preview_published_profile_image(upload_id: UUID, response: Response,
     variant: VariantName = Query(default="avatar_small"),
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)):
-    """Public access only to approved assets currently displayed by active profiles."""
+    """Public access only to approved assets displayed by active profiles or spaces."""
     upload = db.get(ImageUpload, upload_id)
     active_profile = db.scalar(select(Profile.id).where(
         Profile.deleted_at.is_(None), Profile.suspended_at.is_(None),
         (Profile.profile_image_upload_id == upload_id) | (Profile.banner_image_upload_id == upload_id),
     ))
-    if upload is None or upload.deleted_at is not None or upload.processing_status != "ready" or active_profile is None:
-        raise HTTPException(404, "Profile image not found.")
+    active_space = db.scalar(select(Space.id).where(
+        Space.deleted_at.is_(None), Space.icon_image_upload_id == upload_id,
+    )) if active_profile is None and variant in {"avatar_small", "avatar_large"} else None
+    if (upload is None or upload.deleted_at is not None or upload.processing_status != "ready"
+            or (active_profile is None and active_space is None)):
+        raise HTTPException(404, "Published image not found.")
     version = db.get(ImageVariant, (upload.id, variant))
     if version is None:
         raise HTTPException(404, "Image version not found.")

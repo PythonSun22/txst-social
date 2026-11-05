@@ -1,18 +1,26 @@
 "use client";
 
-import SpaceList from "@/components/spaces/SpaceList";
+import Link from "next/link";
+import SpaceSection from "@/components/spaces/SpaceSection";
 import { useSpaces } from "@/components/spaces/SpacesProvider";
 
 export default function SpacesPage() {
   const { spaces, loading, error, reload } = useSpaces();
-  return <section>
-    <h1 className="font-serif text-2xl font-bold text-primary">Spaces</h1>
-    <p className="mb-6 mt-2 text-sm text-muted-foreground">Find your people, from your college to your favorite interests.</p>
+  const communities = spaces.filter((space) => space.kind === "community");
+  const showEmpty = !loading && !error;
+  return <>
     {loading && <p role="status">Loading spaces…</p>}
     {error && <p role="alert" className="mb-4 text-sm text-red-700">{error} <button type="button" onClick={reload} className="underline">Retry</button></p>}
-    {(["community", "college"] as const).map((kind) => <section key={kind} className="mb-6 rounded-card border border-border border-t-4 border-t-accent bg-card p-5 shadow-sm">
-      <h2 className="mb-5 font-serif text-xl font-bold text-primary">{kind === "college" ? "Colleges" : "Communities"}</h2>
-      <SpaceList spaces={spaces.filter((space) => space.kind === kind)} />
-    </section>)}
-  </section>;
+    <div className="space-y-10">
+      <SpaceSection id="general-spaces" title="General spaces" heading="h1"
+        description="Discover communities for your interests and life at Texas State."
+        spaces={communities.filter((space) => space.is_seeded)}
+        emptyMessage={showEmpty ? "No general spaces are available yet." : undefined} />
+      <SpaceSection id="user-spaces" title="User Spaces"
+        description="Discover communities created by students."
+        actions={<Link href="/spaces/create" className="mr-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90">+ Create Space</Link>}
+        spaces={communities.filter((space) => !space.is_seeded)}
+        emptyMessage={showEmpty ? "User-created spaces will appear here." : undefined} />
+    </div>
+  </>;
 }

@@ -43,7 +43,7 @@ async function searchHarness(api) {
     react: runtime,
     "react/jsx-runtime": { jsx, jsxs: jsx },
     "next/link": { __esModule: true, default: "Link" },
-    "@/components/spaces/SpaceIcon": { __esModule: true, default: "SpaceIcon" },
+    "@/components/spaces/SpaceAvatar": { __esModule: true, default: "SpaceAvatar" },
     "@/lib/api": { searchProfiles: api.searchProfiles },
     "@/lib/spaces": { searchSpaces: api.searchSpaces,
       spaceHref: (slug) => `/${slug === "business" ? "colleges" : "spaces"}/${slug}` },

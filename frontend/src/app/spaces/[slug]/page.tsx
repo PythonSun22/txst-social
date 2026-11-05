@@ -23,6 +23,10 @@ export default function SpacePage({ params }: { params: Promise<{ slug: string }
         <SpaceList spaces={[space]} />
       </div>
     </header>
+    {space.rules && <section aria-label="Space rules" className="mb-5 rounded-card border border-border bg-card p-4">
+      <h2 className="font-semibold text-primary">Rules</h2>
+      <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">{space.rules}</p>
+    </section>}
     <Link href={`/submit?space=${encodeURIComponent(slug)}`} className="mb-4 block rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-primary">+ Create Post</Link>
     <SpaceFeed space={slug} />
   </section>;
