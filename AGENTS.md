@@ -279,7 +279,10 @@ tags, PNG paths and per-character transforms live in `frontend/src/lib/college-c
 Artwork is served from `frontend/public/colleges/`. Browsing does not change the
 student’s home college; the confirmation action opens the selected feed. The
 carousel ports `references/colleges/` palettes, layout and GSAP choreography; its
-DM Sans and Space Grotesk fonts and copied styles are scoped to this page.
+The application and Colleges explorer use Arial with Helvetica and generic
+sans-serif fallbacks for body text and headings, with no external font downloads. The global GUI extends the explorer’s cream, maroon and gold palette
+with rounded cards, stronger shadows and visible navigation/focus states; carousel
+layout and animation styles remain scoped to this page.
 It supports keyboard navigation, reduced motion and an explicit feed action. `POST /posts` takes an optional
 `space` slug (default `general`); a college page's Create post button opens
 `/submit?space=<slug>`. Post responses include `space_name`. The moderation worker

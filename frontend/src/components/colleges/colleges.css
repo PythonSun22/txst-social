@@ -8,7 +8,7 @@
   overflow: hidden;
   background: #f4f2ed;
   color: #292624;
-  font-family: var(--font-college-body), 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   --lynx-maroon: #632b39;
 }
 
@@ -25,7 +25,7 @@
   align-items: center;
   gap: 7px;
   color: #632b39;
-  font-family: var(--font-college-heading), 'Space Grotesk', sans-serif;
+  font-family: var(--font-serif);
   font-size: 25px;
   font-weight: 700;
   letter-spacing: -1.2px;
@@ -168,7 +168,7 @@
   top: 36px;
   right: -14px;
   color: #e8e4dc70;
-  font-family: var(--font-college-heading), 'Space Grotesk', sans-serif;
+  font-family: var(--font-serif);
   font-size: clamp(70px, 10.5vw, 180px);
   font-weight: 700;
   line-height: 1;
@@ -270,7 +270,7 @@
 .lynx-page .college-title {
   margin: 0 0 22px;
   color: var(--college-dark);
-  font-family: var(--font-college-heading), 'Space Grotesk', sans-serif;
+  font-family: var(--font-serif);
   font-size: clamp(35px, 3.9vw, 64px);
   line-height: 1.04;
   font-weight: 700;
@@ -325,7 +325,7 @@
   display: flex;
   align-items: baseline;
   gap: 7px;
-  font-family: var(--font-college-heading), 'Space Grotesk', sans-serif;
+  font-family: var(--font-serif);
 }
 
 .lynx-page .college-counter strong {
@@ -432,7 +432,7 @@
 }
 
 .lynx-page .college-picker-number {
-  font-family: var(--font-college-heading), 'Space Grotesk', sans-serif;
+  font-family: var(--font-serif);
   font-size: 11px;
   opacity: 0.6;
 }

@@ -67,9 +67,16 @@ export default function Home() {
 
   return (
     <>
-      <div className="mb-3 flex items-center justify-between"><h1 className="font-serif text-xl font-bold text-primary">ForAll</h1><span className="text-xs text-muted-foreground">Newest first</span></div>
+      <section className="feed-intro" aria-labelledby="feed-heading">
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#f2d492]">Texas State · Campus-wide</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h1 id="feed-heading" className="font-serif text-5xl font-bold tracking-tight">ForAll<span className="text-[#f2d492]">.</span></h1>
+          <span className="rounded-full border border-white/30 px-3 py-1 text-xs text-white/90">Newest first</span>
+        </div>
+        <p className="mt-3 text-sm text-white/85">Your campus. Your conversations.</p>
+      </section>
       <PostSearch />
-      <Link href="/submit" className="mb-4 block rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-primary">+ Create Post</Link>
+      <Link href="/submit" className="mb-5 block rounded-card border border-primary bg-primary px-5 py-4 text-sm font-bold text-white">+ Create Post</Link>
       {loading && <p role="status">Loading posts…</p>}
       {error && (<p role="alert" className="mb-3 text-sm text-red-700">{error}{" "}<button type="button" className="underline" onClick={() => setReload((n) => n + 1)}>Reload feed</button></p>)}
       {!loading && !error && !posts.length && (<p className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground"> No posts to show yet. New posts appear here for their author while awaiting automatic screening.</p>)}

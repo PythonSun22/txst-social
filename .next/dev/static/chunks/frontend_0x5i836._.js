@@ -461,24 +461,61 @@ function Home() {
     }
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
         children: [
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: "mb-3 flex items-center justify-between",
+            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("section", {
+                className: "feed-intro",
+                "aria-labelledby": "feed-heading",
                 children: [
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
-                        className: "font-serif text-xl font-bold text-primary",
-                        children: "ForAll"
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                        className: "mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#f2d492]",
+                        children: "Texas State · Campus-wide"
                     }, void 0, false, {
                         fileName: "[project]/frontend/src/app/page.tsx",
-                        lineNumber: 70,
-                        columnNumber: 63
+                        lineNumber: 71,
+                        columnNumber: 9
                     }, this),
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                        className: "text-xs text-muted-foreground",
-                        children: "Newest first"
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                        className: "flex flex-wrap items-end justify-between gap-3",
+                        children: [
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
+                                id: "feed-heading",
+                                className: "font-serif text-5xl font-bold tracking-tight",
+                                children: [
+                                    "ForAll",
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                        className: "text-[#f2d492]",
+                                        children: "."
+                                    }, void 0, false, {
+                                        fileName: "[project]/frontend/src/app/page.tsx",
+                                        lineNumber: 73,
+                                        columnNumber: 96
+                                    }, this)
+                                ]
+                            }, void 0, true, {
+                                fileName: "[project]/frontend/src/app/page.tsx",
+                                lineNumber: 73,
+                                columnNumber: 11
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                className: "rounded-full border border-white/30 px-3 py-1 text-xs text-white/90",
+                                children: "Newest first"
+                            }, void 0, false, {
+                                fileName: "[project]/frontend/src/app/page.tsx",
+                                lineNumber: 74,
+                                columnNumber: 11
+                            }, this)
+                        ]
+                    }, void 0, true, {
+                        fileName: "[project]/frontend/src/app/page.tsx",
+                        lineNumber: 72,
+                        columnNumber: 9
+                    }, this),
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                        className: "mt-3 text-sm text-white/85",
+                        children: "Your campus. Your conversations."
                     }, void 0, false, {
                         fileName: "[project]/frontend/src/app/page.tsx",
-                        lineNumber: 70,
-                        columnNumber: 132
+                        lineNumber: 76,
+                        columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
@@ -488,16 +525,16 @@ function Home() {
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$src$2f$components$2f$posts$2f$PostSearch$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {}, void 0, false, {
                 fileName: "[project]/frontend/src/app/page.tsx",
-                lineNumber: 71,
+                lineNumber: 78,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
                 href: "/submit",
-                className: "mb-4 block rounded-card border border-border bg-card px-4 py-3 text-sm font-semibold text-primary",
+                className: "mb-5 block rounded-card border border-primary bg-primary px-5 py-4 text-sm font-bold text-white",
                 children: "+ Create Post"
             }, void 0, false, {
                 fileName: "[project]/frontend/src/app/page.tsx",
-                lineNumber: 72,
+                lineNumber: 79,
                 columnNumber: 7
             }, this),
             loading && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -505,7 +542,7 @@ function Home() {
                 children: "Loading posts…"
             }, void 0, false, {
                 fileName: "[project]/frontend/src/app/page.tsx",
-                lineNumber: 73,
+                lineNumber: 80,
                 columnNumber: 19
             }, this),
             error && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -521,13 +558,13 @@ function Home() {
                         children: "Reload feed"
                     }, void 0, false, {
                         fileName: "[project]/frontend/src/app/page.tsx",
-                        lineNumber: 74,
+                        lineNumber: 81,
                         columnNumber: 84
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/frontend/src/app/page.tsx",
-                lineNumber: 74,
+                lineNumber: 81,
                 columnNumber: 18
             }, this),
             !loading && !error && !posts.length && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -535,7 +572,7 @@ function Home() {
                 children: " No posts to show yet. New posts appear here for their author while awaiting automatic screening."
             }, void 0, false, {
                 fileName: "[project]/frontend/src/app/page.tsx",
-                lineNumber: 75,
+                lineNumber: 82,
                 columnNumber: 48
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -551,12 +588,12 @@ function Home() {
                                     } : item))
                     }, `${profile?.id ?? "guest"}:${post.id}`, false, {
                         fileName: "[project]/frontend/src/app/page.tsx",
-                        lineNumber: 77,
+                        lineNumber: 84,
                         columnNumber: 29
                     }, this))
             }, void 0, false, {
                 fileName: "[project]/frontend/src/app/page.tsx",
-                lineNumber: 76,
+                lineNumber: 83,
                 columnNumber: 7
             }, this),
             cursor && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -567,7 +604,7 @@ function Home() {
                 children: more ? "Loading…" : "Load more"
             }, void 0, false, {
                 fileName: "[project]/frontend/src/app/page.tsx",
-                lineNumber: 79,
+                lineNumber: 86,
                 columnNumber: 19
             }, this)
         ]
@@ -1056,7 +1093,7 @@ function PostCard({ post, profile, onLike, onDelete, onStatus }) {
         }
     }
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("article", {
-        className: "rounded-card border border-border bg-card p-4",
+        className: "post-card rounded-card border border-border bg-card p-4",
         children: [
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$frontend$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground",

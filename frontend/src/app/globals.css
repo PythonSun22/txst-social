@@ -1,27 +1,22 @@
 @import "tailwindcss";
 
-/*
- * Texas State maroon and gold theme, taken from the Figma Make mockup
- * (original design source). Colours are defined once here; components use them
- * through the Tailwind names registered in @theme below (bg-primary,
- * text-muted-foreground, border-border, ...), so retheming is one edit.
- */
+/* Shared palette and typography extend the Colleges explorer across the app. */
 :root {
-  --background: #f4f0ec;
-  --foreground: #1a0a0b;
+  --background: #f4f2ed;
+  --foreground: #292624;
   --card: #ffffff;
-  --card-foreground: #1a0a0b;
-  --primary: #501214;
+  --card-foreground: #292624;
+  --primary: #632b39;
   --primary-foreground: #ffffff;
-  --secondary: #f9f5f0;
-  --secondary-foreground: #1a0a0b;
-  --muted: #ede8e2;
-  --muted-foreground: #7a6a5a;
-  --accent: #c4902a;
+  --secondary: #f0e9df;
+  --secondary-foreground: #292624;
+  --muted: #e9e4db;
+  --muted-foreground: #6d625b;
+  --accent: #9b6715;
   --accent-foreground: #ffffff;
-  --border: #ddd5c8;
-  --ring: #501214;
-  --radius: 6px;
+  --border: #cfc6b9;
+  --ring: #632b39;
+  --radius: 18px;
 }
 
 @theme inline {
@@ -40,9 +35,9 @@
   --color-border: var(--border);
   --color-ring: var(--ring);
   --radius-card: var(--radius);
-  /* Font variables are set by next/font in layout.tsx. */
-  --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-serif: var(--font-merriweather), Georgia, serif;
+  /* Native fonts require no downloads. Keep the legacy heading utility name. */
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-serif: Arial, Helvetica, sans-serif;
 }
 
 body {
@@ -53,5 +48,79 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #c4902a33 transparent;
+  scrollbar-color: #b47a1633 transparent;
+}
+
+/* Components use the existing semantic utilities so every feature shares the
+   same surfaces, without changing media, editor or carousel layouts. */
+@layer base {
+  body { margin: 0; }
+  h1, h2, h3 { font-family: var(--font-serif); letter-spacing: -0.035em; }
+  button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+  button:not(:disabled), select:not(:disabled) { cursor: pointer; }
+  :is(a, button, input, textarea, select):focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 4px;
+  }
+  ::selection { background: #ebc46c; color: #292624; }
+}
+
+@layer components {
+  .bg-card.border {
+    box-shadow: 0 16px 32px -24px #3a2a2466, 0 3px 0 #3a2a2410;
+  }
+  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select).border {
+    border-radius: 12px;
+    background-color: #fffdfa;
+    box-shadow: inset 0 2px 3px #3a2a2406;
+  }
+  :is(button, a).bg-primary {
+    box-shadow: 0 4px 0 #401824, 0 7px 14px -8px #632b3977;
+    transition: background-color 160ms, box-shadow 160ms, transform 160ms;
+  }
+  :is(button, a).bg-primary:hover:not(:disabled) { transform: translateY(-1px); }
+  :is(button, a).bg-primary:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #401824;
+  }
+  .site-nav-link {
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 9px 14px;
+    color: #655b54;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background-color 160ms, color 160ms;
+  }
+  .site-nav-link:hover { background: #e9e4db; color: #632b39; }
+  .site-nav-link[aria-current="page"] { background: #632b39; color: white; box-shadow: 0 3px 0 #401824; }
+  .feed-intro {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 24px;
+    border: 1px solid #632b39;
+    border-radius: 20px;
+    padding: 28px;
+    background: #632b39;
+    color: #fffaf1;
+    box-shadow: 0 6px 0 #e4bd68, 0 20px 32px -24px #632b3980;
+  }
+  .feed-intro::after {
+    content: "";
+    position: absolute;
+    width: 180px;
+    height: 180px;
+    border: 32px solid #ffffff0a;
+    border-radius: 50%;
+    top: -65px;
+    right: -55px;
+    pointer-events: none;
+  }
+  .post-card { padding: 22px; }
+  .post-card h2 { font-size: 1.2rem; line-height: 1.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
