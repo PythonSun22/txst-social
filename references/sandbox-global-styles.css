@@ -100,8 +100,8 @@ button:active:not(:disabled) {
 }
 
 .edition,.local-badge,.eyebrow,.card-top,.player-footer,.board-heading,.session-heading,.scores span,.timeline-count,footer {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 120px;
+  font-weight: 666;
   letter-spacing: 1.5px;
 }
 
