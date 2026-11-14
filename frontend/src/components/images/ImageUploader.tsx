@@ -124,7 +124,7 @@ export default function ImageUploader({ policy, canUpload, onUploaded, selectOnl
 
       {inspecting && <p role="status" className="text-sm">Reading image…</p>}
       {selected && <div className="space-y-3">
-        {selected.previewUrl && <img src={selected.previewUrl} alt={cropShape === "circle" ? "Circular profile photo preview" : "Selected image preview"}
+        {selected.previewUrl && <img src={selected.previewUrl} alt={cropShape === "circle" ? "Circular photo preview" : "Selected image preview"}
           width={selected.width!} height={selected.height!}
           className={cropShape === "circle" ? "mx-auto aspect-square max-h-80 w-full max-w-80 rounded-full border-4 border-white object-cover shadow-md ring-2 ring-primary" : "mx-auto max-h-80 w-auto max-w-full rounded-card object-contain"} />}
         <p className="break-all text-sm font-semibold">{selected.file.name}</p>

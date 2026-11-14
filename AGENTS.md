@@ -32,7 +32,8 @@ there are three kinds:
 - **Colleges** — a fixed, seeded set. Students do not create these. A student
   declares one home college.
 - **Communities** — created and run by students, for a club, a course, a dorm,
-  an interest.
+  an interest. Ten built-in starter communities are marked `is_seeded`; those
+  do not require a student creator or a fabricated Auth account.
 
 A student posts into exactly one space. Others like it and reply in threaded
 comments. Likes plus age produce a ranking, and each space has Hot, New and Top
@@ -117,6 +118,15 @@ SQLAlchemy models stay at the backend root. Frontend components are grouped unde
 and API calls live in `frontend/src/lib/profiles.ts`. Image API helpers remain
 in `frontend/src/lib/images/`. Run moderation CLIs from `backend/` with
 `uv run python -m moderation.client` or `uv run python -m moderation.evaluate`.
+Own and public profile routes both render `components/profiles/ProfileContainer.tsx`.
+It owns loading, Auth refresh, cancellation, editing/sign-out and user follows;
+`ProfileView.tsx` owns the shared banner/avatar, gold accents, metadata, sorted
+posts and joined-space layout. Shared display fields are `ProfileDetails`;
+private/pending-image fields stay on `CurrentProfile`. Public profile responses
+include the same college and joined-space counts but no private processing state.
+Public images use `/images/{id}/published-preview`; own images use owner-only
+`/preview`. Profile links/search retain `/profile/{id}`, with own IDs redirecting
+to `/profile`. Empty-state copy uses you/your for owners and they/their for others.
 
 **`supabase/migrations/20260910200000_lynx_core.sql` and subsequent migrations
 are the source of truth for the data model.** Read the core migration first;
@@ -135,7 +145,7 @@ Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Identity**
 - `profiles` — a student. `id` is `auth.users.id`. Holds username, the timestamp
-  of its one-time choice, bio, a normalized major selection,
+  of its one-time choice, an academic-setup completion timestamp, bio, a normalized major selection,
   optional academic level, home college, avatar and
   banner upload references, karma totals, admin flag, and suspension. `email` and
   `email_verified_at` are **mirrored from `auth.users` by trigger** — never
@@ -147,6 +157,8 @@ Eighteen tables of ours, plus Supabase's `auth.users` which we do not own.
 
 **Places**
 - `spaces` — General, colleges and communities, discriminated by `kind`.
+  `is_seeded` explicitly permits built-in communities without `created_by`;
+  other communities still require a creator.
 - `follows` — `(user_id, space_id)` plus `muted`. Composite PK, so following
   twice is impossible rather than merely handled.
 - `user_follows` — `(follower_id, followed_id)` plus `followed_at`. A separate
@@ -255,11 +267,21 @@ Working endpoints today are `GET /health`, `GET /db-health`, `GET /profiles`,
 existing users in through Supabase Auth and sends authenticated students to
 the ForAll feed at `/` after sign-in or email-code confirmation (FR-01/02).
 New accounts instead open `/choose-username` after email confirmation. They must
-choose a unique public username before continuing to `/profile`; the ordinary
-profile editor cannot change it later (FR-06). The signup trigger assigns an
-unrelated random provisional handle before this choice. Apply
-`20261103000000_private_signup_usernames.sql` locally before running this flow;
-shared deployment remains subject to review.
+choose a unique public username, then select college, major and student level on `/choose-college`
+before continuing to `/profile`. The two components share `AccountSetupCard` for
+the same background. `POST /auth/me/academics` validates both catalog choices and the student level,
+atomically saves them, marks `academic_setup_completed_at`, and inserts the college
+follow (FR-11/70). Retries cannot duplicate membership or rejoin after an unfollow.
+College, major and student level remain editable through the existing profile editor, independently
+of follows; usernames cannot change later (FR-06). Sign-in and the own-profile page
+resume the first unfinished step. Signup lists only colleges with active catalog
+majors; the existing undergraduate catalog does not cover all ten college spaces.
+The signup trigger assigns an unrelated random provisional handle before this
+choice. Apply `20261103000000_private_signup_usernames.sql`, the starter-spaces
+migration and `20261105010000_academic_onboarding.sql` locally before running this
+flow. The academic migration backfills already-chosen usernames as complete to
+preserve existing accounts; new/provisional accounts must complete the new step.
+Shared deployment remains subject to review.
 FastAPI validates bearer tokens with the project's Auth server, then loads the
 matching profile. Inactive accounts are rejected (FR-96); a reusable write
 dependency requires verified email (FR-02). Post routes derive `author_id` from
@@ -270,14 +292,91 @@ General posts, ordered images, chronological feed reads and post likes now work
 through `/posts`. Threaded comments and comment likes work through
 `/posts/{id}/comments` and publish unscreened. `GET /search/posts` searches
 post titles with the feed's visibility rule and cursor (FR-80, FR-66); the
-box above the ForAll feed opens `/search/posts?q=…` (`/search` is student search). Bodies, space names and comments are not searched
-yet. Reports remain **schema only**.
+box above the ForAll feed opens `/search/posts?q=…`. Post search still covers
+titles only; bodies and comments are not searched. `/search` is discovery search:
+typing searches students, colleges and community spaces, with an All/Students/
+Colleges/Spaces dropdown to narrow the query. Student results retain profile links;
+space results retain college/community URLs. Requests are debounced and canceled
+on query/category changes; category failures preserve other successful results.
+`GET /spaces?q=&kind=college|community` searches active space names and slugs
+with a 25-result cap; descriptions are excluded and unfiltered directory reads are unchanged.
+Search terms are capped at 50 characters and LIKE wildcards are matched literally.
+No additional search migration is required. Reports remain **schema only**.
 `GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
 shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
 seed) linking to `/colleges/[slug]` feeds (FR-13). `POST /posts` takes an optional
 `space` slug (default `general`); a college page's Create post button opens
 `/submit?space=<slug>`. Post responses include `space_name`. The moderation worker
-screens General and college posts; communities are not screened yet.
+screens General, college and community posts with the same publication rules.
+ForAll and college pages share `frontend/src/components/posts/SpaceFeed.tsx`.
+Pass a space slug to reuse its chronological loading, cursor pagination, error
+retries, Auth refresh and post-card actions (FR-13/60/66). Pages own headings,
+banners and Create post links; changing spaces resets the feed and cancels stale
+requests. This frontend refactor does not change stored post destinations.
+`/spaces` shows General spaces ordered by follower count (highest first, name breaks ties)
+in two horizontally scrolling rows of compact cards, with icons, names,
+descriptions and the shared follow controls. Left/right arrows scroll both rows,
+disable at either end, and respect reduced-motion preferences. Native touch and
+keyboard scrolling remain available. Colleges keep their own directory.
+General spaces contains seeded communities; User Spaces below it contains
+non-seeded communities and shows an empty table state until data exists.
+Both groups use `components/spaces/SpaceSection.tsx` for independent scrolling,
+follower sorting, headings and empty states. Space API responses expose the
+existing `is_seeded` flag. Create Space opens `/spaces/create`; verified accounts
+submit name, unique 3–21-character lowercase URL handle, description, optional
+rules and an optional approved icon through `POST /spaces` (FR-20/21/24).
+The server sets community kind, creator and `is_seeded=false`, then atomically
+inserts the space, creator moderator and creator follow. Exact retries return
+the existing space; handles used by other content return 409. `create` is reserved.
+The shared provider reloads and opens `/spaces/[slug]`; search, posts, sidebar
+and profile membership reuse existing endpoints. Creation forms clear on account
+changes. No owner management/moderator controls are added in this slice.
+`/spaces/[slug]`
+renders community feeds; existing college URLs remain `/colleges/[slug]`.
+`AppShell.tsx` replaces the narrow root wrapper on ForAll and post-search results with a left
+`SpacesSidebar`, sticky on wide screens and collapsible above the feed below
+1280px. Equal outer grid columns keep the 48rem feed wrapper centered
+in the viewport independently of the left sidebar.
+The desktop sidebar is anchored to the left page padding with a 224px maximum
+width and compact spacing; it does not move the centered feed.
+ForAll and post-search also have a right `CollegesSidebar`, using the same white
+card/gold top. The profile's home college has a large shared icon and serif name;
+other followed colleges appear in a smaller independently scrolling list.
+Community-only Your Spaces on the left shows five rows before scrolling; college
+follows live on the right. Both sidebars collapse above the feed on smaller screens.
+All ten colleges have distinct shared SVG icons, also shown on `/colleges` and
+college follow rows. College pages expose the shared follow control; editing a
+profile reloads sidebar data so a changed home college appears immediately.
+ForAll, post-search, college and individual community feeds share the wider
+48rem maximum width; college pages do not add a second padded width wrapper.
+Individual college and space pages keep the centered wrapper without this sidebar.
+Sidebar lists use `SpaceList`'s compact variant: linked icon and name only,
+without follower counts or follow/unfollow controls.
+`SpacesProvider` shares viewer-specific follow state across navigation, moves
+followed spaces above suggestions, and clears pending reads/writes on account
+changes. Own and public profile pages show persisted joined spaces.
+`GET /spaces`, `GET /spaces/{slug}` and `GET /profiles/{id}/spaces` provide the
+metadata; `PUT`/`DELETE /spaces/{slug}/follow` use the authenticated profile ID.
+Follow requires verified email; unfollow requires an active account. General is
+not followable. Existing `follows` rows are the source of membership; no profile
+array or second membership table is added (FR-24/70–73).
+Apply `20261105000000_starter_spaces.sql` locally before running this checkout.
+It seeds Study Groups, Campus Events, Gaming, Art, San Marcos Life, Technology,
+Cooking and Sports, removes direct browser follow writes, and maintains follower
+counts transactionally with a database trigger, including cascade deletes.
+`20261105020000_music_space.sql` adds Music as the ninth starter community,
+including its own music-note icon through the shared `SpaceIcon` component.
+`20261105030000_pets_space.sql` adds Pets as the tenth starter community,
+using the shared paw icon.
+`20261105040000_user_space_icons.sql` adds `spaces.icon_image_upload_id` and
+reference guards/cleanup tracking. Icons reuse avatar compression, quotas and
+moderation; only the creator's ready avatar-purpose upload can be attached.
+The form waits for screening; rejected/failed photos must be removed, replaced
+or retried using the existing image controls. Public preview/Storage policies
+permit approved icons on undeleted spaces; originals remain private. Cleanup
+protects live space references and queues detached/deleted-space icons.
+`SpaceAvatar` displays approved photos across cards, feeds, search and profile lists,
+falling back to built-in symbols. This slice adds no uploaded space banners.
 When explicitly enabled, the FastAPI lifespan starts a ForAll moderation worker
 (FR-90–92), selecting
 eligible pending posts oldest first, including the backlog. OpenAI screens
@@ -511,8 +610,10 @@ on existing databases; it was applied under the explicit exception above.
 browser INSERT/DELETE policies on `post_likes`, ensuring counters cannot be
 bypassed. The user-follow migration allows direct writes only for the caller's
 own verified account, but the frontend uses FastAPI so account and target checks
-stay consistent. Older direct-write policies for comment likes and space follows
-still exist; reconcile those when implementing those features. Auth and signed
+stay consistent. Space follows now write through FastAPI; the starter-spaces
+migration removes the old browser write policy and adds transactional counters.
+Older direct-write policies for comment likes still exist; reconcile those when
+extending that feature. Auth and signed
 Storage transfers remain intentional browser integrations.
 
 ---

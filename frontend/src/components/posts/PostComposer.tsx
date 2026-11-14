@@ -10,12 +10,15 @@ import { getImagePolicy, getStorageBudget, ImageTransferError, reserveImages, up
 import { formatBytes } from "@/lib/images/image-policy";
 import { createPost } from "@/lib/posts";
 import {colleges} from "@/lib/colleges";
+import { spaceHref } from "@/lib/spaces";
+import { useSpaces } from "@/components/spaces/SpacesProvider";
 
 interface Attachment { key: string; image: SelectedImage | null }
 
 /** Owns post orchestration only. Selection/editing and transfers remain reusable image modules. */
 export default function PostComposer({space = "general"}: {space?: string }) {
   const router = useRouter();
+  const { spaces } = useSpaces();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -74,7 +77,7 @@ export default function PostComposer({space = "general"}: {space?: string }) {
       }
       setNotice("Saving post…");
       await createPost({ submission_id: submissionId.current, title: title.trim(), body: body.trim() || null, image_ids: ids, space});
-      router.push(space === "general" ? "/"  : `/colleges/${space}`);
+      router.push(spaceHref(space));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save your post.");
       setNotice(""); setBusy(false); sending.current = false;
@@ -91,7 +94,7 @@ export default function PostComposer({space = "general"}: {space?: string }) {
   }
 
   return <form onSubmit={submit} className="space-y-4 rounded-card border border-border bg-card p-4">
-    <p className="text-xs font-semibold text-muted-foreground">Posting to <span className="text-primary">{colleges.find((c)=> c.slug === space)?.name ?? "General"}</span></p>
+    <p className="text-xs font-semibold text-muted-foreground">Posting to <span className="text-primary">{spaces.find((item) => item.slug === space)?.name ?? colleges.find((c) => c.slug === space)?.name ?? (space === "general" ? "General" : space)}</span></p>
     <fieldset disabled={busy} className="space-y-4">
       <label className="block text-sm font-semibold">Title
         <input required maxLength={300} value={title} onChange={(event) => setTitle(event.target.value)}

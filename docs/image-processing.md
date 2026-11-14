@@ -271,6 +271,16 @@ shared data are not used in those tests.
 
 ## State handling and feed reads
 
+Space icons also use the avatar pipeline (96 px and 384 px square WebP variants).
+`POST /spaces` accepts only a creator-owned, completed `avatar` upload with a
+`ready` processing result; the creation form waits for compression/moderation.
+No new image purpose, quota or moderation path is introduced. Apply
+`20261105040000_user_space_icons.sql` for the space reference, approval guard,
+cleanup tracking and public Storage variant access. The public preview endpoint
+serves approved variants referenced by active profiles or undeleted spaces.
+Originals remain private; attached space icons protect bytes from unused-image
+cleanup, while detached/deleted-space icons receive the normal cleanup grace.
+
 `backend/images/lifecycle.py` defines shared processing states, retained-input
 checks, retry eligibility and image notices. The image API and post serializer use
 these same rules: an invalid or missing input must not offer a service retry.

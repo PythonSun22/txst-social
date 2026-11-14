@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import PawIcon from "@/components/ui/PawIcon";
-import { chooseUsername, getCurrentProfile } from "@/lib/profiles";
+import AccountSetupCard from "@/components/auth/AccountSetupCard";
+import { chooseUsername, getCurrentProfile, getProfileSetupPath } from "@/lib/profiles";
 
 /** One-time public username choice after email confirmation (FR-02, FR-06). */
 export default function ChooseUsernamePage() {
@@ -22,7 +22,7 @@ export default function ChooseUsernamePage() {
         if (!profile) {
           router.replace("/login");
         } else if (profile.username_chosen) {
-          router.replace("/profile");
+          router.replace(getProfileSetupPath(profile) ?? "/profile");
         } else {
           setLoading(false);
         }
@@ -48,7 +48,7 @@ export default function ChooseUsernamePage() {
     setError("");
     try {
       await chooseUsername(chosen);
-      router.replace("/profile");
+      router.replace("/choose-college");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save your username.");
       setSaving(false);
@@ -56,20 +56,8 @@ export default function ChooseUsernamePage() {
   }
 
   return (
-    <section className="relative mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-xl items-center justify-center">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-        <PawIcon
-          variant="background"
-          className="absolute left-0 top-1/2 size-[103.5dvh] -translate-x-[40%] -translate-y-1/2 text-primary/20"
-        />
-      </div>
-
-      <div className="relative w-full rounded-[1.75rem] border border-border bg-card px-6 py-8 shadow-[0_24px_70px_-42px_rgba(80,18,20,0.55)] sm:px-10">
-        <h1 className="font-serif text-3xl font-bold text-primary">Enter your username</h1>
-        <p className="mt-3 text-sm font-semibold text-foreground">Reminder: Your username is permanent. It cannot be changed later.</p>
-
-        {error && <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
-
+    <AccountSetupCard title="Enter your username"
+      description="Reminder: Your username is permanent. It cannot be changed later." error={error}>
         {loading ? (
           <p role="status" className="mt-7 text-sm text-muted-foreground">Loading your account…</p>
         ) : (
@@ -95,11 +83,10 @@ export default function ChooseUsernamePage() {
               <p className="mt-2 text-xs text-muted-foreground">3–20 letters, numbers, or underscores.</p>
             </div>
             <button type="submit" disabled={saving} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white hover:bg-[#681c20] disabled:opacity-60">
-              {saving ? "Saving…" : "Continue to profile"}
+              {saving ? "Saving…" : "Continue to college"}
             </button>
           </form>
         )}
-      </div>
-    </section>
+    </AccountSetupCard>
   );
 }

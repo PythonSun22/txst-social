@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getProfileConnections, type ProfileListItem } from "@/lib/api";
 
@@ -20,21 +20,29 @@ export default function UserConnections({
   const [people, setPeople] = useState<ProfileListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => { request.current?.abort(); }, []);
 
   async function toggle(kind: "followers" | "following") {
+    request.current?.abort();
+    request.current = null;
     if (view === kind) {
       setView(null);
       return;
     }
+    const current = new AbortController();
+    request.current = current;
     setView(kind);
+    setPeople([]);
     setLoading(true);
     setError("");
     try {
-      setPeople(await getProfileConnections(profileId, kind));
+      const people = await getProfileConnections(profileId, kind, current.signal);
+      if (!current.signal.aborted) setPeople(people);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load this list.");
+      if (!current.signal.aborted) setError(cause instanceof Error ? cause.message : "Unable to load this list.");
     } finally {
-      setLoading(false);
+      if (!current.signal.aborted) setLoading(false);
     }
   }
 
@@ -51,11 +59,13 @@ export default function UserConnections({
       <h2 className="font-serif font-bold text-primary">
         {ownProfile
           ? view === "followers" ? "People following you" : "People you follow"
-          : view === "followers" ? "Followers" : "Following"}
+          : view === "followers" ? "People following them" : "People they follow"}
       </h2>
       {loading && <p role="status" className="mt-2 text-sm">Loading…</p>}
       {error && <p role="alert" className="mt-2 text-sm text-primary">{error}</p>}
-      {!loading && !error && people.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No {view} yet.</p>}
+      {!loading && !error && people.length === 0 && <p className="mt-2 text-sm text-muted-foreground">{view === "followers"
+        ? ownProfile ? "No one is following you yet." : "No one is following them yet."
+        : ownProfile ? "You aren’t following anyone yet." : "They aren’t following anyone yet."}</p>}
       <ul className="mt-2 divide-y divide-border">
         {people.map((person) => <li key={person.id} className="py-2">
           <Link href={`/profile/${person.id}`} className="font-semibold text-primary hover:underline">{person.display_name || person.username}</Link>

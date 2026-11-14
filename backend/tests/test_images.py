@@ -224,6 +224,17 @@ class ImageTests(unittest.TestCase):
         self.assertEqual(self.client.get(f"/images/{self.upload.id}/published-preview").status_code, 404)
         self.storage.assert_not_called()
 
+    def test_published_preview_serves_approved_space_icons_but_not_unapproved_images(self):
+        self.upload.processing_status = "ready"
+        self.storage.return_value = httpx.Response(200, json={"signedURL": "/object/sign/post-images/icon?token=preview"})
+        self.db.scalar.side_effect = [None, uuid4()]
+        response = self.client.get(f"/images/{self.upload.id}/published-preview?variant=avatar_small")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.upload.processing_status = "blocked"
+        self.db.scalar.side_effect = [None, uuid4()]
+        self.assertEqual(self.client.get(f"/images/{self.upload.id}/published-preview?variant=avatar_small").status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

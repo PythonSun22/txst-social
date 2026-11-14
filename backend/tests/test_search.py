@@ -6,13 +6,14 @@ from unittest.mock import Mock
 from uuid import uuid4
 os.environ['DATABASE_URL']='postgresql+psycopg://test:test@localhost/test'
 os.environ['MODERATION_ENABLED']='false'
+os.environ['IMAGE_PROCESSING_ENABLED']='false'
 from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 from auth import get_optional_profile
 from database import get_db
 from main import app
-from models import Post, Profile
+from models import Post, Profile, Space
 from posts.routes import encode_cursor
 from search import search_posts, title_matches
 
@@ -71,8 +72,9 @@ class SearchTests(unittest.TestCase):
                 with self.subTest(length=len(q)): self.assertEqual(client.get('/search/posts',params={'q':q}).status_code,422)
 
     def test_results_use_feed_contract(self):
+        space=Space(id=self.post.space_id,kind='college',slug='science_engineering',name='College of Science and Engineering')
         rows=[]
-        for values in ([self.post],[self.user],[],[]):
+        for values in ([self.post],[self.user],[space],[]):
             result=Mock(); result.all.return_value=values; rows.append(result)
         self.db.scalars.side_effect=rows
         app.dependency_overrides[get_db]=lambda:self.db
@@ -82,3 +84,4 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(response.status_code,200)
         body=response.json()
         self.assertEqual((body['items'][0]['title'],body['items'][0]['author'],body['next_cursor']),('Calculus tutoring','tester',None))
+        self.assertEqual(body['items'][0]['space_name'],space.name)

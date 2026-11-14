@@ -12,7 +12,7 @@ from images.budget import delete_recorded, release_processing
 from images.lifecycle import PROCESSING_STATUSES
 from images.schemas import SOURCE_GRACE_SECONDS
 from images.worker_storage import remove_images
-from models import ImageStorageObject, ImageUpload, ImageVariant, Post, PostMedia, Profile
+from models import ImageStorageObject, ImageUpload, ImageVariant, Post, PostMedia, Profile, Space
 from moderation.client import ModerationError
 from worker_control import credential_error
 
@@ -31,7 +31,8 @@ def has_live_reference(db, upload_id):
          & select(ImageUpload.id).where(ImageUpload.id == upload_id,
              or_(ImageUpload.processing_status.not_in(["blocked", "failed"]), ImageUpload.recovery_required.is_(True))).exists()),
     )).exists()
-    return db.scalar(select(post | profile))
+    space = select(Space.id).where(Space.deleted_at.is_(None), Space.icon_image_upload_id == upload_id).exists()
+    return db.scalar(select(post | profile | space))
 
 
 def retire_unused_once(sessions=SessionLocal):
