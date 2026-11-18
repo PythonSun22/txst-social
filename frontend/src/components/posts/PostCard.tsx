@@ -108,7 +108,7 @@ export default function PostCard({ post, profile, onLike, onDelete, onStatus }: 
     catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : "Unable to update like."); }
     finally { inFlight.current = false; if (mounted.current) setBusy(false); }
   }
-  return <article className="rounded-card border border-border bg-card p-4">
+  return <article className="post-card rounded-card border border-border bg-card p-4">
     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
       {post.author_avatar_upload_id ? <AuthorAvatar id={post.author_avatar_upload_id} /> : <PawIcon size={16} />}<strong className="text-primary">{post.space_name}</strong>
       <span>Posted by {post.author_id ? <Link href={`/profile/${post.author_id}`} className="font-semibold text-primary underline-offset-2 hover:underline">{post.author}</Link> : post.author}</span><time dateTime={post.created_at}>{dateFormat.format(new Date(post.created_at))}</time>
