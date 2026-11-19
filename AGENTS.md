@@ -303,8 +303,16 @@ with a 25-result cap; descriptions are excluded and unfiltered directory reads a
 Search terms are capped at 50 characters and LIKE wildcards are matched literally.
 No additional search migration is required. Reports remain **schema only**.
 `GET /posts?space=<slug>` reads any space's feed (default `general`). `/colleges`
-shows a static banner grid (`frontend/src/lib/colleges.ts`, slugs must match the
-seed) linking to `/colleges/[slug]` feeds (FR-13). `POST /posts` takes an optional
+shows an animated 2D college carousel linking to `/colleges/[slug]` feeds (FR-13).
+College feed names and slugs remain in `frontend/src/lib/colleges.ts`; presentation copy, themes,
+tags, PNG paths and per-character transforms live in `frontend/src/lib/college-carousel.ts`.
+Artwork is served from `frontend/public/colleges/`. Browsing does not change the
+student’s home college; the confirmation action opens the selected feed.
+The application and Colleges explorer use Arial with Helvetica and generic
+sans-serif fallbacks for body text and headings, with no external font downloads. The global GUI extends the explorer’s cream, maroon and gold palette
+with rounded cards, stronger shadows and visible navigation/focus states; carousel
+layout and animation styles remain scoped to this page.
+It supports keyboard navigation, reduced motion and an explicit feed action. `POST /posts` takes an optional
 `space` slug (default `general`); a college page's Create post button opens
 `/submit?space=<slug>`. Post responses include `space_name`. The moderation worker
 screens General, college and community posts with the same publication rules.
